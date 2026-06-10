@@ -2,14 +2,12 @@ package server
 
 import (
 	"context"
-	"errors"
 
 	"github.com/perfect-panel/server/internal/logic/nodeconfig"
 	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/internal/types"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
-	"gorm.io/gorm"
 )
 
 type QueryServerProtocolConfigLogic struct {
@@ -71,11 +69,11 @@ func (l *QueryServerProtocolConfigLogic) QueryServerProtocolConfig(req *types.Qu
 
 	nodeValues := nodeconfig.GlobalValues(l.svcCtx.Config.Node)
 	override, err := l.svcCtx.Store.Node().FindServerConfigOverride(l.ctx, req.ServerID)
-	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	if err != nil {
 		l.Errorf("[GetServerProtocols] FindServerConfigOverride Error: %s", err.Error())
 		return nil, err
 	}
-	if err == nil {
+	if override != nil {
 		if err = nodeconfig.ApplyOverride(&nodeValues, override); err != nil {
 			l.Errorf("[GetServerProtocols] ApplyOverride Error: %s", err.Error())
 			return nil, err
