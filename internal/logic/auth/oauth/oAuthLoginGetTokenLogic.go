@@ -16,8 +16,10 @@ import (
 	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/oauth/apple"
+	githuboauth "github.com/perfect-panel/server/pkg/oauth/github"
 	"github.com/perfect-panel/server/pkg/oauth/google"
 	"github.com/perfect-panel/server/pkg/oauth/telegram"
+	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/uuidx"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -29,6 +31,7 @@ const (
 	OAuthGoogle    = "google"
 	OAuthApple     = "apple"
 	OAuthTelegram  = "telegram"
+	OAuthGithub    = "github"
 	AuthEmail      = "email"
 	AuthExpire     = 86400
 	TelegramDomain = "ppanel.com"
@@ -84,7 +87,7 @@ func (l *OAuthLoginGetTokenLogic) OAuthLoginGetToken(req *types.OAuthLoginGetTok
 }
 
 func (l *OAuthLoginGetTokenLogic) google(req *types.OAuthLoginGetTokenRequest, requestID, ip, userAgent string) (*user.User, error) {
-	startTime := time.Now()
+	startTime := timeutil.Now()
 	l.Infow("google oauth processing started",
 		logger.Field("request_id", requestID),
 		logger.Field("provider", OAuthGoogle),
@@ -162,7 +165,7 @@ func (l *OAuthLoginGetTokenLogic) google(req *types.OAuthLoginGetTokenRequest, r
 }
 
 func (l *OAuthLoginGetTokenLogic) apple(req *types.OAuthLoginGetTokenRequest, requestID, ip, userAgent string) (*user.User, error) {
-	startTime := time.Now()
+	startTime := timeutil.Now()
 	l.Infow("apple oauth processing started",
 		logger.Field("request_id", requestID),
 		logger.Field("provider", OAuthApple),
@@ -262,7 +265,7 @@ func (l *OAuthLoginGetTokenLogic) apple(req *types.OAuthLoginGetTokenRequest, re
 }
 
 func (l *OAuthLoginGetTokenLogic) telegram(req *types.OAuthLoginGetTokenRequest, requestID, ip, userAgent string) (*user.User, error) {
-	startTime := time.Now()
+	startTime := timeutil.Now()
 	l.Infow("telegram oauth processing started",
 		logger.Field("request_id", requestID),
 		logger.Field("provider", OAuthTelegram),
@@ -292,15 +295,15 @@ func (l *OAuthLoginGetTokenLogic) telegram(req *types.OAuthLoginGetTokenRequest,
 	l.Debugw("validating telegram auth date",
 		logger.Field("request_id", requestID),
 		logger.Field("auth_date", *callbackData.AuthDate),
-		logger.Field("current_time", time.Now().Unix()),
+		logger.Field("current_time", timeutil.Now().Unix()),
 	)
 
-	if time.Now().Unix()-*callbackData.AuthDate > AuthExpire {
+	if timeutil.Now().Unix()-*callbackData.AuthDate > AuthExpire {
 		l.Errorw("telegram auth date expired",
 			logger.Field("request_id", requestID),
 			logger.Field("provider", OAuthTelegram),
 			logger.Field("auth_date", *callbackData.AuthDate),
-			logger.Field("current_time", time.Now().Unix()),
+			logger.Field("current_time", timeutil.Now().Unix()),
 			logger.Field("expire_seconds", AuthExpire),
 		)
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "auth date expired")
@@ -324,8 +327,87 @@ func (l *OAuthLoginGetTokenLogic) telegram(req *types.OAuthLoginGetTokenRequest,
 	return l.findOrRegisterUser(OAuthTelegram, userID, email, avatar, requestID, ip, userAgent)
 }
 
+func (l *OAuthLoginGetTokenLogic) github(req *types.OAuthLoginGetTokenRequest, requestID, ip, userAgent string) (*user.User, error) {
+	startTime := timeutil.Now()
+	l.Infow("github oauth processing started",
+		logger.Field("request_id", requestID),
+		logger.Field("provider", OAuthGithub),
+	)
+
+	var request oauthRequest
+	if err := tool.CloneMapToStruct(req.Callback.(map[string]interface{}), &request); err != nil {
+		l.Errorw("failed to parse github callback data",
+			logger.Field("request_id", requestID),
+			logger.Field("provider", OAuthGithub),
+			logger.Field("error", err.Error()),
+		)
+		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "parse callback data failed: %v", err)
+	}
+
+	l.Debugw("github oauth state validation started",
+		logger.Field("request_id", requestID),
+		logger.Field("state", request.State),
+	)
+
+	redirect, err := l.validateStateCode(OAuthGithub, request.State, requestID)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg, err := l.getGithubConfig(requestID)
+	if err != nil {
+		return nil, err
+	}
+
+	client := githuboauth.New(&githuboauth.Config{
+		ClientID:     cfg.ClientId,
+		ClientSecret: cfg.ClientSecret,
+		RedirectURL:  redirect,
+	})
+
+	l.Debugw("exchanging github authorization code for token",
+		logger.Field("request_id", requestID),
+		logger.Field("redirect_url", redirect),
+	)
+
+	token, err := client.Exchange(l.ctx, request.Code)
+	if err != nil {
+		l.Errorw("failed to exchange github authorization code",
+			logger.Field("request_id", requestID),
+			logger.Field("provider", OAuthGithub),
+			logger.Field("error", err.Error()),
+		)
+		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "exchange token failed: %v", err)
+	}
+
+	l.Debugw("fetching github user information",
+		logger.Field("request_id", requestID),
+	)
+
+	githubUserInfo, err := client.GetUserInfo(token.AccessToken)
+	if err != nil {
+		l.Errorw("failed to get github user info",
+			logger.Field("request_id", requestID),
+			logger.Field("provider", OAuthGithub),
+			logger.Field("error", err.Error()),
+		)
+		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "get user info failed: %v", err)
+	}
+
+	l.Infow("github oauth processing completed",
+		logger.Field("request_id", requestID),
+		logger.Field("provider", OAuthGithub),
+		logger.Field("openid", githubUserInfo.OpenID),
+		logger.Field("email", githubUserInfo.Email),
+		logger.Field("login", githubUserInfo.Login),
+		logger.Field("duration_ms", time.Since(startTime).Milliseconds()),
+	)
+
+	return l.findOrRegisterUser(OAuthGithub, fmt.Sprintf("%d", githubUserInfo.OpenID), githubUserInfo.Email, githubUserInfo.Avatar, requestID, ip, userAgent)
+}
+
 func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, requestID, ip, userAgent string) (*user.User, error) {
-	startTime := time.Now()
+	startTime := timeutil.Now()
 	l.Infow("user registration started",
 		logger.Field("request_id", requestID),
 		logger.Field("auth_method", method),
@@ -435,13 +517,13 @@ func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, reques
 		Identifier: openid,
 		RegisterIP: ip,
 		UserAgent:  userAgent,
-		Timestamp:  time.Now().UnixMilli(),
+		Timestamp:  timeutil.Now().UnixMilli(),
 	}
 	content, _ := registerLog.Marshal()
 
 	err = l.svcCtx.Store.Log().Insert(l.ctx, &log.SystemLog{
 		Type:     log.TypeRegister.Uint8(),
-		Date:     time.Now().Format("2006-01-02"),
+		Date:     timeutil.Now().Format("2006-01-02"),
 		ObjectID: userInfo.Id,
 		Content:  string(content),
 	})
@@ -524,12 +606,12 @@ func (l *OAuthLoginGetTokenLogic) recordLoginStatus(loginStatus bool, userInfo *
 			LoginIP:   ip,
 			UserAgent: userAgent,
 			Success:   loginStatus,
-			Timestamp: time.Now().UnixMilli(),
+			Timestamp: timeutil.Now().UnixMilli(),
 		}
 		content, _ := loginLog.Marshal()
 		if err := l.svcCtx.Store.Log().Insert(l.ctx, &log.SystemLog{
 			Type:     log.TypeLogin.Uint8(),
-			Date:     time.Now().Format("2006-01-02"),
+			Date:     timeutil.Now().Format("2006-01-02"),
 			ObjectID: userInfo.Id,
 			Content:  string(content),
 		}); err != nil {
@@ -556,6 +638,8 @@ func (l *OAuthLoginGetTokenLogic) handleOAuthProvider(req *types.OAuthLoginGetTo
 		return l.apple(req, requestID, ip, userAgent)
 	case OAuthTelegram:
 		return l.telegram(req, requestID, ip, userAgent)
+	case OAuthGithub:
+		return l.github(req, requestID, ip, userAgent)
 	default:
 		l.Errorw("unsupported oauth login method",
 			logger.Field("request_id", requestID),
@@ -566,7 +650,7 @@ func (l *OAuthLoginGetTokenLogic) handleOAuthProvider(req *types.OAuthLoginGetTo
 }
 
 func (l *OAuthLoginGetTokenLogic) generateToken(userInfo *user.User, requestID string) (string, error) {
-	startTime := time.Now()
+	startTime := timeutil.Now()
 	sessionId := uuidx.NewUUID().String()
 
 	l.Debugw("generating jwt token",
@@ -577,7 +661,7 @@ func (l *OAuthLoginGetTokenLogic) generateToken(userInfo *user.User, requestID s
 
 	token, err := jwt.NewJwtToken(
 		l.svcCtx.Config.JwtAuth.AccessSecret,
-		time.Now().Unix(),
+		timeutil.Now().Unix(),
 		l.svcCtx.Config.JwtAuth.AccessExpire,
 		jwt.WithOption("UserId", userInfo.Id),
 		jwt.WithOption("SessionId", sessionId),
@@ -744,6 +828,41 @@ func (l *OAuthLoginGetTokenLogic) getTelegramConfig(requestID string) (*auth.Tel
 	return &cfg, nil
 }
 
+func (l *OAuthLoginGetTokenLogic) getGithubConfig(requestID string) (*auth.GithubAuthConfig, error) {
+	l.Debugw("fetching github oauth config",
+		logger.Field("request_id", requestID),
+		logger.Field("provider", OAuthGithub),
+	)
+
+	authMethod, err := l.svcCtx.Store.Auth().FindOneByMethod(l.ctx, OAuthGithub)
+	if err != nil {
+		l.Errorw("failed to find github auth method",
+			logger.Field("request_id", requestID),
+			logger.Field("provider", OAuthGithub),
+			logger.Field("error", err.Error()),
+		)
+		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find github auth method failed: %v", err)
+	}
+
+	var cfg auth.GithubAuthConfig
+	if err = cfg.Unmarshal(authMethod.Config); err != nil {
+		l.Errorw("failed to unmarshal github config",
+			logger.Field("request_id", requestID),
+			logger.Field("provider", OAuthGithub),
+			logger.Field("config", authMethod.Config),
+			logger.Field("error", err.Error()),
+		)
+		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "unmarshal github config failed: %v", err)
+	}
+
+	l.Debugw("github oauth config loaded successfully",
+		logger.Field("request_id", requestID),
+		logger.Field("provider", OAuthGithub),
+		logger.Field("client_id", cfg.ClientId),
+	)
+	return &cfg, nil
+}
+
 func (l *OAuthLoginGetTokenLogic) findOrRegisterUser(authType, openID, email, avatar, requestID, ip, userAgent string) (*user.User, error) {
 	l.Debugw("finding or registering user",
 		logger.Field("request_id", requestID),
@@ -815,7 +934,7 @@ func (l *OAuthLoginGetTokenLogic) activeTrial(store repository.Store, uid int64,
 		return nil, err
 	}
 
-	startTime := time.Now()
+	startTime := timeutil.Now()
 	expireTime := tool.AddTime(l.svcCtx.Config.Register.TrialTimeUnit, l.svcCtx.Config.Register.TrialTime, startTime)
 	subscribeToken := uuidx.SubscribeToken(fmt.Sprintf("Trial-%v-%s", uid, uuidx.NewUUID().String()))
 	subscribeUUID := uuidx.NewUUID().String()
