@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/perfect-panel/server/internal/model/ads"
+	"github.com/perfect-panel/server/internal/model/entity/ads"
 	"github.com/perfect-panel/server/pkg/cache"
 	"github.com/perfect-panel/server/pkg/orm"
 	"github.com/redis/go-redis/v9"
@@ -89,6 +89,7 @@ func (m *adsRepo) Delete(ctx context.Context, id int64) error {
 func (m *adsRepo) GetAdsListByPage(ctx context.Context, page, size int, filter ads.Filter) (int64, []*ads.Ads, error) {
 	var list []*ads.Ads
 	var total int64
+	page, size = normalizePage(page, size)
 	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
 		conn = conn.Model(&ads.Ads{})
 		if filter.Status != nil {

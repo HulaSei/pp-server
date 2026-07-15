@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strconv"
 
-	"github.com/perfect-panel/server/internal/model/coupon"
+	"github.com/perfect-panel/server/internal/model/entity/coupon"
 	"github.com/perfect-panel/server/pkg/cache"
 	"github.com/perfect-panel/server/pkg/orm"
 	"github.com/redis/go-redis/v9"
@@ -134,6 +134,7 @@ func (m *couponRepo) Transaction(ctx context.Context, fn func(db *gorm.DB) error
 
 // QueryCouponListByPage query coupon list by page
 func (m *couponRepo) QueryCouponListByPage(ctx context.Context, page, size int, subscribe int64, search string) (total int64, list []*coupon.Coupon, err error) {
+	page, size = normalizePage(page, size)
 	err = m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
 		db := conn.Model(&coupon.Coupon{})
 		if subscribe != 0 {

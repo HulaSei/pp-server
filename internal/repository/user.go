@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
-	"github.com/perfect-panel/server/internal/model/order"
-	"github.com/perfect-panel/server/internal/model/user"
+	"github.com/perfect-panel/server/internal/model/entity/order"
+	trafficEntity "github.com/perfect-panel/server/internal/model/entity/traffic"
+	"github.com/perfect-panel/server/internal/model/entity/user"
 	"github.com/perfect-panel/server/pkg/authmethod"
 	"github.com/perfect-panel/server/pkg/cache"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -76,6 +78,7 @@ type UserRepo interface {
 	DeleteSubscribe(ctx context.Context, token string, tx ...*gorm.DB) error
 	DeleteSubscribeById(ctx context.Context, id int64, tx ...*gorm.DB) error
 	UpdateUserSubscribeWithTraffic(ctx context.Context, id, download, upload int64, tx ...*gorm.DB) error
+	BatchUpdateUserSubscribeWithTraffic(ctx context.Context, deltas []trafficEntity.SubscribeTrafficDelta, tx ...*gorm.DB) error
 	FindUsersSubscribeBySubscribeId(ctx context.Context, subscribeId int64) ([]*user.Subscribe, error)
 	FindUserSubscribesByStatus(ctx context.Context, status ...int64) ([]*user.Subscribe, error)
 	FindSubscribesByIds(ctx context.Context, ids []int64) ([]*user.Subscribe, error)
@@ -256,6 +259,7 @@ func (m *userRepo) Transaction(ctx context.Context, fn func(db *gorm.DB) error) 
 func (m *userRepo) QueryPageList(ctx context.Context, page, size int, filter *user.UserFilterParams) ([]*user.User, int64, error) {
 	var list []*user.User
 	var total int64
+	page, size = normalizePage(page, size)
 	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
 		conn = applyUserPageFilters(conn.Model(&user.User{}), filter)
 		if err := conn.Count(&total).Error; err != nil {
@@ -280,33 +284,8 @@ func applyUserPageFilters(conn *gorm.DB, filter *user.UserFilterParams) *gorm.DB
 			conn = conn.Where(userSearchCondition(conn), search, search)
 		}
 	}
-	if filter.UserSubscribeId != nil {
-		conn = conn.Where(
-			fmt.Sprintf(
-				"EXISTS (SELECT 1 FROM %s WHERE %s = %s AND %s = ? AND %s IN ?)",
-				userSubscribeTableName(conn),
-				userSubscribeColumn(conn, "user_id"),
-				userIdColumn,
-				userSubscribeColumn(conn, "id"),
-				userSubscribeColumn(conn, "status"),
-			),
-			*filter.UserSubscribeId,
-			[]int64{0, 1},
-		)
-	}
-	if filter.SubscribeId != nil {
-		conn = conn.Where(
-			fmt.Sprintf(
-				"EXISTS (SELECT 1 FROM %s WHERE %s = %s AND %s = ? AND %s IN ?)",
-				userSubscribeTableName(conn),
-				userSubscribeColumn(conn, "user_id"),
-				userIdColumn,
-				userSubscribeColumn(conn, "subscribe_id"),
-				userSubscribeColumn(conn, "status"),
-			),
-			*filter.SubscribeId,
-			[]int64{0, 1},
-		)
+	if filter.UserSubscribeId != nil || filter.SubscribeId != nil || strings.TrimSpace(filter.UserSubscribeToken) != "" {
+		conn = userSubscribeExistsCondition(conn, userIdColumn, filter)
 	}
 	if filter.Order != "" {
 		switch strings.ToUpper(filter.Order) {
@@ -318,6 +297,37 @@ func applyUserPageFilters(conn *gorm.DB, filter *user.UserFilterParams) *gorm.DB
 		conn = conn.Unscoped()
 	}
 	return conn
+}
+
+func userSubscribeExistsCondition(conn *gorm.DB, userIdColumn string, filter *user.UserFilterParams) *gorm.DB {
+	conditions := []string{
+		fmt.Sprintf("%s = %s", userSubscribeColumn(conn, "user_id"), userIdColumn),
+	}
+	args := make([]interface{}, 0, 5)
+	if filter.UserSubscribeId != nil {
+		conditions = append(conditions, fmt.Sprintf("%s = ?", userSubscribeColumn(conn, "id")))
+		args = append(args, *filter.UserSubscribeId)
+	}
+	if filter.SubscribeId != nil {
+		conditions = append(conditions, fmt.Sprintf("%s = ?", userSubscribeColumn(conn, "subscribe_id")))
+		args = append(args, *filter.SubscribeId)
+	}
+	subscribeToken := strings.TrimSpace(filter.UserSubscribeToken)
+	if subscribeToken != "" {
+		conditions = append(conditions, fmt.Sprintf("(%s = ? OR %s = ?)", userSubscribeColumn(conn, "token"), userSubscribeColumn(conn, "uuid")))
+		args = append(args, subscribeToken, subscribeToken)
+	} else {
+		conditions = append(conditions, fmt.Sprintf("%s IN ?", userSubscribeColumn(conn, "status")))
+		args = append(args, []int64{0, 1})
+	}
+	return conn.Where(
+		fmt.Sprintf(
+			"EXISTS (SELECT 1 FROM %s WHERE %s)",
+			userSubscribeTableName(conn),
+			strings.Join(conditions, " AND "),
+		),
+		args...,
+	)
 }
 
 func userSearchCondition(conn *gorm.DB) string {
@@ -989,6 +999,80 @@ func (m *userRepo) UpdateUserSubscribeWithTraffic(ctx context.Context, id, downl
 	})
 }
 
+func (m *userRepo) BatchUpdateUserSubscribeWithTraffic(ctx context.Context, deltas []trafficEntity.SubscribeTrafficDelta, tx ...*gorm.DB) error {
+	deltas = mergeSubscribeTrafficDeltas(deltas)
+	if len(deltas) == 0 {
+		return nil
+	}
+
+	ids := make([]int64, 0, len(deltas))
+	for _, delta := range deltas {
+		ids = append(ids, delta.SubscribeId)
+	}
+	subs, err := m.FindSubscribesByIds(ctx, ids)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		_ = m.ClearSubscribeCache(ctx, subs...)
+	}()
+
+	return m.ExecNoCacheCtx(ctx, func(conn *gorm.DB) error {
+		if len(tx) > 0 {
+			conn = tx[0]
+		}
+		downloadExpr, downloadArgs := userSubscribeTrafficIncrementExpr(conn, "download", deltas)
+		uploadExpr, uploadArgs := userSubscribeTrafficIncrementExpr(conn, "upload", deltas)
+		return conn.Model(&user.Subscribe{}).Where("id IN ?", ids).Updates(map[string]interface{}{
+			"download": gorm.Expr(downloadExpr, downloadArgs...),
+			"upload":   gorm.Expr(uploadExpr, uploadArgs...),
+		}).Error
+	})
+}
+
+func mergeSubscribeTrafficDeltas(deltas []trafficEntity.SubscribeTrafficDelta) []trafficEntity.SubscribeTrafficDelta {
+	if len(deltas) == 0 {
+		return nil
+	}
+	merged := make(map[int64]trafficEntity.SubscribeTrafficDelta, len(deltas))
+	for _, delta := range deltas {
+		if delta.SubscribeId <= 0 {
+			continue
+		}
+		current := merged[delta.SubscribeId]
+		current.SubscribeId = delta.SubscribeId
+		current.Download += delta.Download
+		current.Upload += delta.Upload
+		merged[delta.SubscribeId] = current
+	}
+	result := make([]trafficEntity.SubscribeTrafficDelta, 0, len(merged))
+	for _, delta := range merged {
+		result = append(result, delta)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return result[i].SubscribeId < result[j].SubscribeId
+	})
+	return result
+}
+
+func userSubscribeTrafficIncrementExpr(db *gorm.DB, column string, deltas []trafficEntity.SubscribeTrafficDelta) (string, []interface{}) {
+	idColumn := userSubscribeColumn(db, "id")
+	targetColumn := userSubscribeColumn(db, column)
+	parts := make([]string, 0, len(deltas))
+	args := make([]interface{}, 0, len(deltas)*2)
+	for _, delta := range deltas {
+		parts = append(parts, "WHEN ? THEN ?")
+		args = append(args, delta.SubscribeId)
+		if column == "download" {
+			args = append(args, delta.Download)
+		} else {
+			args = append(args, delta.Upload)
+		}
+	}
+	return fmt.Sprintf("%s + CASE %s %s ELSE 0 END", targetColumn, idColumn, strings.Join(parts, " ")), args
+}
+
 // FindOneSubscribeByToken  finds a record by token.
 func (m *userRepo) FindOneSubscribeByToken(ctx context.Context, token string) (*user.Subscribe, error) {
 	var data user.Subscribe
@@ -1128,6 +1212,7 @@ func (m *userRepo) FindOneDeviceByIdentifier(ctx context.Context, id string) (*u
 func (m *userRepo) QueryDevicePageList(ctx context.Context, userId, subscribeId int64, page, size int) ([]*user.Device, int64, error) {
 	var list []*user.Device
 	var total int64
+	page, size = normalizePage(page, size)
 	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
 		return conn.Model(&user.Device{}).Where("user_id = ? and subscribe_id = ?", userId, subscribeId).Count(&total).Limit(size).Offset((page - 1) * size).Find(&list).Error
 	})
@@ -1233,6 +1318,7 @@ func (m *userRepo) CountAffiliates(ctx context.Context, refererId int64) (int64,
 func (m *userRepo) QueryAffiliateList(ctx context.Context, refererId int64, page, size int) ([]*user.User, int64, error) {
 	var list []*user.User
 	var total int64
+	page, size = normalizePage(page, size)
 	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
 		return conn.Model(&user.User{}).
 			Where("referer_id = ?", refererId).

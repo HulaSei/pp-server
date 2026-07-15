@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/perfect-panel/server/internal/model/announcement"
+	"github.com/perfect-panel/server/internal/model/entity/announcement"
 	"github.com/perfect-panel/server/pkg/cache"
 	"github.com/perfect-panel/server/pkg/orm"
 	"github.com/redis/go-redis/v9"
@@ -95,6 +95,7 @@ func (m *announcementRepo) Delete(ctx context.Context, id int64) error {
 func (m *announcementRepo) GetAnnouncementListByPage(ctx context.Context, page, size int, filter announcement.Filter) (int64, []*announcement.Announcement, error) {
 	var list []*announcement.Announcement
 	var total int64
+	page, size = normalizePage(page, size)
 	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
 		conn = conn.Model(&announcement.Announcement{})
 		if filter.Show != nil {

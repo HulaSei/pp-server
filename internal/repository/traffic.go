@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/perfect-panel/server/internal/model/traffic"
+	"github.com/perfect-panel/server/internal/model/entity/traffic"
 	"github.com/perfect-panel/server/pkg/orm"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -15,6 +15,7 @@ import (
 // TrafficRepo traffic 数据访问接口
 type TrafficRepo interface {
 	Insert(ctx context.Context, data *traffic.TrafficLog) error
+	InsertBatch(ctx context.Context, data []*traffic.TrafficLog, batchSize int, tx ...*gorm.DB) error
 	FindOne(ctx context.Context, id int64) (*traffic.TrafficLog, error)
 	Update(ctx context.Context, data *traffic.TrafficLog) error
 	Delete(ctx context.Context, id int64) error
@@ -50,6 +51,20 @@ func newTrafficRepo(db *gorm.DB) TrafficRepo {
 
 func (m *trafficRepo) Insert(ctx context.Context, data *traffic.TrafficLog) error {
 	return m.Conn.WithContext(ctx).Create(&data).Error
+}
+
+func (m *trafficRepo) InsertBatch(ctx context.Context, data []*traffic.TrafficLog, batchSize int, tx ...*gorm.DB) error {
+	if len(data) == 0 {
+		return nil
+	}
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+	db := m.Conn
+	if len(tx) > 0 {
+		db = tx[0]
+	}
+	return db.WithContext(ctx).CreateInBatches(data, batchSize).Error
 }
 
 func (m *trafficRepo) FindOne(ctx context.Context, id int64) (*traffic.TrafficLog, error) {
@@ -195,6 +210,7 @@ func (m *trafficRepo) QueryUserTrafficRanking(ctx context.Context, start, end ti
 func (m *trafficRepo) QueryTrafficLogPageList(ctx context.Context, userId, subscribeId int64, page, size int) ([]*traffic.TrafficLog, int64, error) {
 	var list []*traffic.TrafficLog
 	var total int64
+	page, size = normalizePage(page, size)
 	err := m.Conn.WithContext(ctx).Model(&traffic.TrafficLog{}).Where("user_id = ? and subscribe_id= ?", userId, subscribeId).Count(&total).Limit(size).Offset((page - 1) * size).Find(&list).Error
 	return list, total, err
 }
@@ -203,12 +219,7 @@ func (m *trafficRepo) QueryTrafficLogDetails(ctx context.Context, filter *traffi
 	if filter == nil {
 		filter = &traffic.TrafficLogDetailsFilter{Page: 1, Size: 10}
 	}
-	if filter.Page < 1 {
-		filter.Page = 1
-	}
-	if filter.Size < 1 {
-		filter.Size = 10
-	}
+	filter.Page, filter.Size = normalizePage(filter.Page, filter.Size)
 
 	query := m.Conn.WithContext(ctx).Model(&traffic.TrafficLog{})
 	if filter.ServerId != 0 {

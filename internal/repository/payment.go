@@ -5,7 +5,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/perfect-panel/server/internal/model/payment"
+	"github.com/perfect-panel/server/internal/model/entity/payment"
 	"github.com/perfect-panel/server/pkg/cache"
 	"github.com/perfect-panel/server/pkg/orm"
 	"github.com/redis/go-redis/v9"
@@ -138,6 +138,7 @@ func (m *paymentRepo) FindAvailableMethods(ctx context.Context) ([]*payment.Paym
 func (m *paymentRepo) FindListByPage(ctx context.Context, page, size int, req *payment.Filter) (int64, []*payment.Payment, error) {
 	var resp []*payment.Payment
 	var total int64
+	page, size = normalizePage(page, size)
 	err := m.QueryNoCacheCtx(ctx, &resp, func(conn *gorm.DB, v interface{}) error {
 		conn = conn.Model(&payment.Payment{})
 		if req != nil {
