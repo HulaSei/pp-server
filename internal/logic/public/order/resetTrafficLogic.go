@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/perfect-panel/server/internal/model/entity/log"
+	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -53,6 +54,13 @@ func (l *ResetTrafficLogic) ResetTraffic(req *dto.ResetTrafficOrderRequest) (res
 	if userSubscribe.UserId != u.Id {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "subscription does not belong to the current user")
 	}
+	// NoLimit subscriptions use the Unix epoch as their expiry sentinel. A paid
+	// traffic reset must not be created for a subscription whose finite term has
+	// already elapsed, because it cannot restore access or extend that term.
+	now := timeutil.Now()
+	if userSubscribe.ExpireTime.Unix() > 0 && userSubscribe.ExpireTime.Before(now) {
+		return nil, errors.Wrapf(xerr.NewErrCode(xerr.SubscribeNotAvailable), "subscription expired")
+	}
 	if userSubscribe.Subscribe == nil {
 		l.Errorw("[ResetTraffic] subscribe not found", logger.Field("UserSubscribeID", req.UserSubscribeID))
 		return nil, errors.New("subscribe not found")
@@ -84,6 +92,7 @@ func (l *ResetTrafficLogic) ResetTraffic(req *dto.ResetTrafficOrderRequest) (res
 		SubscribeId:    userSubscribe.SubscribeId,
 		SubscribeToken: userSubscribe.Token,
 	}
+	orderflow.ApplyIdempotency(l.ctx, &orderInfo)
 	// Database transaction
 	err = store.InTx(l.ctx, func(txStore repository.Store) error {
 		lockedUser, e := txStore.User().FindOneForUpdate(l.ctx, u.Id)

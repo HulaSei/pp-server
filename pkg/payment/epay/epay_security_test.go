@@ -1,10 +1,13 @@
 package epay
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 )
 
@@ -66,6 +69,72 @@ func TestParseMoneyUsesExactMinorUnits(t *testing.T) {
 	}
 }
 
+func TestCreatePaymentSubmitKeepsLegacyRedirect(t *testing.T) {
+	client := NewClient("1001", "https://pay.example/", "secret", "alipay", ModeSubmit)
+	result, err := client.CreatePayment(context.Background(), Order{
+		Name: "product", OrderNo: "order-1", Amount: 10,
+		NotifyUrl: "https://merchant.example/notify", ReturnUrl: "https://merchant.example/return",
+	})
+	if err != nil {
+		t.Fatalf("CreatePayment: %v", err)
+	}
+	if result.Type != "url" || !strings.HasPrefix(result.URL, "https://pay.example/submit.php?") {
+		t.Fatalf("unexpected submit result: %+v", result)
+	}
+	parsed, err := url.Parse(result.URL)
+	if err != nil {
+		t.Fatal(err)
+	}
+	params := make(map[string]string, len(parsed.Query()))
+	for name := range parsed.Query() {
+		params[name] = parsed.Query().Get(name)
+	}
+	if params["sign_type"] != "MD5" || !client.VerifySign(params) {
+		t.Fatalf("submit redirect has invalid signature: %+v", params)
+	}
+}
+
+func TestCreatePaymentMAPIUsesFormPOST(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("method=%s, want POST", r.Method)
+		}
+		if r.URL.Path != "/gateway/mapi.php" {
+			t.Errorf("path=%q", r.URL.Path)
+		}
+		if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
+			t.Errorf("content-type=%q", r.Header.Get("Content-Type"))
+		}
+		if err := r.ParseForm(); err != nil {
+			t.Fatal(err)
+		}
+		params := make(map[string]string, len(r.PostForm))
+		for name := range r.PostForm {
+			params[name] = r.PostForm.Get(name)
+		}
+		client := NewClient("1001", "https://gateway.example", "secret", "alipay", ModeMAPI)
+		if params["clientip"] != "203.0.113.9" || !client.VerifySign(params) {
+			t.Errorf("unexpected mapi params: %+v", params)
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"code": 1, "trade_no": "trade-1", "qrcode": "weixin://pay/example",
+		})
+	}))
+	defer server.Close()
+
+	client := NewClient("1001", server.URL+"/gateway", "secret", "alipay", ModeMAPI)
+	result, err := client.CreatePayment(context.Background(), Order{
+		Name: "product", OrderNo: "order-1", Amount: 10,
+		NotifyUrl: "https://merchant.example/notify", ClientIP: "203.0.113.9",
+	})
+	if err != nil {
+		t.Fatalf("CreatePayment: %v", err)
+	}
+	if result.Type != "qr" || result.URL != "weixin://pay/example" || result.TradeNo != "trade-1" {
+		t.Fatalf("unexpected mapi result: %+v", result)
+	}
+}
+
 func TestQueryOrderReturnsAuthoritativeGatewayFields(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.URL.Path; got != "/gateway/api.php" {
@@ -92,6 +161,76 @@ func TestQueryOrderReturnsAuthoritativeGatewayFields(t *testing.T) {
 	}
 	if result.MerchantID != "1001" || result.OrderNo != "order-1" || result.TradeNo != "trade-1" || result.Money != "10.00" || !result.Paid {
 		t.Fatalf("unexpected query result: %+v", result)
+	}
+}
+
+func TestQueryOrderFallsBackToEasyPayStatusQuery(t *testing.T) {
+	var standardRequests, fallbackRequests int
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/gateway/api.php":
+			standardRequests++
+			if r.Method != http.MethodGet {
+				t.Errorf("standard method=%s, want GET", r.Method)
+			}
+			http.NotFound(w, r)
+		case "/gateway/api/EasyPay/queryOrder":
+			fallbackRequests++
+			if r.Method != http.MethodPost {
+				t.Errorf("fallback method=%s, want POST", r.Method)
+			}
+			if !strings.HasPrefix(r.Header.Get("Content-Type"), "application/x-www-form-urlencoded") {
+				t.Errorf("fallback content-type=%q", r.Header.Get("Content-Type"))
+			}
+			if err := r.ParseForm(); err != nil {
+				t.Fatal(err)
+			}
+			if got := r.PostForm.Get("orderNo"); got != "order-1" {
+				t.Errorf("orderNo=%q, want order-1", got)
+			}
+			if len(r.PostForm) != 1 {
+				t.Errorf("fallback params=%v, want only orderNo", r.PostForm)
+			}
+			_ = json.NewEncoder(w).Encode(map[string]interface{}{
+				"code": 1, "msg": "query success", "data": map[string]string{"status": "success"},
+			})
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client := NewClient("1001", server.URL+"/gateway", "secret", "alipay")
+	result, err := client.QueryOrder("order-1")
+	if err != nil {
+		t.Fatalf("QueryOrder: %v", err)
+	}
+	if standardRequests != 1 || fallbackRequests != 1 {
+		t.Fatalf("standard=%d fallback=%d, want one request each", standardRequests, fallbackRequests)
+	}
+	if !result.Paid || !result.StatusOnly || result.Message != "query success" {
+		t.Fatalf("unexpected fallback result: %+v", result)
+	}
+}
+
+func TestQueryOrderEasyPayFallbackReportsUnpaid(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api.php" {
+			http.NotFound(w, r)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]interface{}{
+			"code": 1, "data": map[string]string{"status": "pending"},
+		})
+	}))
+	defer server.Close()
+
+	result, err := NewClient("1001", server.URL, "secret", "alipay").QueryOrder("order-1")
+	if err != nil {
+		t.Fatalf("QueryOrder: %v", err)
+	}
+	if result.Paid || !result.StatusOnly {
+		t.Fatalf("unexpected fallback result: %+v", result)
 	}
 }
 

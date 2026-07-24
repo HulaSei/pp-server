@@ -7,7 +7,8 @@ type CheckoutOrderRequest struct {
 }
 
 type CheckoutOrderResponse struct {
-	Type        string         `json:"type"`
+	// Type is url (including EPay mapi payurl/urlscheme), qr, stripe, or balance.
+	Type        string         `json:"type" enums:"url,qr,stripe,balance" example:"url"`
 	CheckoutUrl string         `json:"checkout_url,omitempty"`
 	Stripe      *StripePayment `json:"stripe,omitempty"`
 }
@@ -149,10 +150,11 @@ type PreRenewalOrderResponse struct {
 }
 
 type PurchaseOrderRequest struct {
-	SubscribeId int64  `json:"subscribe_id"`
-	Quantity    int64  `json:"quantity" validate:"required,gt=0,lte=1000"`
-	Payment     int64  `json:"payment,omitempty"`
-	Coupon      string `json:"coupon,omitempty"`
+	SubscribeId     int64  `json:"subscribe_id"`
+	Quantity        int64  `json:"quantity" validate:"required,gt=0,lte=1000"`
+	Payment         int64  `json:"payment,omitempty"`
+	Coupon          string `json:"coupon,omitempty"`
+	UserSubscribeId int64  `json:"user_subscribe_id,omitempty"`
 }
 
 type PurchaseOrderResponse struct {

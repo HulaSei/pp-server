@@ -59,6 +59,7 @@ type CheckoutConfig struct {
 	SiteName          string
 	CurrencyUnit      string
 	CurrencyAccessKey string
+	ClientIP          string
 }
 
 // GuestCheckoutCache provides the one Redis operation needed to validate
@@ -218,15 +219,16 @@ func (l *PurchaseCheckoutLogic) PurchaseCheckout(req *dto.CheckoutOrderRequest) 
 	// Route to appropriate payment handler based on payment platform
 	switch paymentPlatform.ParsePlatform(orderInfo.Method) {
 	case paymentPlatform.EPay:
-		// Process EPay payment - generates payment URL for redirect
-		url, err := l.epayPayment(paymentConfig, orderInfo, req.ReturnUrl)
+		// Submit mode preserves the legacy gateway redirect; mapi returns the
+		// payment destination received from its server-side POST call.
+		paymentResult, err := l.epayPayment(paymentConfig, orderInfo, req.ReturnUrl)
 		if err != nil {
 			l.Logger.Error("[PurchaseCheckout] epay error", logger.Field("error", err.Error()))
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "epayPayment error: %v", err.Error())
 		}
 		resp = &dto.CheckoutOrderResponse{
-			CheckoutUrl: url,
-			Type:        "url", // Client should redirect to URL
+			CheckoutUrl: paymentResult.URL,
+			Type:        paymentResult.Type,
 		}
 
 	case paymentPlatform.Stripe:
@@ -466,68 +468,75 @@ func (l *PurchaseCheckoutLogic) stripePayment(config string, info *order.Order, 
 
 // epayPayment processes EPay payment by generating a payment URL for redirect
 // It handles currency conversion and creates a payment URL for external payment processing
-func (l *PurchaseCheckoutLogic) epayPayment(config *payment.Payment, info *order.Order, returnUrl string) (string, error) {
+func (l *PurchaseCheckoutLogic) epayPayment(config *payment.Payment, info *order.Order, returnUrl string) (*epay.PaymentResult, error) {
 	var err error
 	// Parse EPay configuration from payment settings
 	epayConfig := &payment.EPayConfig{}
 	if err := epayConfig.Unmarshal([]byte(config.Config)); err != nil {
 		l.Errorw("[PurchaseCheckout] Unmarshal EPay config error", logger.Field("error", err.Error()))
-		return "", errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "Unmarshal error: %s", err.Error())
+		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "Unmarshal error: %s", err.Error())
 	}
 	// Initialize EPay client with merchant credentials
-	client := epay.NewClient(epayConfig.Pid, epayConfig.Url, epayConfig.Key, epayConfig.Type)
+	client := epay.NewClient(epayConfig.Pid, epayConfig.Url, epayConfig.Key, epayConfig.Type, epayConfig.Mode)
 	var amount float64
 	if l.deps.Config.CurrencyUnit != "CNY" {
 		// Convert order amount to CNY using current exchange rate
 		amount, err = l.queryExchangeRate("CNY", info.Amount)
 		if err != nil {
 			l.Logger.Error("[PurchaseCheckout] queryExchangeRate error", logger.Field("error", err.Error()))
-			return "", err
+			return nil, err
 		}
 	} else {
 		amount = float64(info.Amount) / float64(100)
 	}
 	expectedAmount, err := epay.ParseMoney(epay.FormatMoney(amount))
 	if err != nil {
-		return "", errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "invalid EPay amount: %v", err)
+		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "invalid EPay amount: %v", err)
 	}
 	if err := l.persistPaymentExpectation(info, expectedAmount, "CNY"); err != nil {
-		return "", err
+		return nil, err
 	}
 
-	// gateway mod
-	isGatewayMod := report.IsGatewayMode()
-
-	// Build notification URL for payment status callbacks
-	notifyUrl := ""
-	if config.Domain != "" {
-		notifyUrl = strings.TrimSuffix(config.Domain, "/")
-		if isGatewayMod {
-			notifyUrl += "/api/"
-		}
-		notifyUrl = strings.TrimSuffix(notifyUrl, "/") + "/v1/notify/" + config.Platform + "/" + config.Token
-	} else {
-		host, ok := l.ctx.Value(constant.CtxKeyRequestHost).(string)
-		if !ok {
-			host = l.deps.Config.Host
-		}
-		notifyUrl = "https://" + strings.TrimSuffix(host, "/")
-		if isGatewayMod {
-			notifyUrl += "/api"
-		}
-		notifyUrl = strings.TrimSuffix(notifyUrl, "/") + "/v1/notify/" + config.Platform + "/" + config.Token
-	}
-
-	// Create payment URL for user redirection
-	url := client.CreatePayUrl(epay.Order{
+	baseURL := l.paymentPublicBaseURL(config)
+	notifyURL := baseURL + "/v1/notify/" + config.Platform + "/" + config.Token
+	result, err := client.CreatePayment(l.ctx, epay.Order{
 		Name:      l.deps.Config.SiteName,
 		Amount:    amount,
 		OrderNo:   info.OrderNo,
 		SignType:  "MD5",
-		NotifyUrl: notifyUrl,
+		NotifyUrl: notifyURL,
 		ReturnUrl: returnUrl,
+		ClientIP:  l.deps.Config.ClientIP,
 	})
-	return url, nil
+	if err != nil {
+		return nil, err
+	}
+	if result.TradeNo != "" {
+		updated, err := l.deps.Store.SetPaymentTradeNoIfEmpty(l.ctx, info.OrderNo, result.TradeNo)
+		if err != nil {
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseUpdateError), "save EPay trade number: %v", err)
+		}
+		if !updated && info.TradeNo != "" && info.TradeNo != result.TradeNo {
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.OrderStatusError), "EPay checkout already uses a different trade number")
+		}
+		info.TradeNo = result.TradeNo
+	}
+	return result, nil
+}
+
+func (l *PurchaseCheckoutLogic) paymentPublicBaseURL(config *payment.Payment) string {
+	baseURL := strings.TrimSuffix(config.Domain, "/")
+	if baseURL == "" {
+		host, ok := l.ctx.Value(constant.CtxKeyRequestHost).(string)
+		if !ok || host == "" {
+			host = l.deps.Config.Host
+		}
+		baseURL = "https://" + strings.TrimSuffix(host, "/")
+	}
+	if report.IsGatewayMode() {
+		baseURL = strings.TrimSuffix(baseURL, "/") + "/api"
+	}
+	return strings.TrimSuffix(baseURL, "/")
 }
 
 // queryExchangeRate converts the order amount from system currency to target currency
@@ -566,6 +575,14 @@ func (l *PurchaseCheckoutLogic) queryExchangeRate(to string, src int64) (amount 
 }
 
 func (l *PurchaseCheckoutLogic) persistPaymentExpectation(info *order.Order, amount int64, currency string) error {
+	currency = strings.ToUpper(currency)
+	if info.PaymentCurrency != "" {
+		if info.PaymentAmount != amount || !strings.EqualFold(info.PaymentCurrency, currency) {
+			return errors.Wrapf(xerr.NewErrCode(xerr.OrderStatusError), "payment expectation does not match existing checkout")
+		}
+		return nil
+	}
+
 	updated, err := l.deps.Store.UpdatePaymentExpectation(l.ctx, info.OrderNo, amount, currency)
 	if err != nil {
 		l.Errorw("[PurchaseCheckout] Save payment expectation failed",
@@ -574,11 +591,32 @@ func (l *PurchaseCheckoutLogic) persistPaymentExpectation(info *order.Order, amo
 		)
 		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseUpdateError), "save payment expectation: %v", err)
 	}
-	if !updated {
+	if updated {
+		info.PaymentAmount = amount
+		info.PaymentCurrency = currency
+		return nil
+	}
+
+	// Another concurrent checkout may have recorded the immutable snapshot
+	// first. Reload it so identical retries can continue (and, for Stripe,
+	// reuse the payment intent it already claimed) while a different amount or
+	// currency remains rejected.
+	latest, err := l.deps.Store.FindOrderByOrderNo(l.ctx, info.OrderNo)
+	if err != nil {
+		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "reload payment expectation: %v", err)
+	}
+	if latest.Status != 1 {
 		return errors.Wrapf(xerr.NewErrCode(xerr.OrderStatusError), "order is no longer pending")
 	}
-	info.PaymentAmount = amount
-	info.PaymentCurrency = currency
+	if latest.PaymentCurrency == "" {
+		return errors.Wrapf(xerr.NewErrCode(xerr.OrderStatusError), "payment checkout is being initialized; retry")
+	}
+	if latest.PaymentAmount != amount || !strings.EqualFold(latest.PaymentCurrency, currency) {
+		return errors.Wrapf(xerr.NewErrCode(xerr.OrderStatusError), "payment expectation does not match existing checkout")
+	}
+	info.PaymentAmount = latest.PaymentAmount
+	info.PaymentCurrency = latest.PaymentCurrency
+	info.TradeNo = latest.TradeNo
 	return nil
 }
 
