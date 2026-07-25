@@ -96,6 +96,32 @@ func (m *Service) Start() {
 		trace.StopAgent()
 	})
 	m.svc.Restart = m.Restart
+	m.svc.ReinitSubsystem = func(subsystem string) {
+		switch subsystem {
+		case "verify":
+			initialize.Verify(m.svc)
+		case "node":
+			initialize.Node(m.svc)
+		case "telegram":
+			initialize.Telegram(m.svc)
+		case "currency":
+			initialize.Currency(m.svc)
+		case "register":
+			initialize.Register(m.svc)
+		case "site":
+			initialize.Site(m.svc)
+		case "invite":
+			initialize.Invite(m.svc)
+		case "subscribe":
+			initialize.Subscribe(m.svc)
+		case "email":
+			initialize.Email(m.svc)
+		case "mobile":
+			initialize.Mobile(m.svc)
+		case "device":
+			initialize.Device(m.svc)
+		}
+	}
 	logger.Infof("server start at %v", serverAddr)
 	m.server.Start()
 }

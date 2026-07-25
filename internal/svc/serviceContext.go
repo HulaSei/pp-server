@@ -7,8 +7,16 @@ import (
 	"github.com/perfect-panel/server/pkg/exchangeRate"
 
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/eventbus"
+	"github.com/perfect-panel/server/internal/module/billing"
+	"github.com/perfect-panel/server/internal/module/identity"
+	"github.com/perfect-panel/server/internal/module/network"
+	"github.com/perfect-panel/server/internal/module/notification"
+	"github.com/perfect-panel/server/internal/module/platform"
+	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/module/support"
 	"github.com/perfect-panel/server/internal/repository"
+	"github.com/perfect-panel/server/pkg/asynqx"
 	"github.com/perfect-panel/server/pkg/limit"
 	"github.com/perfect-panel/server/pkg/nodeMultiplier"
 	"github.com/perfect-panel/server/pkg/orm"
@@ -21,7 +29,7 @@ import (
 type ServiceContext struct {
 	Redis        *redis.Client
 	Config       config.Config
-	Queue        *asynq.Client
+	Queue        *asynqx.Client
 	Inspector    *asynq.Inspector
 	ExchangeRate *exchangeRate.Cache
 	GeoIP        *IPLocation
@@ -29,10 +37,21 @@ type ServiceContext struct {
 
 	// Domain modules (see docs/adr-001-modular-monolith.md). ServiceContext is
 	// their composition root; handlers call the module facades.
-	Support support.Service
+	Support      support.Service
+	Billing      billing.Service
+	Platform     platform.Service
+	Subscription subscription.Service
+	Identity     identity.Service
+	Network      network.Service
+	Notification notification.Service
+	EventBus     *eventbus.Bus
 
 	//NodeCache   *cache.NodeCacheClient
-	Restart               func() error
+	Restart func() error
+	// ReinitSubsystem re-runs a subsystem's initialization after its
+	// configuration changed; assigned by the transport server alongside
+	// Restart (the initialize package cannot be imported here).
+	ReinitSubsystem       func(subsystem string)
 	TelegramBot           *tgbotapi.BotAPI
 	NodeMultiplierManager *nodeMultiplier.Manager
 	AuthLimiter           *limit.PeriodLimit
@@ -65,21 +84,29 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		panic(err.Error())
 	}
 	authLimiter := limit.NewPeriodLimit(86400, 15, rds, config.SendCountLimitKeyPrefix, limit.Align())
-	store := repository.NewGormStore(db, rds)
+	store := NewStore(db, rds)
 	queue := NewAsynqClient(c)
+	rate := exchangeRate.NewCache(0)
 	srv := &ServiceContext{
 		Redis:        rds,
 		Config:       c,
 		Queue:        queue,
 		Inspector:    NewAsynqInspector(c),
-		ExchangeRate: exchangeRate.NewCache(0),
+		ExchangeRate: rate,
 		GeoIP:        geoIP,
 		Store:        store,
 		Support:      newSupportModule(store, queue),
 		//NodeCache:   cache.NewNodeCacheClient(rds),
 		AuthLimiter: authLimiter,
 	}
+	srv.Billing = newBillingModule(c, store, queue, rds, rate, srv)
+	srv.Platform = newPlatformModule(store, srv)
 	srv.DeviceManager = NewDeviceManager(srv)
+	srv.Subscription = newSubscriptionModule(store, srv)
+	srv.Identity = newIdentityModule(store, srv)
+	srv.Network = newNetworkModule(store, srv)
+	srv.Notification = newNotificationModule(store, srv)
+	srv.EventBus = newEventBus(store, srv)
 	return srv
 
 }

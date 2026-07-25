@@ -28,12 +28,37 @@ const importPrefix = "github.com/perfect-panel/server/"
 // internal/logic, keyed by importer directory. Removing an edge here is always
 // welcome; adding one requires updating docs/adr-001-modular-monolith.md, as
 // each new edge makes the future module split harder.
-var legacyLogicImports = map[string][]string{
-	"internal/logic/admin/server": {"internal/logic/nodeconfig"},
-	"internal/logic/auth":         {"internal/logic/common"},
-	"internal/logic/public/order": {"internal/logic/notify", "internal/logic/public/portal"},
-	"internal/logic/public/user":  {"internal/logic/auth/registerpolicy", "internal/logic/common", "internal/logic/telegram"},
-	"internal/logic/server":       {"internal/logic/nodeconfig"},
+var legacyLogicImports = map[string][]string{}
+
+// svcImporters is the frozen baseline of package directories that may import
+// internal/svc (the legacy god object). ADR-001 step 3 shrinks this list as
+// domains move behind module facades with injected dependencies; removing an
+// entry is always welcome, adding one requires updating the ADR.
+var svcImporters = map[string]bool{
+	"cmd": true, "initialize": true, "internal": true,
+	"internal/handler": true, "internal/handler/admin": true,
+	"internal/handler/admin/ads": true, "internal/handler/admin/announcement": true,
+	"internal/handler/admin/application": true, "internal/handler/admin/authMethod": true,
+	"internal/handler/admin/console": true, "internal/handler/admin/coupon": true,
+	"internal/handler/admin/document": true, "internal/handler/admin/log": true,
+	"internal/handler/admin/marketing": true, "internal/handler/admin/order": true,
+	"internal/handler/admin/payment": true, "internal/handler/admin/server": true,
+	"internal/handler/admin/subscribe": true, "internal/handler/admin/system": true,
+	"internal/handler/admin/ticket": true, "internal/handler/admin/tool": true,
+	"internal/handler/admin/user": true, "internal/handler/auth": true,
+	"internal/handler/auth/oauth": true, "internal/handler/common": true,
+	"internal/handler/edge": true, "internal/handler/notify": true,
+	"internal/handler/public/announcement": true, "internal/handler/public/document": true,
+	"internal/handler/public/order": true, "internal/handler/public/payment": true,
+	"internal/handler/public/portal": true, "internal/handler/public/subscribe": true,
+	"internal/handler/public/ticket": true, "internal/handler/public/user": true,
+	"internal/handler/server": true,
+	"internal/middleware":     true, "internal/route": true,
+	"internal/transport/httpserver": true,
+	"queue":                         true, "queue/handler": true,
+	"queue/logic/email": true, "queue/logic/events": true, "queue/logic/order": true, "queue/logic/sms": true,
+	"queue/logic/subscription": true, "queue/logic/task": true, "queue/logic/traffic": true,
+	"scheduler": true,
 }
 
 // skippedDirs are top-level directories that contain no production Go code
@@ -161,9 +186,28 @@ func TestModulePurity(t *testing.T) {
 	}
 }
 
-// TestModuleLayout enforces that a module exposes only its facade package and
-// an optional events package: every other .go file must live under the
-// module's internal/ subtree where the compiler seals it off.
+// TestSvcImportFreeze forbids new packages from importing the internal/svc
+// god object: the frozen baseline above may only shrink. New code receives
+// its dependencies via module facade constructors (ADR-001 step 3).
+func TestSvcImportFreeze(t *testing.T) {
+	for _, f := range collectGoFiles(t) {
+		for _, imp := range f.imports {
+			if !within(imp, "internal/svc") {
+				continue
+			}
+			if within(f.dir, "internal/svc") || svcImporters[f.dir] {
+				continue
+			}
+			t.Errorf("%s: new import of internal/svc — inject dependencies through a module facade instead (see docs/adr-001-modular-monolith.md)", f.path)
+		}
+	}
+}
+
+// TestModuleLayout enforces that a module exposes only its facade package,
+// an optional events package and its entity/ packages (the persistence
+// structs it owns — plain data other modules may read): every other .go file
+// must live under the module's internal/ subtree where the compiler seals it
+// off.
 func TestModuleLayout(t *testing.T) {
 	for _, f := range collectGoFiles(t) {
 		rest, ok := strings.CutPrefix(f.dir, "internal/module/")
@@ -174,9 +218,9 @@ func TestModuleLayout(t *testing.T) {
 		if len(segs) < 2 {
 			continue // facade package internal/module/<name>
 		}
-		if segs[1] == "internal" || segs[1] == "events" {
+		if segs[1] == "internal" || segs[1] == "events" || segs[1] == "entity" {
 			continue
 		}
-		t.Errorf("%s: module %q may only expose its facade and events/ packages; implementation belongs under internal/module/%s/internal/", f.path, segs[0], segs[0])
+		t.Errorf("%s: module %q may only expose its facade, events/ and entity/ packages; implementation belongs under internal/module/%s/internal/", f.path, segs[0], segs[0])
 	}
 }
