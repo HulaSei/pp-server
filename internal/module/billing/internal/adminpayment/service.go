@@ -128,17 +128,23 @@ func (s *Service) Update(ctx context.Context, req *dto.UpdatePaymentMethodReques
 	if req.Sort == 0 {
 		req.Sort = method.Sort
 	}
-	config := parsePaymentPlatformConfig(ctx, payment.ParsePlatform(req.Platform), req.Config)
-	if config == "" {
-		return nil, errors.Wrapf(xerr.NewErrCodeMsg(400, "INVALID_PAYMENT_CONFIG"), "invalid payment config")
-	}
-	if method.Config != config || method.Domain != req.Domain {
-		pending, err := s.orders.CountPendingByPaymentID(ctx, method.Id)
-		if err != nil {
-			return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "count pending payment orders: %v", err)
+	// Balance is an internal checkout method: it has no gateway credentials
+	// to validate and no callback URL, so toggling it must neither parse a
+	// platform config nor be blocked by the pending-order guard.
+	config := method.Config
+	if payment.ParsePlatform(req.Platform) != payment.Balance {
+		config = parsePaymentPlatformConfig(ctx, payment.ParsePlatform(req.Platform), req.Config)
+		if config == "" {
+			return nil, errors.Wrapf(xerr.NewErrCodeMsg(400, "INVALID_PAYMENT_CONFIG"), "invalid payment config")
 		}
-		if pending > 0 {
-			return nil, errors.Wrapf(xerr.NewErrCodeMsg(409, "PAYMENT_METHOD_HAS_PENDING_ORDERS"), "payment method has %d pending orders", pending)
+		if method.Config != config || method.Domain != req.Domain {
+			pending, err := s.orders.CountPendingByPaymentID(ctx, method.Id)
+			if err != nil {
+				return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "count pending payment orders: %v", err)
+			}
+			if pending > 0 {
+				return nil, errors.Wrapf(xerr.NewErrCodeMsg(409, "PAYMENT_METHOD_HAS_PENDING_ORDERS"), "payment method has %d pending orders", pending)
+			}
 		}
 	}
 	tool.DeepCopy(method, req)
@@ -156,6 +162,16 @@ func (s *Service) Update(ctx context.Context, req *dto.UpdatePaymentMethodReques
 }
 
 func (s *Service) Delete(ctx context.Context, req *dto.DeletePaymentMethodRequest) error {
+	method, err := s.payments.FindOne(ctx, req.Id)
+	if err != nil {
+		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find payment method error: %v", err)
+	}
+	// The seeded balance method is an internal checkout method the storefront
+	// depends on; deleting it breaks every balance purchase with an opaque
+	// record-not-found until the seed row is restored by hand.
+	if payment.ParsePlatform(method.Platform) == payment.Balance {
+		return errors.Wrapf(xerr.NewErrCodeMsg(400, "PAYMENT_METHOD_INTERNAL"), "the balance payment method cannot be deleted")
+	}
 	pending, err := s.orders.CountPendingByPaymentID(ctx, req.Id)
 	if err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "count pending payment orders: %v", err)
