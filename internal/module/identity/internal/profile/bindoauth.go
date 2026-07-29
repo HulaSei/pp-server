@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
+	facebookoauth "github.com/perfect-panel/server/pkg/oauth/facebook"
 	githuboauth "github.com/perfect-panel/server/pkg/oauth/github"
 	"github.com/perfect-panel/server/pkg/oauth/google"
 	"github.com/perfect-panel/server/pkg/oauth/telegram"
+	"github.com/perfect-panel/server/pkg/oauthstate"
 	"github.com/perfect-panel/server/pkg/random"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
@@ -48,7 +50,7 @@ func (l *BindOAuthLogic) BindOAuth(req *dto.BindOAuthRequest) (resp *dto.BindOAu
 	case "github":
 		uri, err = l.github(req)
 	case "facebook":
-		uri, err = l.facebook()
+		uri, err = l.facebook(req)
 	default:
 		l.Errorw("oauth login method not support: %v", logger.Field("method", req.Method))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "oauth login method not support: %v", req.Method)
@@ -89,8 +91,30 @@ func (l *BindOAuthLogic) google(req *dto.BindOAuthRequest) (string, error) {
 	return uri, nil
 }
 
-func (l *BindOAuthLogic) facebook() (string, error) {
-	return "", nil
+func (l *BindOAuthLogic) facebook(req *dto.BindOAuthRequest) (string, error) {
+	authMethod, err := l.deps.Auth.FindOneByMethod(l.ctx, "facebook")
+	if err != nil {
+		return "", err
+	}
+	var cfg auth.FacebookAuthConfig
+	err = cfg.Unmarshal(authMethod.Config)
+	if err != nil {
+		l.Errorw("error unmarshal facebook config", logger.Field("error", err.Error()))
+		return "", err
+	}
+	client := facebookoauth.New(&facebookoauth.Config{
+		ClientID:     cfg.ClientId,
+		ClientSecret: cfg.ClientSecret,
+		RedirectURL:  req.Redirect,
+	})
+	// generate the state code
+	code := random.KeyNew(32, 1)
+	// save the state code
+	err = l.deps.Redis.Set(l.ctx, fmt.Sprintf("facebook:%s", code), req.Redirect, 5*60*time.Second).Err()
+	if err != nil {
+		return "", err
+	}
+	return client.AuthCodeURL(code), nil
 }
 func (l *BindOAuthLogic) apple(req *dto.BindOAuthRequest) (string, error) {
 	authMethod, err := l.deps.Auth.FindOneByMethod(l.ctx, "apple")
@@ -103,6 +127,11 @@ func (l *BindOAuthLogic) apple(req *dto.BindOAuthRequest) (string, error) {
 		l.Errorw("error unmarshal apple config", logger.Field("error", err.Error()))
 		return "", err
 	}
+	// The stored redirect becomes a browser redirect in the Apple form-post
+	// callback, so pin it to the configured site host.
+	if err := oauthstate.ValidateRedirect(req.Redirect, l.siteHost()); err != nil {
+		return "", errors.Wrapf(xerr.NewErrCode(xerr.InvalidParams), "invalid redirect: %v", err)
+	}
 	uri := "https://appleid.apple.com/auth/authorize?client_id=%s&redirect_uri=%s&response_type=code&state=%s&scope=name email&response_mode=form_post"
 	// generate the state code
 	code := random.KeyNew(32, 1)
@@ -110,6 +139,7 @@ func (l *BindOAuthLogic) apple(req *dto.BindOAuthRequest) (string, error) {
 	err = l.deps.Redis.Set(l.ctx, fmt.Sprintf("apple:%s", code), req.Redirect, 5*60*time.Second).Err()
 	if err != nil {
 		l.Errorw("error save state code to redis", logger.Field("error", err.Error()))
+		return "", err
 	}
 	return fmt.Sprintf(uri, cfg.ClientId, fmt.Sprintf("%s/v1/auth/oauth/callback/apple", cfg.RedirectURL), code), nil
 }
@@ -151,6 +181,17 @@ func (l *BindOAuthLogic) telegram(req *dto.BindOAuthRequest) (string, error) {
 		l.Errorw("error unmarshal telegram config", logger.Field("error", err.Error()))
 		return "", err
 	}
-	code := random.KeyNew(32, 1)
-	return telegram.GenerateTelegramOAuthURL(cfg.BotToken, code, req.Redirect), nil
+	// Telegram Login has no OAuth state round-trip: the bind callback
+	// authenticates the widget result by its HMAC signature and auth_date
+	// freshness. The random value only feeds the URL's embed parameter.
+	return telegram.GenerateTelegramOAuthURL(cfg.BotToken, random.KeyNew(32, 1), req.Redirect), nil
+}
+
+// siteHost snapshots the configured site host; the accessor is optional so
+// tests may build Deps without it.
+func (l *BindOAuthLogic) siteHost() string {
+	if l.deps.SiteHost == nil {
+		return ""
+	}
+	return l.deps.SiteHost()
 }
