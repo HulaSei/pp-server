@@ -9,9 +9,12 @@ import (
 	"github.com/redis/go-redis/v9"
 )
 
-// TelegramSessionStore reads short-lived account-binding sessions.
+// TelegramSessionStore reads and consumes short-lived account-binding tokens.
+// Deleting the token on a successful bind is what makes the deep link
+// single-use.
 type TelegramSessionStore interface {
 	Get(ctx context.Context, key string) (string, error)
+	Delete(ctx context.Context, key string) error
 }
 
 // TelegramRedisStore supports both account-binding sessions and administrator
@@ -39,6 +42,12 @@ type TelegramLogicDependencies struct {
 // NewTelegramBotMessenger adapts a Telegram Bot API client to the command
 // messenger port.
 func NewTelegramBotMessenger(bot *tgbotapi.BotAPI) TelegramMessenger {
+	return telegramBotMessenger{bot: bot}
+}
+
+// NewTelegramBotCommandRegistrar adapts a Telegram Bot API client to the
+// command-menu port.
+func NewTelegramBotCommandRegistrar(bot *tgbotapi.BotAPI) TelegramCommandRegistrar {
 	return telegramBotMessenger{bot: bot}
 }
 
