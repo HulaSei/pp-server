@@ -171,6 +171,11 @@ func sanitizeRuntimeProtocol(protocol *Protocol) bool {
 	case "snell":
 		protocol.Security = ""
 		protocol.SNI = ""
+		// Snell multiplexes inside the protocol, so the node exposes no knob.
+		protocol.Multiplex = ""
+		// The node ignores the listener PSK but still bounds it on v6, so a
+		// stale value could reject an otherwise valid inbound.
+		protocol.ServerKey = ""
 		clearTLSClient(protocol)
 		clearCertificate(protocol)
 		clearReality(protocol)
@@ -184,9 +189,11 @@ func sanitizeRuntimeProtocol(protocol *Protocol) bool {
 		} else {
 			protocol.Obfs = ""
 		}
-		return protocol.Port > 0 && protocol.ServerKey != "" && (protocol.Version == 5 || protocol.Version == 6)
+		return protocol.Port > 0 && (protocol.Version == 5 || protocol.Version == 6)
 	case "hysteria":
 		protocol.Security = "tls"
+		// The node rejects a multiplex value on QUIC inbounds.
+		protocol.Multiplex = ""
 		clearTLSClient(protocol)
 		clearReality(protocol)
 		clearStreamTransport(protocol)
@@ -195,6 +202,8 @@ func sanitizeRuntimeProtocol(protocol *Protocol) bool {
 		return protocol.Port > 0 && hasTLSCertificate(*protocol)
 	case "naive":
 		protocol.Security = "tls"
+		// The node rejects a multiplex value on QUIC inbounds.
+		protocol.Multiplex = ""
 		clearTLSClient(protocol)
 		clearReality(protocol)
 		clearStreamTransport(protocol)
@@ -299,9 +308,9 @@ func validateRuntimeProtocol(protocol *Protocol) error {
 		if protocol.Version != 5 && protocol.Version != 6 {
 			return fmt.Errorf("snell requires version 5 or 6")
 		}
-		if protocol.ServerKey == "" || protocol.Version == 6 && len(protocol.ServerKey) < 12 {
-			return fmt.Errorf("snell requires valid server_key")
-		}
+		// Every user authenticates with their own UUID as the PSK, so the
+		// listener key is obsolete for both versions.
+		protocol.ServerKey = ""
 		if protocol.Version == 5 {
 			if protocol.Mode != "" {
 				return fmt.Errorf("snell v5 does not support mode")
@@ -351,6 +360,10 @@ func validateRuntimeProtocol(protocol *Protocol) error {
 		}
 		if !validShadowsocksrObfs(protocol.Obfs) {
 			return fmt.Errorf("shadowsocksr obfs is invalid")
+		}
+		// Obfs only wraps TCP, so a UDP-only listener has nothing to obfuscate.
+		if protocol.Transport == "udp" && protocol.Obfs != "plain" {
+			return fmt.Errorf("shadowsocksr udp-only transport requires plain obfs")
 		}
 	}
 	if protocolRequiresTLSCertificate(*protocol) && !hasTLSCertificate(*protocol) {
@@ -675,9 +688,12 @@ func validShadowsocksrCipher(cipher string) bool {
 	}
 }
 
+// Only the protocols that carry a wire UID are allowed: origin and the legacy
+// verify/auth families cap the node at exactly one active user.
 func validShadowsocksrProtocol(protocol string) bool {
 	switch strings.ToLower(strings.TrimSpace(protocol)) {
-	case "auth_aes128_md5", "auth_aes128_sha1", "auth_chain_a":
+	case "auth_aes128_md5", "auth_aes128_sha1", "auth_chain_a", "auth_chain_b",
+		"auth_chain_c", "auth_chain_d", "auth_chain_e", "auth_chain_f":
 		return true
 	default:
 		return false
@@ -686,7 +702,8 @@ func validShadowsocksrProtocol(protocol string) bool {
 
 func validShadowsocksrObfs(obfs string) bool {
 	switch strings.ToLower(strings.TrimSpace(obfs)) {
-	case "plain", "http_simple", "http_post", "tls1.2_ticket_auth", "tls1.2_ticket_fastauth":
+	case "plain", "http_simple", "http_post", "tls1.0_session_auth",
+		"tls1.2_ticket_auth", "tls1.2_ticket_fastauth":
 		return true
 	default:
 		return false
@@ -919,7 +936,6 @@ func clearQUICControls(protocol *Protocol) {
 	protocol.QUICCongestionControl = ""
 	protocol.ReduceRtt = false
 	protocol.Heartbeat = 0
-	protocol.Multiplex = ""
 	protocol.PaddingScheme = ""
 }
 
