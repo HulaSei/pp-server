@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"testing"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/go-telegram/bot/models"
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
@@ -98,12 +98,13 @@ func TestStartRejectsSessionIdAsToken(t *testing.T) {
 		fmt.Sprintf("%v:%v", config.SessionIdKey, token): "7",
 	})
 
-	update := &tgbotapi.Update{Message: &tgbotapi.Message{
+	msg := &models.Message{
 		Text:     "/start " + token,
-		Chat:     &tgbotapi.Chat{ID: 1001},
-		Entities: []tgbotapi.MessageEntity{{Type: "bot_command", Offset: 0, Length: 6}},
-	}}
-	if err := logic.start(update); err != nil {
+		Chat:     models.Chat{ID: 1001, Type: models.ChatTypePrivate},
+		From:     &models.User{ID: 1001},
+		Entities: []models.MessageEntity{{Type: models.MessageEntityTypeBotCommand, Offset: 0, Length: 6}},
+	}
+	if err := logic.start(msg); err != nil {
 		t.Fatalf("start error = %v", err)
 	}
 	if len(auths.inserted) != 0 {
@@ -132,6 +133,9 @@ func TestBindConsumesDedicatedTokenExactlyOnce(t *testing.T) {
 	}
 	if len(store.deleted) != 1 || store.deleted[0] != key {
 		t.Fatalf("deleted keys = %v, want [%s]", store.deleted, key)
+	}
+	if !messenger.markdown {
+		t.Fatal("bind confirmation must be sent as MarkdownV2, not plain text")
 	}
 
 	// Replaying the same link finds nothing to redeem.

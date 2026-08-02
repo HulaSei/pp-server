@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	tgbot "github.com/go-telegram/bot"
 	"strconv"
 	"time"
 
@@ -21,6 +21,7 @@ import (
 	"github.com/perfect-panel/server/internal/module/platform"
 	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/module/support"
+	ticket "github.com/perfect-panel/server/internal/module/support/entity/ticket"
 	"github.com/perfect-panel/server/internal/report"
 	"github.com/perfect-panel/server/internal/repository"
 	emailworker "github.com/perfect-panel/server/internal/worker/email"
@@ -287,7 +288,7 @@ func (n lifecycleNotifier) NotifySubscriptionExpiring(ctx context.Context, userI
 	if planName == "" {
 		planName = "订阅"
 	}
-	text, err := tool.RenderTemplateToString(notification.SubscribeExpireNotify, map[string]string{
+	text, err := notification.RenderTelegramMarkdown(notification.SubscribeExpireNotify, map[string]string{
 		"SubscribeName": planName,
 		"ExpiredAt":     expireAt.Format("2006-01-02 15:04:05"),
 		"RenewalAmount": fmt.Sprintf("%.2f", float64(renewalAmount)/100),
@@ -485,7 +486,9 @@ func newEventBus(store repository.Store, srv *ServiceContext) *eventbus.Bus {
 // call.
 func newNotificationModule(store repository.Store, srv *ServiceContext) notification.Service {
 	return notification.New(notification.Deps{
-		Bot:           func() *tgbotapi.BotAPI { return srv.TelegramBot },
+		Bot:           func() *tgbot.Bot { return srv.TelegramBot },
+		GroupChatID:   func() int64 { return srv.Config.Telegram.GroupChatID },
+		Topics:        store.TelegramTopic(),
 		Redis:         srv.Redis,
 		Users:         store.User(),
 		UserAuth:      store.UserAuth(),
@@ -502,7 +505,7 @@ func newNotificationModule(store repository.Store, srv *ServiceContext) notifica
 // newSupportModule wires the support module against the legacy store. The
 // adapters below satisfy the module's ports until the owning modules exist
 // (ADR-001).
-func newSupportModule(store repository.Store, queue *asynqx.Client) support.Service {
+func newSupportModule(store repository.Store, queue *asynqx.Client, srv *ServiceContext) support.Service {
 	return support.New(support.Deps{
 		Announcements: store.Announcement(),
 		Ads:           store.Ads(),
@@ -514,6 +517,51 @@ func newSupportModule(store repository.Store, queue *asynqx.Client) support.Serv
 		QuotaTargets:  store.UserSubscription(),
 		Queue:         marketingQueue{client: queue},
 		EmailStopper:  emailWorkerStopper{},
+		TicketNotify:  ticketTopicNotifier{srv: srv},
+	})
+}
+
+// ticketTopicNotifier mirrors ticket lifecycle into the Telegram admin
+// group. Best-effort by the port's contract: the group being unconfigured
+// or unreachable only logs — the ticket operation already succeeded. The
+// mirror runs detached from the request: a user submitting a ticket must
+// not wait on Telegram round-trips (the bot client's HTTP timeout is 60s).
+type ticketTopicNotifier struct{ srv *ServiceContext }
+
+func (n ticketTopicNotifier) enabled() bool {
+	return n.srv.Config.Telegram.GroupChatID != 0 && n.srv.Notification != nil
+}
+
+func (n ticketTopicNotifier) mirror(ctx context.Context, ticketID int64, what string, call func(ctx context.Context) error) {
+	if !n.enabled() {
+		return
+	}
+	detached := context.WithoutCancel(ctx)
+	go func() {
+		mirrorCtx, cancel := context.WithTimeout(detached, 15*time.Second)
+		defer cancel()
+		if err := call(mirrorCtx); err != nil {
+			logger.WithContext(mirrorCtx).Errorw("[TicketTopic] "+what+" mirror failed",
+				logger.Field("error", err.Error()), logger.Field("ticket_id", ticketID))
+		}
+	}()
+}
+
+func (n ticketTopicNotifier) TicketCreated(ctx context.Context, t *ticket.Ticket) {
+	n.mirror(ctx, t.Id, "create", func(ctx context.Context) error {
+		return n.srv.Notification.NotifyTicketCreated(ctx, t)
+	})
+}
+
+func (n ticketTopicNotifier) TicketReplied(ctx context.Context, ticketID int64, from, content string) {
+	n.mirror(ctx, ticketID, "reply", func(ctx context.Context) error {
+		return n.srv.Notification.NotifyTicketReplied(ctx, ticketID, from, content)
+	})
+}
+
+func (n ticketTopicNotifier) TicketStatusChanged(ctx context.Context, ticketID int64, status uint8) {
+	n.mirror(ctx, ticketID, "status", func(ctx context.Context) error {
+		return n.srv.Notification.NotifyTicketStatusChanged(ctx, ticketID, status)
 	})
 }
 

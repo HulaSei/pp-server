@@ -13,7 +13,6 @@ import (
 	"fmt"
 	"strconv"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
@@ -275,16 +274,14 @@ func (l *ActivateOrderLogic) getGuestOrderInfo(ctx context.Context, orderInfo *o
 // sendNotifications sends both user and admin notifications for order completion
 func (l *ActivateOrderLogic) sendNotifications(ctx context.Context, orderInfo *order.Order, userInfo *user.User, outcome *subscription.FulfillmentOutcome, notifyType string) {
 	// Send user notification
-	if telegramId, ok := findTelegram(userInfo); ok {
-		templateData := l.buildUserNotificationData(orderInfo, outcome)
-		if text, err := tool.RenderTemplateToString(notifyType, templateData); err == nil {
-			l.sendUserNotifyWithTelegram(telegramId, text)
-		}
+	templateData := l.buildUserNotificationData(orderInfo, outcome)
+	if text, err := notification.RenderTelegramMarkdown(notifyType, templateData); err == nil {
+		l.sendUserNotifyWithTelegram(ctx, userInfo.Id, text)
 	}
 
 	// Send admin notification
-	adminData := l.buildAdminNotificationData(orderInfo, outcome)
-	if text, err := tool.RenderTemplateToString(notification.AdminOrderNotify, adminData); err == nil {
+	adminData := l.buildAdminNotificationData(orderInfo, userInfo, outcome)
+	if text, err := notification.RenderTelegramMarkdown(notification.AdminOrderNotify, adminData); err == nil {
 		l.sendAdminNotifyWithTelegram(ctx, text)
 	}
 }
@@ -292,29 +289,28 @@ func (l *ActivateOrderLogic) sendNotifications(ctx context.Context, orderInfo *o
 // sendRechargeNotifications sends specific notifications for balance recharge orders
 func (l *ActivateOrderLogic) sendRechargeNotifications(ctx context.Context, orderInfo *order.Order, userInfo *user.User, balance int64) {
 	// Send user notification
-	if telegramId, ok := findTelegram(userInfo); ok {
-		templateData := map[string]string{
-			"OrderAmount":   fmt.Sprintf("%.2f", float64(orderInfo.Price)/100),
-			"PaymentMethod": orderInfo.Method,
-			"Time":          orderInfo.CreatedAt.Format("2006-01-02 15:04:05"),
-			"Balance":       fmt.Sprintf("%.2f", float64(balance)/100),
-		}
-		if text, err := tool.RenderTemplateToString(notification.RechargeNotify, templateData); err == nil {
-			l.sendUserNotifyWithTelegram(telegramId, text)
-		}
+	templateData := map[string]string{
+		"OrderAmount":   fmt.Sprintf("%.2f", float64(orderInfo.Price)/100),
+		"PaymentMethod": orderInfo.Method,
+		"Time":          orderInfo.CreatedAt.Format("2006-01-02 15:04:05"),
+		"Balance":       fmt.Sprintf("%.2f", float64(balance)/100),
+	}
+	if text, err := notification.RenderTelegramMarkdown(notification.RechargeNotify, templateData); err == nil {
+		l.sendUserNotifyWithTelegram(ctx, userInfo.Id, text)
 	}
 
 	// Send admin notification
 	adminData := map[string]string{
 		"OrderNo":       orderInfo.OrderNo,
 		"TradeNo":       orderInfo.TradeNo,
+		"UserEmail":     findEmail(userInfo),
 		"OrderAmount":   fmt.Sprintf("%.2f", float64(orderInfo.Price)/100),
 		"SubscribeName": "余额充值",
 		"OrderStatus":   "已支付",
 		"OrderTime":     orderInfo.CreatedAt.Format("2006-01-02 15:04:05"),
 		"PaymentMethod": orderInfo.Method,
 	}
-	if text, err := tool.RenderTemplateToString(notification.AdminOrderNotify, adminData); err == nil {
+	if text, err := notification.RenderTelegramMarkdown(notification.AdminOrderNotify, adminData); err == nil {
 		l.sendAdminNotifyWithTelegram(ctx, text)
 	}
 }
@@ -336,7 +332,7 @@ func (l *ActivateOrderLogic) buildUserNotificationData(orderInfo *order.Order, o
 }
 
 // buildAdminNotificationData creates template data for admin notifications
-func (l *ActivateOrderLogic) buildAdminNotificationData(orderInfo *order.Order, outcome *subscription.FulfillmentOutcome) map[string]string {
+func (l *ActivateOrderLogic) buildAdminNotificationData(orderInfo *order.Order, userInfo *user.User, outcome *subscription.FulfillmentOutcome) map[string]string {
 	subscribeName := outcome.PlanName
 	if orderInfo.Type == OrderTypeResetTraffic {
 		subscribeName = "流量重置"
@@ -345,6 +341,7 @@ func (l *ActivateOrderLogic) buildAdminNotificationData(orderInfo *order.Order, 
 	return map[string]string{
 		"OrderNo":       orderInfo.OrderNo,
 		"TradeNo":       orderInfo.TradeNo,
+		"UserEmail":     findEmail(userInfo),
 		"SubscribeName": subscribeName,
 		"OrderAmount":   fmt.Sprintf("%.2f", float64(orderInfo.Price)/100),
 		"OrderStatus":   "已支付",
@@ -353,49 +350,37 @@ func (l *ActivateOrderLogic) buildAdminNotificationData(orderInfo *order.Order, 
 	}
 }
 
-// sendUserNotifyWithTelegram sends a notification message to a user via Telegram
-func (l *ActivateOrderLogic) sendUserNotifyWithTelegram(chatId int64, text string) {
+// sendUserNotifyWithTelegram delivers rendered MarkdownV2 to the buyer's
+// bound Telegram; "no binding" and "no bot" both just mean nothing to send.
+func (l *ActivateOrderLogic) sendUserNotifyWithTelegram(ctx context.Context, userID int64, text string) {
 	if !l.svc.Config.Telegram.EnableNotify {
 		return
 	}
-	msg := tgbotapi.NewMessage(chatId, text)
-	msg.ParseMode = "markdown"
-	if _, err := l.svc.TelegramBot.Send(msg); err != nil {
-		logger.Error("Send telegram user message failed", logger.Field("error", err.Error()))
+	if err := l.svc.Notification.NotifyTelegramUser(ctx, userID, text); err != nil {
+		logger.WithContext(ctx).Info("Telegram user notice skipped",
+			logger.Field("reason", err.Error()), logger.Field("user_id", userID))
 	}
 }
 
-// sendAdminNotifyWithTelegram sends a notification message to all admin users via Telegram
+// sendAdminNotifyWithTelegram posts into the admin group's notification
+// topic - the group is the only administrator channel, so an unconfigured
+// group means the notice is skipped.
 func (l *ActivateOrderLogic) sendAdminNotifyWithTelegram(ctx context.Context, text string) {
 	if !l.svc.Config.Telegram.EnableNotify {
 		return
 	}
-	admins, err := l.svc.Store.User().QueryAdminUsers(ctx)
-	if err != nil {
-		logger.WithContext(ctx).Error("Query admin users failed", logger.Field("error", err.Error()))
-		return
-	}
-
-	for _, admin := range admins {
-		if telegramId, ok := findTelegram(admin); ok {
-			msg := tgbotapi.NewMessage(telegramId, text)
-			msg.ParseMode = "markdown"
-			if _, err := l.svc.TelegramBot.Send(msg); err != nil {
-				logger.WithContext(ctx).Error("Send telegram admin message failed", logger.Field("error", err.Error()))
-			}
-		}
+	if err := l.svc.Notification.NotifyAdminsTelegram(ctx, text); err != nil {
+		logger.WithContext(ctx).Info("Telegram admin notice skipped", logger.Field("reason", err.Error()))
 	}
 }
 
-// findTelegram extracts Telegram chat ID from user authentication methods.
-// Returns the chat ID and a boolean indicating if Telegram auth was found.
-func findTelegram(u *user.User) (int64, bool) {
+// findEmail returns the user's email auth identifier, falling back to the
+// numeric id so the admin notification always names the buyer.
+func findEmail(u *user.User) string {
 	for _, item := range u.AuthMethods {
-		if item.AuthType == "telegram" {
-			if telegramId, err := strconv.ParseInt(item.AuthIdentifier, 10, 64); err == nil {
-				return telegramId, true
-			}
+		if item.AuthType == "email" {
+			return item.AuthIdentifier
 		}
 	}
-	return 0, false
+	return fmt.Sprintf("ID:%d", u.Id)
 }

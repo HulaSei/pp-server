@@ -6,12 +6,12 @@ import (
 	"strconv"
 	"strings"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	tgbot "github.com/go-telegram/bot"
+	"github.com/go-telegram/bot/models"
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
@@ -31,29 +31,63 @@ func NewTelegramLogic(ctx context.Context, deps TelegramLogicDependencies) *Tele
 	}
 }
 
-func (l *TelegramLogic) TelegramLogic(req *tgbotapi.Update) {
-	if req.Message == nil || req.Message.Text == "" {
-		l.Logger.Error("[TelegramLogic] Message is empty")
+// TelegramLogic routes one update. User commands live in the private chat;
+// everything administrative — commands, support topics, ticket topics —
+// lives in the configured admin group. Messages from other groups are
+// ignored entirely.
+func (l *TelegramLogic) TelegramLogic(req *models.Update) {
+	msg := req.Message
+	if msg == nil {
 		return
 	}
-	cmd := req.Message.Command()
+	group := l.groupChatID()
+	switch {
+	case msg.Chat.Type == models.ChatTypePrivate:
+		l.handlePrivate(msg)
+	case group != 0 && msg.Chat.ID == group:
+		l.handleGroup(msg)
+	}
+}
+
+func (l *TelegramLogic) groupChatID() int64 {
+	if l.deps.GroupChatID == nil {
+		return 0
+	}
+	return l.deps.GroupChatID()
+}
+
+func (l *TelegramLogic) handlePrivate(msg *models.Message) {
+	if msg.From != nil && msg.From.IsBot {
+		return
+	}
+	cmd := messageCommand(msg)
+	// /help is in the public menu, so in the private chat it must answer
+	// with the user-facing help — the admin help lives in the group.
+	if cmd == "help" || cmd == "h" {
+		_ = l.sendMessage("🤖 可用命令：\n/start <令牌> 或 /bind <令牌> —— 绑定面板账号\n\n绑定后直接发送消息即可联系人工客服。", msg.Chat.ID)
+		return
+	}
 	if isAdminCommand(cmd) {
-		l.deps.Admin.Handle(req.Message)
+		_ = l.sendMessage("管理员命令只能在管理群中使用。", msg.Chat.ID)
 		return
 	}
 	switch cmd {
 	case "traffic":
-		if err := l.traffic(req.Message.Chat.ID); err != nil {
-			l.Logger.Error("[TelegramLogic] Traffic Error: ", logger.Field("error", err.Error()), logger.Field("command", req.Message.Command()), logger.Field("chat_id", req.Message.Chat.ID))
+		if err := l.traffic(msg.Chat.ID); err != nil {
+			l.Logger.Error("[TelegramLogic] Traffic Error: ", logger.Field("error", err.Error()), logger.Field("command", cmd), logger.Field("chat_id", msg.Chat.ID))
 		}
 	case "bind":
-		if err := l.bind(req.Message.Chat.ID, req.Message.CommandArguments()); err != nil {
-			l.Logger.Error("[TelegramLogic] Bind Error: ", logger.Field("error", err.Error()), logger.Field("command", req.Message.Command()), logger.Field("chat_id", req.Message.Chat.ID))
+		if err := l.bind(msg.Chat.ID, commandArguments(msg)); err != nil {
+			l.Logger.Error("[TelegramLogic] Bind Error: ", logger.Field("error", err.Error()), logger.Field("command", cmd), logger.Field("chat_id", msg.Chat.ID))
 		}
 	case "start":
-		if err := l.start(req); err != nil {
-			l.Logger.Error("[TelegramLogic] Start Error: ", logger.Field("error", err.Error()), logger.Field("command", req.Message.Command()), logger.Field("chat_id", req.Message.Chat.ID), logger.Field("text", req.Message.Text))
+		if err := l.start(msg); err != nil {
+			l.Logger.Error("[TelegramLogic] Start Error: ", logger.Field("error", err.Error()), logger.Field("command", cmd), logger.Field("chat_id", msg.Chat.ID), logger.Field("text", msg.Text))
 		}
+	case "":
+		// A plain message is a support request: relay it into the user's
+		// live-chat topic in the admin group.
+		l.relaySupport(msg)
 	}
 }
 
@@ -70,17 +104,36 @@ func isAdminCommand(cmd string) bool {
 }
 
 func (l *TelegramLogic) sendMessage(message string, userID int64) error {
-	return l.deps.Messenger.Send(userID, message)
+	return l.deps.Messenger.Send(userID, 0, message)
+}
+
+func (l *TelegramLogic) sendMarkdown(message string, userID int64) error {
+	return l.deps.Messenger.SendMarkdown(userID, 0, message)
 }
 
 type telegramBotMessenger struct {
-	bot *tgbotapi.BotAPI
+	bot *tgbot.Bot
 }
 
-func (m telegramBotMessenger) Send(chatID int64, message string) error {
-	msg := tgbotapi.NewMessage(chatID, message)
-	msg.ParseMode = "Markdown"
-	_, err := m.bot.Send(msg)
+// Send delivers plain text: command replies and administrator output carry
+// no formatting, and plain text cannot be broken by the data inside it.
+func (m telegramBotMessenger) Send(chatID, threadID int64, message string) error {
+	_, err := m.bot.SendMessage(context.Background(), &tgbot.SendMessageParams{
+		ChatID:          chatID,
+		MessageThreadID: int(threadID),
+		Text:            message,
+	})
+	return err
+}
+
+// SendMarkdown delivers MarkdownV2 built by RenderMarkdownV2.
+func (m telegramBotMessenger) SendMarkdown(chatID, threadID int64, message string) error {
+	_, err := m.bot.SendMessage(context.Background(), &tgbot.SendMessageParams{
+		ChatID:          chatID,
+		MessageThreadID: int(threadID),
+		Text:            message,
+		ParseMode:       models.ParseModeMarkdown,
+	})
 	return err
 }
 
@@ -88,20 +141,36 @@ func (m telegramBotMessenger) Send(chatID int64, message string) error {
 // scope every user sees; otherwise the menu applies to that chat alone, which
 // is how administrator commands stay hidden from ordinary users.
 func (m telegramBotMessenger) SetCommands(chatID int64, commands []Command) error {
-	botCommands := make([]tgbotapi.BotCommand, 0, len(commands))
+	botCommands := make([]models.BotCommand, 0, len(commands))
 	for _, command := range commands {
-		botCommands = append(botCommands, tgbotapi.BotCommand{
+		botCommands = append(botCommands, models.BotCommand{
 			Command:     command.Command,
 			Description: command.Description,
 		})
 	}
 
-	config := tgbotapi.NewSetMyCommands(botCommands...)
+	params := &tgbot.SetMyCommandsParams{Commands: botCommands}
 	if chatID != 0 {
-		config = tgbotapi.NewSetMyCommandsWithScope(
-			tgbotapi.NewBotCommandScopeChat(chatID), botCommands...)
+		params.Scope = &models.BotCommandScopeChat{ChatID: chatID}
 	}
-	_, err := m.bot.Request(config)
+	_, err := m.bot.SetMyCommands(context.Background(), params)
+	return err
+}
+
+// SetGroupAdminCommands publishes a menu that only the group's
+// administrators see in their composer.
+func (m telegramBotMessenger) SetGroupAdminCommands(chatID int64, commands []Command) error {
+	botCommands := make([]models.BotCommand, 0, len(commands))
+	for _, command := range commands {
+		botCommands = append(botCommands, models.BotCommand{
+			Command:     command.Command,
+			Description: command.Description,
+		})
+	}
+	_, err := m.bot.SetMyCommands(context.Background(), &tgbot.SetMyCommandsParams{
+		Commands: botCommands,
+		Scope:    &models.BotCommandScopeChatAdministrators{ChatID: chatID},
+	})
 	return err
 }
 
@@ -204,7 +273,7 @@ func (l *TelegramLogic) bind(userId int64, token string) error {
 		l.Errorw("TelegramLogic bind UpdateUserCache Error", logger.Field("error", err.Error()), logger.Field("bindUserId", bindUserId))
 	}
 
-	text, err := tool.RenderTemplateToString(BindNotify, map[string]string{
+	text, err := RenderMarkdownV2(BindNotify, map[string]string{
 		"Id":   strconv.FormatInt(bindUserId, 10),
 		"Time": timeutil.Now().Format("2006-01-02 15:04:05"),
 	})
@@ -212,70 +281,70 @@ func (l *TelegramLogic) bind(userId int64, token string) error {
 		l.Errorw("TelegramLogic bind RenderTemplate Error", logger.Field("error", err.Error()))
 		return l.sendMessage("Bound successfully!", userId)
 	}
-	return l.sendMessage(text, userId)
+	return l.sendMarkdown(text, userId)
 }
 
-func (l *TelegramLogic) start(req *tgbotapi.Update) error {
-	if req.Message.CommandArguments() == "" {
-		return l.sendMessage("Please bind account!", req.Message.Chat.ID)
+func (l *TelegramLogic) start(msg *models.Message) error {
+	bindToken := commandArguments(msg)
+	if bindToken == "" {
+		return l.sendMessage("Please bind account!", msg.Chat.ID)
 	}
 
-	bindToken := req.Message.CommandArguments()
-	chatIdStr := strconv.FormatInt(req.Message.Chat.ID, 10)
+	chatIdStr := strconv.FormatInt(msg.Chat.ID, 10)
 
 	// Resolve the single-use binding token issued by the panel
 	value, err := l.deps.Sessions.Get(context.Background(), bindTokenKey(bindToken))
 	if err != nil && !errors.Is(err, redis.Nil) {
 		l.Errorw("TelegramLogic start Redis Get Error", logger.Field("error", err.Error()))
-		return l.sendMessage("Bind failed!", req.Message.Chat.ID)
+		return l.sendMessage("Bind failed!", msg.Chat.ID)
 	}
 	if value == "" {
 		l.Errorw("TelegramLogic start bind token not found or expired")
-		return l.sendMessage("Session expired. Please request a new bind link.", req.Message.Chat.ID)
+		return l.sendMessage("Session expired. Please request a new bind link.", msg.Chat.ID)
 	}
 
 	userId, err := strconv.ParseInt(value, 10, 64)
 	if err != nil {
 		l.Errorw("TelegramLogic start ParseInt Error", logger.Field("error", err.Error()))
-		return l.sendMessage("Bind failed!", req.Message.Chat.ID)
+		return l.sendMessage("Bind failed!", msg.Chat.ID)
 	}
 
 	// Check if this Chat ID is already bound to another user
 	existingByChatId, err := l.deps.UserAuth.FindUserAuthMethodByOpenID(l.ctx, "telegram", chatIdStr)
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
-			l.Errorw("TelegramLogic start FindUserAuthMethodByOpenID Error", logger.Field("error", err.Error()), logger.Field("chatId", req.Message.Chat.ID))
-			return l.sendMessage("Bind failed!", req.Message.Chat.ID)
+			l.Errorw("TelegramLogic start FindUserAuthMethodByOpenID Error", logger.Field("error", err.Error()), logger.Field("chatId", msg.Chat.ID))
+			return l.sendMessage("Bind failed!", msg.Chat.ID)
 		}
 	}
 	if existingByChatId.Id > 0 && existingByChatId.UserId != userId {
 		l.Infow("Telegram account already bound to another user, cannot rebind",
-			logger.Field("chatId", req.Message.Chat.ID),
+			logger.Field("chatId", msg.Chat.ID),
 			logger.Field("existingUserId", existingByChatId.UserId),
 			logger.Field("newUserId", userId),
 		)
-		return l.sendMessage("This Telegram account is already bound to another user.", req.Message.Chat.ID)
+		return l.sendMessage("This Telegram account is already bound to another user.", msg.Chat.ID)
 	}
 
 	// Check if the target user already has a Telegram binding
 	method, err := l.deps.UserAuth.FindUserAuthMethodByPlatform(l.ctx, userId, "telegram")
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		l.Errorw("TelegramLogic start FindUserAuthMethodByPlatform Error", logger.Field("error", err.Error()), logger.Field("userId", userId))
-		return l.sendMessage("Bind failed!", req.Message.Chat.ID)
+		return l.sendMessage("Bind failed!", msg.Chat.ID)
 	}
 
 	if err == nil && method.Id > 0 {
 		// Already bound to the same chat ID — nothing to do
 		if method.AuthIdentifier == chatIdStr {
-			return l.sendMessage("Your account is already bound to this Telegram account.", req.Message.Chat.ID)
+			return l.sendMessage("Your account is already bound to this Telegram account.", msg.Chat.ID)
 		}
 		// Already bound to a different chat ID — DON'T overwrite silently
 		l.Infow("User already bound to a different Telegram account, cannot rebind via start",
 			logger.Field("userId", userId),
 			logger.Field("existingChatId", method.AuthIdentifier),
-			logger.Field("newChatId", req.Message.Chat.ID),
+			logger.Field("newChatId", msg.Chat.ID),
 		)
-		return l.sendMessage("Your account is already bound to a different Telegram account. Please unbind it first.", req.Message.Chat.ID)
+		return l.sendMessage("Your account is already bound to a different Telegram account. Please unbind it first.", msg.Chat.ID)
 	}
 
 	// No existing binding — create a new one
@@ -288,7 +357,7 @@ func (l *TelegramLogic) start(req *tgbotapi.Update) error {
 		UpdatedAt:      timeutil.Now(),
 	}); err != nil {
 		l.Errorw("TelegramLogic start InsertUserAuthMethod Error", logger.Field("error", err.Error()), logger.Field("userId", userId))
-		return l.sendMessage("Bind failed!", req.Message.Chat.ID)
+		return l.sendMessage("Bind failed!", msg.Chat.ID)
 	}
 	l.consumeBindToken(bindToken)
 
@@ -300,13 +369,13 @@ func (l *TelegramLogic) start(req *tgbotapi.Update) error {
 		l.Errorw("TelegramLogic start UpdateUserCache Error", logger.Field("error", err.Error()), logger.Field("userId", userId))
 	}
 
-	text, err := tool.RenderTemplateToString(BindNotify, map[string]string{
+	text, err := RenderMarkdownV2(BindNotify, map[string]string{
 		"Id":   strconv.FormatInt(userId, 10),
 		"Time": timeutil.Now().Format("2006-01-02 15:04:05"),
 	})
 	if err != nil {
 		l.Errorw("TelegramLogic start RenderTemplate Error", logger.Field("error", err.Error()))
-		return l.sendMessage("Bound successfully!", req.Message.Chat.ID)
+		return l.sendMessage("Bound successfully!", msg.Chat.ID)
 	}
-	return l.sendMessage(text, req.Message.Chat.ID)
+	return l.sendMarkdown(text, msg.Chat.ID)
 }

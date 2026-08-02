@@ -7,24 +7,29 @@ import (
 	"testing"
 	"time"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	"github.com/go-telegram/bot/models"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
 	"gorm.io/gorm"
 )
 
 type sentTelegramMessage struct {
-	chatID  int64
-	message string
+	chatID   int64
+	threadID int64
+	message  string
 }
 
 type fakeTelegramMessenger struct {
 	messages []sentTelegramMessage
 }
 
-func (m *fakeTelegramMessenger) Send(chatID int64, message string) error {
-	m.messages = append(m.messages, sentTelegramMessage{chatID: chatID, message: message})
+func (m *fakeTelegramMessenger) Send(chatID, threadID int64, message string) error {
+	m.messages = append(m.messages, sentTelegramMessage{chatID: chatID, threadID: threadID, message: message})
 	return nil
+}
+
+func (m *fakeTelegramMessenger) SendMarkdown(chatID, threadID int64, message string) error {
+	return m.Send(chatID, threadID, message)
 }
 
 type fakeTelegramActions struct {
@@ -90,12 +95,16 @@ func (r *fakeTelegramAdminAuth) FindUserAuthMethodByOpenID(_ context.Context, _,
 	return &copy, nil
 }
 
-func telegramCommand(chatID int64, command string) *tgbotapi.Message {
-	return &tgbotapi.Message{
-		Chat: &tgbotapi.Chat{ID: chatID},
+// telegramCommand builds a command message the way a private chat produces
+// it: the sender's user id equals the chat id. Group-context tests override
+// Chat/From/MessageThreadID on the result.
+func telegramCommand(chatID int64, command string) *models.Message {
+	return &models.Message{
+		Chat: models.Chat{ID: chatID, Type: models.ChatTypePrivate},
+		From: &models.User{ID: chatID},
 		Text: command,
-		Entities: []tgbotapi.MessageEntity{{
-			Type:   "bot_command",
+		Entities: []models.MessageEntity{{
+			Type:   models.MessageEntityTypeBotCommand,
 			Offset: 0,
 			Length: len(command),
 		}},

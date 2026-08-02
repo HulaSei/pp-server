@@ -21,7 +21,7 @@ import (
 	"github.com/perfect-panel/server/pkg/nodeMultiplier"
 	"github.com/perfect-panel/server/pkg/orm"
 
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
+	tgbot "github.com/go-telegram/bot"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 )
@@ -52,7 +52,7 @@ type ServiceContext struct {
 	// configuration changed; assigned by the transport server alongside
 	// Restart (the initialize package cannot be imported here).
 	ReinitSubsystem       func(subsystem string)
-	TelegramBot           *tgbotapi.BotAPI
+	TelegramBot           *tgbot.Bot
 	NodeMultiplierManager *nodeMultiplier.Manager
 	AuthLimiter           *limit.PeriodLimit
 	DeviceManager         *device.DeviceManager
@@ -95,10 +95,12 @@ func NewServiceContext(c config.Config) *ServiceContext {
 		ExchangeRate: rate,
 		GeoIP:        geoIP,
 		Store:        store,
-		Support:      newSupportModule(store, queue),
 		//NodeCache:   cache.NewNodeCacheClient(rds),
 		AuthLimiter: authLimiter,
 	}
+	// Support takes srv for the ticket→Telegram mirror; the adapter reads
+	// srv.Notification lazily, so constructing it before Notification is safe.
+	srv.Support = newSupportModule(store, queue, srv)
 	srv.Billing = newBillingModule(c, store, queue, rds, rate, srv)
 	srv.Platform = newPlatformModule(store, srv)
 	srv.DeviceManager = NewDeviceManager(srv)
