@@ -2,7 +2,7 @@ name: Nightly
 
 on:
   push:
-    branches: [dev]
+    branches: [dev, main]
   workflow_dispatch:
 
 permissions:
@@ -62,12 +62,24 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      # main builds toward the next series, so it reports that series rather than a
+      # commit: operators reading the panel see "2.0(...) Nightly" and can tell a
+      # v2 preview from a bleeding-edge dev build without decoding a sha.
       - name: Resolve build metadata
         run: |
-          echo "VERSION=${GITHUB_SHA::8}" >> $GITHUB_ENV
           echo "BUILD_TIME=$(date --iso-8601=seconds)" >> $GITHUB_ENV
+          echo "SHORT_SHA=${GITHUB_SHA::8}" >> $GITHUB_ENV
+          if [ "$GITHUB_REF_NAME" = "main" ]; then
+            echo "VERSION=2.0" >> $GITHUB_ENV
+            echo "IMAGE_CHANNEL=v2.0-nightly" >> $GITHUB_ENV
+          else
+            echo "VERSION=${GITHUB_SHA::8}" >> $GITHUB_ENV
+            echo "IMAGE_CHANNEL=nightly" >> $GITHUB_ENV
+          fi
 
+      # Only the dev line publishes a GitHub release, so only it needs binaries.
       - name: Build binaries
+        if: github.ref_name == 'dev'
         run: make linux-amd64 linux-arm64 VERSION=${{ env.VERSION }} CHANNEL=nightly
 
       - name: Log in to GitHub Container Registry
@@ -80,7 +92,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # amd64 only: an arm64 leg would run under QEMU on every push to dev.
+      # amd64 only: an arm64 leg would run under QEMU on every push.
       - name: Build and push the nightly image
         uses: docker/build-push-action@v6
         with:
@@ -92,14 +104,17 @@ jobs:
             VERSION=${{ env.VERSION }}
             CHANNEL=nightly
           tags: |
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:nightly
-            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:nightly-${{ env.VERSION }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_CHANNEL }}
+            ghcr.io/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ env.IMAGE_CHANNEL }}-${{ env.SHORT_SHA }}
 
       # Replacing the release keeps one rolling entry whose asset URLs never
       # change, so releases/download/nightly/<name> always resolves to the newest
       # build. The tag is nightly rather than v-prefixed so it cannot trigger the
-      # stable pipeline, which fires on 'v*'.
+      # stable pipeline, which fires on 'v*'. The feature line publishes only
+      # images, so it deliberately has no release of its own -- and could not reuse
+      # a v2.0-prefixed tag here without firing that pipeline.
       - name: Publish the rolling nightly release
+        if: github.ref_name == 'dev'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |

@@ -49,6 +49,19 @@ jobs:
       - name: Set BUILD_TIME env
         run: echo BUILD_TIME=$(date --iso-8601=seconds) >> ${GITHUB_ENV}
 
+      # A tag fires this workflow no matter which line it sits on, so the floating
+      # tag has to be routed: :latest must keep pointing at the feature line even
+      # while the frozen LTS line publishes patches of its own. A commit reachable
+      # from master belongs to LTS; anything else is the feature line. Treating an
+      # ambiguous commit as LTS is the safe direction, since it leaves :latest be.
+      - name: Resolve release line
+        run: |
+          git fetch --quiet origin master
+          if git merge-base --is-ancestor "$GITHUB_SHA" origin/master; then
+            echo "FLOATING_TAG=lts" >> $GITHUB_ENV
+          else
+            echo "FLOATING_TAG=latest" >> $GITHUB_ENV
+          fi
 
       - name: Build and push Docker image for main release
         if: "!contains(github.ref_name, 'beta')"
@@ -62,7 +75,7 @@ jobs:
             VERSION=${{ env.VERSION }}
             CHANNEL=stable
           tags: |
-            ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:latest
+            ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.FLOATING_TAG }}
             ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}
             ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.MAJOR_MINOR }}
             ${{ secrets.DOCKER_USERNAME }}/${{ env.IMAGE_NAME }}:${{ env.VERSION }}-${{ env.GIT_SHA }}

@@ -2,7 +2,7 @@ name: Performance
 
 on:
   pull_request:
-    branches: ["master", "dev"]
+    branches: ["master", "main", "dev"]
     paths:
       - "internal/**"
       - "pkg/httpx/**"
