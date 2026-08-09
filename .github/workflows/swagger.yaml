@@ -2,7 +2,7 @@ name: Generate and sync Swagger
 
 on:
   pull_request:
-    branches: [master, main, dev]
+    branches: [master, dev, main]
     paths:
       - "**/*.go"
       - "api/**/*.proto"
@@ -10,9 +10,10 @@ on:
       - "go.sum"
       - "ppanel.json"
       - "script/generate-swagger.sh"
+      - "script/check-swagger-workflow-contract.py"
       - ".github/workflows/swagger.yaml"
   push:
-    branches: [master, main, dev]
+    branches: [master, dev, main]
     paths:
       - "**/*.go"
       - "api/**/*.proto"
@@ -20,6 +21,7 @@ on:
       - "go.sum"
       - "ppanel.json"
       - "script/generate-swagger.sh"
+      - "script/check-swagger-workflow-contract.py"
       - ".github/workflows/swagger.yaml"
   workflow_dispatch:
 
@@ -53,33 +55,33 @@ jobs:
       - name: Verify Swagger covers Hertz routes
         run: go test ./internal/route -run '^TestSwagger' -count=1
 
-      - name: Checkout documentation repository
+      - name: Verify Swagger workflow contract
+        run: python3 script/check-swagger-workflow-contract.py
+
+      - name: Checkout frontend repository
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
         uses: actions/checkout@v4
         with:
-          repository: perfect-panel/ppanel-docs
+          repository: perfect-panel/frontend
+          ref: main
           token: ${{ secrets.GH_TOKEN }}
-          path: ppanel-docs
+          path: frontend
 
       - name: Copy Swagger documents
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
         run: |
-          mkdir -p ppanel-docs/public/swagger
-          cp build/swagger/ppanel.json ppanel-docs/public/swagger/ppanel.json
-          cp build/swagger/admin.json ppanel-docs/public/swagger/admin.json
-          cp build/swagger/user.json ppanel-docs/public/swagger/user.json
-          cp build/swagger/common.json ppanel-docs/public/swagger/common.json
-          cp build/swagger/node.json ppanel-docs/public/swagger/node.json
+          mkdir -p frontend/docs/public/swagger
+          find build/swagger -maxdepth 1 -type f -name '*.json' -exec cp {} frontend/docs/public/swagger/ \;
 
-      - name: Commit documentation changes
+      - name: Commit frontend Swagger changes
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
-        working-directory: ppanel-docs
+        working-directory: frontend
         run: |
-          git add public/swagger
+          git add docs/public/swagger/*.json
           if git diff --cached --quiet; then
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "docs: update Swagger files"
+          git commit -m "docs(api): sync Swagger from backend"
           git push
