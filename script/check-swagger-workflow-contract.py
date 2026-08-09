@@ -39,12 +39,14 @@ require(r"path:\s*frontend\b", "frontend checkout must use path: frontend")
 require(r"frontend/docs/public/swagger", "workflow must sync into frontend/docs/public/swagger")
 
 # Sync every generated top-level JSON dynamically instead of maintaining a stale manual list.
-require(r"find\s+build/swagger\b[^\n]*-maxdepth\s+1[^\n]*-name\s+['\"]\*\.json['\"]", "workflow must discover all top-level build/swagger/*.json files dynamically")
-require(r"cp\b[^\n]*\{\}[^\n]*frontend/docs/public/swagger/", "workflow must copy discovered JSON files into frontend/docs/public/swagger")
+require(r"manifest=['\"]frontend/docs/public/swagger/\.backend-generated['\"]", "workflow must track backend-owned files in a manifest")
+require(r"done\s*<\s*['\"]?\$\{manifest\}['\"]?", "workflow must remove files listed by the previous backend manifest")
+require(r"find\s+build/swagger\b[^\n]*-maxdepth\s+1[^\n]*-name\s+['\"]\*\.json['\"][^\n]*-printf\s+['\"]%f", "workflow must discover all top-level build/swagger/*.json files dynamically")
+require(r"cp\s+['\"]build/swagger/\$\{file\}['\"]\s+frontend/docs/public/swagger/", "workflow must copy each discovered JSON into frontend/docs/public/swagger")
 
 # Only generated Swagger JSON should be committed in the frontend repository, and no-op syncs should not commit.
 require(r"working-directory:\s*frontend\b", "commit step must run in frontend checkout")
-require(r"git add\s+docs/public/swagger/.*\.json", "commit step must stage only docs/public/swagger JSON files")
+require(r"git add\s+--all\s+--\s+docs/public/swagger", "commit step must stage additions, updates, and removals under docs/public/swagger")
 require(r"git diff --cached --quiet", "workflow must skip commit when there are no changes")
 require(r"git commit -m ['\"]docs\(api\): sync Swagger from backend['\"]", "workflow must use the required Swagger sync commit message")
 
