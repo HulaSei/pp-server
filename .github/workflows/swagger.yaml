@@ -71,13 +71,22 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
         run: |
           mkdir -p frontend/docs/public/swagger
-          find build/swagger -maxdepth 1 -type f -name '*.json' -exec cp {} frontend/docs/public/swagger/ \;
+          manifest="frontend/docs/public/swagger/.backend-generated"
+          if [[ -f "${manifest}" ]]; then
+            while IFS= read -r file; do
+              rm -f "frontend/docs/public/swagger/${file}"
+            done < "${manifest}"
+          fi
+          find build/swagger -maxdepth 1 -type f -name '*.json' -printf '%f\n' | sort > "${manifest}"
+          while IFS= read -r file; do
+            cp "build/swagger/${file}" frontend/docs/public/swagger/
+          done < "${manifest}"
 
       - name: Commit frontend Swagger changes
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
         working-directory: frontend
         run: |
-          git add docs/public/swagger/*.json
+          git add --all -- docs/public/swagger
           if git diff --cached --quiet; then
             exit 0
           fi
