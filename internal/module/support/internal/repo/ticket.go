@@ -106,7 +106,9 @@ func (m *ticketRepo) Delete(ctx context.Context, id int64) error {
 func (m *ticketRepo) QueryTicketDetail(ctx context.Context, id int64) (*ticket.Details, error) {
 	var data *ticket.Details
 	err := m.QueryNoCacheCtx(ctx, &data, func(conn *gorm.DB, v interface{}) error {
-		return conn.Model(&ticket.Ticket{}).Where("id = ?", id).Preload("Follows").First(v).Error
+		return conn.Model(&ticket.Ticket{}).Where("id = ?", id).Preload("Follows", func(db *gorm.DB) *gorm.DB {
+			return db.Order("created_at ASC, id ASC")
+		}).First(v).Error
 	})
 	return data, err
 }
