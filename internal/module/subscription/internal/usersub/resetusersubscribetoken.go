@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
@@ -34,6 +35,7 @@ func (l *ResetUserSubscribeTokenLogic) ResetUserSubscribeToken(req *dto.ResetUse
 		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "FindOneSubscribe error: %v", err.Error())
 	}
 	userSub.Token = uuidx.SubscribeToken(fmt.Sprintf("AdminUpdate:%d", timeutil.Now().UnixMilli()))
+	userSub.UUID = uuid.New().String()
 
 	err = l.deps.UserSubs.UpdateSubscribe(l.ctx, userSub)
 	if err != nil {
