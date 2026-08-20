@@ -48,7 +48,7 @@ func (l *QueryUserSubscribeNodeListLogic) QueryUserSubscribeNodeList() (resp *dt
 	for _, us := range userSubscribes {
 		userSubscribe, err := l.getUserSubscribe(us.Token)
 		if err != nil {
-			l.Errorw("[SubscribeLogic] Get user subscribe failed", logger.Field("error", err.Error()), logger.Field("token", userSubscribe.Token))
+			l.Errorw("[SubscribeLogic] Get user subscribe failed", logger.Field("error", err.Error()))
 			return nil, err
 		}
 		nodes, err := l.getServers(userSubscribe)
@@ -242,7 +242,7 @@ func (l *QueryUserSubscribeNodeListLogic) getFirstHostLine() string {
 func (l *QueryUserSubscribeNodeListLogic) getUserSubscribe(token string) (*usersub.Subscribe, error) {
 	userSub, err := l.deps.UserSubs.FindOneSubscribeByToken(l.ctx, token)
 	if err != nil {
-		l.Infow("[Generate Subscribe]find subscribe error: %v", logger.Field("error", err.Error()), logger.Field("token", token))
+		l.Infow("[Generate Subscribe]find subscribe error: %v", logger.Field("error", err.Error()))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find subscribe error: %v", err.Error())
 	}
 

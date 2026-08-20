@@ -3,7 +3,7 @@ package logger
 import (
 	"context"
 	"errors"
-	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -34,23 +34,23 @@ func (l *GormLogger) LogMode(logger.LogLevel) logger.Interface {
 }
 
 func (l *GormLogger) Info(ctx context.Context, str string, args ...interface{}) {
-	WithContext(ctx).WithCallerSkip(2).Infof("%s Info: %s", TAG, str, args)
+	WithContext(ctx).WithCallerSkip(2).Infof("%s Info", TAG)
 }
 
 func (l *GormLogger) Warn(ctx context.Context, str string, args ...interface{}) {
-	WithContext(ctx).WithCallerSkip(2).Infof("%s Warn: %s", TAG, str, args)
+	WithContext(ctx).WithCallerSkip(2).Infof("%s Warn", TAG)
 }
 
 func (l *GormLogger) Error(ctx context.Context, str string, args ...interface{}) {
-	WithContext(ctx).WithCallerSkip(2).Errorf("%s Error: %s", TAG, str, args)
+	WithContext(ctx).WithCallerSkip(2).Errorf("%s Error", TAG)
 }
 
 func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
 	sql, rowsAffected := fc()
 	fields := []LogField{
 		{
-			Key:   "sql",
-			Value: sql,
+			Key:   "operation",
+			Value: sqlOperation(sql),
 		},
 		{
 			Key:   "rows",
@@ -71,6 +71,20 @@ func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql 
 			WithContext(ctx).WithCallerSkip(6).WithDuration(time.Since(begin)).Errorw(TAG, fields...)
 		}
 	} else {
-		WithContext(ctx).WithCallerSkip(6).WithDuration(time.Since(begin)).Infow(fmt.Sprintf("%s SQL Executed", TAG), fields...)
+		WithContext(ctx).WithCallerSkip(6).WithDuration(time.Since(begin)).Infow(TAG+" SQL Executed", fields...)
+	}
+}
+
+func sqlOperation(query string) string {
+	parts := strings.Fields(query)
+	if len(parts) == 0 {
+		return "UNKNOWN"
+	}
+	operation := strings.ToUpper(parts[0])
+	switch operation {
+	case "SELECT", "INSERT", "UPDATE", "DELETE", "CREATE", "ALTER", "DROP", "TRUNCATE":
+		return operation
+	default:
+		return "OTHER"
 	}
 }
