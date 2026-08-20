@@ -361,6 +361,7 @@ func marshalJson(t interface{}) ([]byte, error) {
 }
 
 func output(writer io.Writer, level string, val any, fields ...LogField) {
+	val = redactValue(val)
 	// only truncate string content, don't know how to truncate the values of other types.
 	if v, ok := val.(string); ok {
 		maxLen := atomic.LoadUint32(&maxContentLength)
@@ -370,7 +371,7 @@ func output(writer io.Writer, level string, val any, fields ...LogField) {
 		}
 	}
 
-	fields = combineGlobalFields(fields)
+	fields = redactFields(combineGlobalFields(fields))
 	// +3 for timestamp, level and content
 	entry := make(logEntry, len(fields)+3)
 	for _, field := range fields {

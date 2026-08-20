@@ -61,7 +61,7 @@ func AuthenticateRequest(ctx context.Context, svc *svc.ServiceContext, token str
 
 	claims, err := jwt.ParseJwtToken(token, jwtConfig.AccessSecret)
 	if err != nil {
-		logger.WithContext(ctx).Debug("[AuthMiddleware] ParseJwtToken", logger.Field("error", err.Error()), logger.Field("token", token))
+		logger.WithContext(ctx).Debug("[AuthMiddleware] ParseJwtToken", logger.Field("error", err.Error()))
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.ErrorTokenExpire), "Token Invalid")
 	}
 
