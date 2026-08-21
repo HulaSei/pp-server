@@ -10,7 +10,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/billing"
-	"github.com/perfect-panel/server/internal/svc"
+
 	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/payment"
@@ -40,7 +40,7 @@ var errNotifyPayloadTooLarge = errors.New("http: request body too large")
 // @Router /v1/notify/{platform}/{token} [patch]
 // @Router /v1/notify/{platform}/{token} [post]
 // @Router /v1/notify/{platform}/{token} [put]
-func PaymentNotifyHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func PaymentNotifyHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		platform, ok := c.Value(constant.CtxKeyPlatform).(string)
 		if !ok {
@@ -58,7 +58,7 @@ func PaymentNotifyHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 				return
 			}
 			req := epayNotifyRequest(params)
-			if err := svcCtx.Billing.EPayNotify(c, billing.EPayNotifyMeta{
+			if err := service.EPayNotify(c, billing.EPayNotifyMeta{
 				Method: string(ctx.Method()),
 				Params: params,
 			}, req); err != nil {
@@ -73,14 +73,14 @@ func PaymentNotifyHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 				result.HttpResult(ctx, nil, err)
 				return
 			}
-			if err := svcCtx.Billing.StripeNotify(c, payload, string(ctx.GetHeader("Stripe-Signature"))); err != nil {
+			if err := service.StripeNotify(c, payload, string(ctx.GetHeader("Stripe-Signature"))); err != nil {
 				result.HttpResult(ctx, nil, err)
 				return
 			}
 			result.HttpResult(ctx, nil, nil)
 
 		case payment.AlipayF2F:
-			if err := svcCtx.Billing.AlipayNotify(c, nativeFormValues(ctx)); err != nil {
+			if err := service.AlipayNotify(c, nativeFormValues(ctx)); err != nil {
 				result.HttpResult(ctx, nil, err)
 				return
 			}
@@ -93,7 +93,7 @@ func PaymentNotifyHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 				result.HttpResult(ctx, nil, err)
 				return
 			}
-			if err := svcCtx.Billing.CryptomusNotify(c, payload); err != nil {
+			if err := service.CryptomusNotify(c, payload); err != nil {
 				logger.WithContext(c).Errorf("CryptomusNotify failed: %v", err.Error())
 				ctx.String(consts.StatusBadRequest, err.Error())
 				return

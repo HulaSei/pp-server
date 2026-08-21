@@ -4,19 +4,19 @@ import (
 	"context"
 
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/svc"
+	module "github.com/perfect-panel/server/internal/module/subscription"
 )
 
 // RemindExpiringLogic is the queue shell for the pre-expiry reminder; the
 // business logic lives in the subscription module.
 type RemindExpiringLogic struct {
-	svc *svc.ServiceContext
+	service module.Service
 }
 
-func NewRemindExpiringLogic(svc *svc.ServiceContext) *RemindExpiringLogic {
-	return &RemindExpiringLogic{svc: svc}
+func NewRemindExpiringLogic(service module.Service) *RemindExpiringLogic {
+	return &RemindExpiringLogic{service: service}
 }
 
 func (l *RemindExpiringLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
-	return l.svc.Subscription.RemindExpiringSubscriptions(ctx)
+	return l.service.RemindExpiringSubscriptions(ctx)
 }

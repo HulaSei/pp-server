@@ -12,7 +12,6 @@ import (
 	appconfig "github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/internal/svc"
 	pkgaes "github.com/perfect-panel/server/pkg/aes"
 	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -22,7 +21,7 @@ func TestAuthMiddleware_abortsWithTokenEnvelope_whenAuthorizationMissing(t *test
 	// Given
 	engine := server.Default()
 	downstreamRan := false
-	engine.GET("/protected", AuthMiddleware(&svc.ServiceContext{}), func(_ context.Context, ctx *app.RequestContext) {
+	engine.GET("/protected", AuthMiddleware(AuthDeps{}), func(_ context.Context, ctx *app.RequestContext) {
 		downstreamRan = true
 		ctx.String(http.StatusOK, "unreachable")
 	})
@@ -56,8 +55,8 @@ func TestDeviceMiddleware_decryptsRequestAndEncryptsResponse_whenDeviceLogin(t *
 	}
 
 	engine := server.Default()
-	engine.POST("/device", DeviceMiddleware(&svc.ServiceContext{
-		Config: appconfig.Config{Device: appconfig.DeviceConfig{Enable: true, EnableSecurity: true, SecuritySecret: secret}},
+	engine.POST("/device", DeviceMiddleware(func() appconfig.DeviceConfig {
+		return appconfig.DeviceConfig{Enable: true, EnableSecurity: true, SecuritySecret: secret}
 	}), func(requestCtx context.Context, ctx *app.RequestContext) {
 		if loginType, _ := requestCtx.Value(constant.LoginType).(string); loginType != "device" {
 			t.Errorf("expected derived request context login type %q, got %q", "device", loginType)
@@ -112,8 +111,8 @@ func TestDeviceMiddleware_rejectsPlaintextDeviceLoginRoute_withoutLoginTypeHeade
 	const secret = "device-secret"
 	engine := server.Default()
 	downstreamRan := false
-	engine.POST("/v1/auth/login/device", DeviceMiddleware(&svc.ServiceContext{
-		Config: appconfig.Config{Device: appconfig.DeviceConfig{Enable: true, EnableSecurity: true, SecuritySecret: secret}},
+	engine.POST("/v1/auth/login/device", DeviceMiddleware(func() appconfig.DeviceConfig {
+		return appconfig.DeviceConfig{Enable: true, EnableSecurity: true, SecuritySecret: secret}
 	}), func(_ context.Context, ctx *app.RequestContext) {
 		downstreamRan = true
 		ctx.String(http.StatusOK, "unreachable")
@@ -131,8 +130,8 @@ func TestDeviceMiddleware_rejectsPlaintextDeviceLoginRoute_withoutLoginTypeHeade
 
 func TestDeviceMiddleware_allowsUnrelatedPlaintextRoute_whenSecurityEnabled(t *testing.T) {
 	engine := server.Default()
-	engine.POST("/v1/auth/login", DeviceMiddleware(&svc.ServiceContext{
-		Config: appconfig.Config{Device: appconfig.DeviceConfig{Enable: true, EnableSecurity: true, SecuritySecret: "device-secret"}},
+	engine.POST("/v1/auth/login", DeviceMiddleware(func() appconfig.DeviceConfig {
+		return appconfig.DeviceConfig{Enable: true, EnableSecurity: true, SecuritySecret: "device-secret"}
 	}), func(_ context.Context, ctx *app.RequestContext) {
 		ctx.String(http.StatusOK, string(ctx.Request.Body()))
 	})
@@ -196,9 +195,7 @@ func TestNotifyMiddleware_propagatesPaymentContext_whenTokenResolves(t *testing.
 	// Given
 	paymentConfig := &payment.Payment{Platform: "stripe", Token: "notify-token"}
 	engine := server.Default()
-	engine.GET("/v1/notify/:platform/:token", NotifyMiddleware(&svc.ServiceContext{
-		Store: paymentStore{payment: paymentRepository{payment: paymentConfig}},
-	}), func(requestCtx context.Context, ctx *app.RequestContext) {
+	engine.GET("/v1/notify/:platform/:token", NotifyMiddleware(paymentStore{payment: paymentRepository{payment: paymentConfig}}), func(requestCtx context.Context, ctx *app.RequestContext) {
 		platform, _ := requestCtx.Value(constant.CtxKeyPlatform).(string)
 		configuredPayment, _ := requestCtx.Value(constant.CtxKeyPayment).(*payment.Payment)
 		if platform != paymentConfig.Platform || configuredPayment != paymentConfig {
@@ -225,9 +222,7 @@ func TestNotifyMiddlewareRejectsRoutePlatformThatDoesNotMatchToken(t *testing.T)
 	paymentConfig := &payment.Payment{Platform: "EPay", Token: "notify-token"}
 	engine := server.Default()
 	downstreamRan := false
-	engine.GET("/v1/notify/:platform/:token", NotifyMiddleware(&svc.ServiceContext{
-		Store: paymentStore{payment: paymentRepository{payment: paymentConfig}},
-	}), func(_ context.Context, ctx *app.RequestContext) {
+	engine.GET("/v1/notify/:platform/:token", NotifyMiddleware(paymentStore{payment: paymentRepository{payment: paymentConfig}}), func(_ context.Context, ctx *app.RequestContext) {
 		downstreamRan = true
 		ctx.String(http.StatusOK, "unreachable")
 	})

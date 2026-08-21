@@ -9,25 +9,32 @@ import (
 	"time"
 
 	"github.com/perfect-panel/server/initialize"
+	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/report"
+	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/internal/transport/httpserver"
 	"github.com/perfect-panel/server/pkg/logger"
 
 	"github.com/perfect-panel/server/pkg/proc"
 	"github.com/perfect-panel/server/pkg/trace"
-
-	"github.com/perfect-panel/server/internal/svc"
 )
 
 type Service struct {
 	server transportServer
-	svc    *svc.ServiceContext
+	deps   Dependencies
 }
 
-func NewService(svc *svc.ServiceContext) *Service {
-	return &Service{
-		svc: svc,
-	}
+type Dependencies struct {
+	Config                 func() config.Config
+	Store                  repository.Store
+	Initialize             *initialize.Dependencies
+	HTTP                   func() httpserver.Dependencies
+	SetRestart             func(func() error)
+	SetReinitializeHandler func(func(string))
+}
+
+func NewService(deps Dependencies) *Service {
+	return &Service{deps: deps}
 }
 
 type transportServer interface {
@@ -35,10 +42,10 @@ type transportServer interface {
 	Shutdown(ctx context.Context) error
 }
 
-func newTransportServer(svc *svc.ServiceContext, addr string) transportServer {
+func newTransportServer(deps httpserver.Dependencies, runtimeConfig config.Config, addr string) transportServer {
 	var tlsConfig *tls.Config
-	if svc.Config.TLS.Enable {
-		cert, err := tls.LoadX509KeyPair(svc.Config.TLS.CertFile, svc.Config.TLS.KeyFile)
+	if runtimeConfig.TLS.Enable {
+		cert, err := tls.LoadX509KeyPair(runtimeConfig.TLS.CertFile, runtimeConfig.TLS.KeyFile)
 		if err != nil {
 			logger.Errorf("load tls certificate error: %s", err.Error())
 			return nil
@@ -48,17 +55,18 @@ func newTransportServer(svc *svc.ServiceContext, addr string) transportServer {
 			Certificates: []tls.Certificate{cert},
 		}
 	}
-	return httpserver.New(svc, addr, tlsConfig)
+	return httpserver.New(deps, addr, tlsConfig)
 }
 
 func (m *Service) Start() {
-	if m.svc == nil {
+	if m.deps.Config == nil || m.deps.Initialize == nil || m.deps.HTTP == nil {
 		panic("config file path is nil")
 	}
 
 	// get server port
-	port := m.svc.Config.Port
-	host := m.svc.Config.Host
+	runtimeConfig := m.deps.Config()
+	port := runtimeConfig.Port
+	host := runtimeConfig.Host
 	// check gateway mode
 	if report.IsGatewayMode() {
 		// get free port
@@ -79,11 +87,11 @@ func (m *Service) Start() {
 	}
 
 	serverAddr := fmt.Sprintf("%v:%d", host, port)
-	initialize.StartInitSystemConfig(m.svc)
-	if err := m.svc.Store.UserAuth().ValidateEmailIdentityUniqueness(context.Background()); err != nil {
+	initialize.StartInitSystemConfig(m.deps.Initialize)
+	if err := m.deps.Store.UserAuth().ValidateEmailIdentityUniqueness(context.Background()); err != nil {
 		panic(err.Error())
 	}
-	m.server = newTransportServer(m.svc, serverAddr)
+	m.server = newTransportServer(m.deps.HTTP(), m.deps.Config(), serverAddr)
 	if m.server == nil {
 		return
 	}
@@ -95,32 +103,37 @@ func (m *Service) Start() {
 	proc.AddShutdownListener(func() {
 		trace.StopAgent()
 	})
-	m.svc.Restart = m.Restart
-	m.svc.ReinitSubsystem = func(subsystem string) {
+	if m.deps.SetRestart != nil {
+		m.deps.SetRestart(m.Restart)
+	}
+	reinitialize := func(subsystem string) {
 		switch subsystem {
 		case "verify":
-			initialize.Verify(m.svc)
+			initialize.Verify(m.deps.Initialize)
 		case "node":
-			initialize.Node(m.svc)
+			initialize.Node(m.deps.Initialize)
 		case "telegram":
-			initialize.Telegram(m.svc)
+			initialize.Telegram(m.deps.Initialize)
 		case "currency":
-			initialize.Currency(m.svc)
+			initialize.Currency(m.deps.Initialize)
 		case "register":
-			initialize.Register(m.svc)
+			initialize.Register(m.deps.Initialize)
 		case "site":
-			initialize.Site(m.svc)
+			initialize.Site(m.deps.Initialize)
 		case "invite":
-			initialize.Invite(m.svc)
+			initialize.Invite(m.deps.Initialize)
 		case "subscribe":
-			initialize.Subscribe(m.svc)
+			initialize.Subscribe(m.deps.Initialize)
 		case "email":
-			initialize.Email(m.svc)
+			initialize.Email(m.deps.Initialize)
 		case "mobile":
-			initialize.Mobile(m.svc)
+			initialize.Mobile(m.deps.Initialize)
 		case "device":
-			initialize.Device(m.svc)
+			initialize.Device(m.deps.Initialize)
 		}
+	}
+	if m.deps.SetReinitializeHandler != nil {
+		m.deps.SetReinitializeHandler(reinitialize)
 	}
 	logger.Infof("server start at %v", serverAddr)
 	m.server.Start()

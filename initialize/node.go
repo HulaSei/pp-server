@@ -8,12 +8,11 @@ import (
 
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/module/platform/entity/system"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/nodeMultiplier"
 	"github.com/perfect-panel/server/pkg/tool"
 )
 
-func Node(ctx *svc.ServiceContext) {
+func Node(ctx *Dependencies) {
 	logger.Debug("Node config initialization")
 	configs, err := ctx.Store.System().GetNodeConfig(context.Background())
 	if err != nil {
@@ -52,7 +51,7 @@ func Node(ctx *svc.ServiceContext) {
 		c.Outbound = outbound
 	}
 
-	ctx.Config.Node = c
+	ctx.updateConfig(func(current *config.Config) { current.Node = c })
 
 	nodeMultiplierData, err := ctx.Store.System().FindNodeMultiplierConfig(context.Background())
 	if err != nil {
@@ -78,5 +77,7 @@ func Node(ctx *svc.ServiceContext) {
 	if err := json.Unmarshal([]byte(nodeMultiplierData.Value), &periods); err != nil {
 		logger.Error("Unmarshal Node Multiplier Config Error: ", logger.Field("error", err.Error()), logger.Field("value", nodeMultiplierData.Value))
 	}
-	ctx.NodeMultiplierManager = nodeMultiplier.NewNodeMultiplierManager(periods)
+	if ctx.SetNodeMultiplierManager != nil {
+		ctx.SetNodeMultiplierManager(nodeMultiplier.NewNodeMultiplierManager(periods))
+	}
 }

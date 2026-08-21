@@ -14,7 +14,6 @@ import (
 	"github.com/go-telegram/bot/models"
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/telegramsecret"
 )
 
@@ -46,7 +45,7 @@ func swapTelegramPoller(start func(ctx context.Context)) {
 // Telegram (re)initialises the bot from the stored configuration. On failure
 // it returns without touching the running state, so a transient error during
 // re-initialisation leaves the previous bot working instead of none at all.
-func Telegram(svc *svc.ServiceContext) {
+func Telegram(svc *Dependencies) {
 	method, err := svc.Store.Auth().FindOneByMethod(context.Background(), "telegram")
 	if err != nil {
 		logger.Errorf("[Init Telegram Config] Get Telegram Config Error: %s", err.Error())
@@ -125,7 +124,8 @@ func Telegram(svc *svc.ServiceContext) {
 	}
 
 	// Pick mode: prefer webhook, fall back to long-polling when no domain or in debug.
-	useWebhook := tgConfig.WebHookDomain != "" && !svc.Config.Debug
+	currentConfig := svc.currentConfig()
+	useWebhook := tgConfig.WebHookDomain != "" && !currentConfig.Debug
 	if useWebhook {
 		// Webhook mode: register the URL with Telegram. The secret travels in
 		// the X-Telegram-Bot-Api-Secret-Token header, never in the URL. The
@@ -142,8 +142,10 @@ func Telegram(svc *svc.ServiceContext) {
 			return
 		}
 		swapTelegramPoller(nil)
-		svc.Config.Telegram = newConfig
-		svc.TelegramBot = bot
+		svc.updateConfig(func(current *config.Config) { current.Telegram = newConfig })
+		if svc.SetTelegramBot != nil {
+			svc.SetTelegramBot(bot)
+		}
 		logger.Info("[Init Telegram Config] Webhook registered", logger.Field("url", webhookURL))
 	} else {
 		// Long-polling mode. A leftover webhook registration blocks
@@ -152,12 +154,14 @@ func Telegram(svc *svc.ServiceContext) {
 			logger.Errorf("[Init Telegram Config] Delete Webhook Error: %s", err.Error())
 		}
 		// Publish the client and config before any update can arrive: the
-		// update handlers reach the bot through svc.TelegramBot.
-		svc.Config.Telegram = newConfig
-		svc.TelegramBot = bot
+		// update handlers reach the bot through the runtime-state accessor.
+		svc.updateConfig(func(current *config.Config) { current.Telegram = newConfig })
+		if svc.SetTelegramBot != nil {
+			svc.SetTelegramBot(bot)
+		}
 		swapTelegramPoller(func(ctx context.Context) { bot.Start(ctx) })
 		mode := "long-polling"
-		if svc.Config.Debug {
+		if currentConfig.Debug {
 			mode = "long-polling (debug)"
 		}
 		logger.Info("[Init Telegram Config] Using " + mode)
@@ -180,7 +184,7 @@ func Telegram(svc *svc.ServiceContext) {
 			logger.Error("[Init Telegram Config] Admin group unusable, group features disabled",
 				logger.Field("group_chat_id", groupChatID),
 				logger.Field("error", err.Error()))
-			svc.Config.Telegram.GroupChatID = 0
+			svc.updateConfig(func(current *config.Config) { current.Telegram.GroupChatID = 0 })
 		} else {
 			logger.Info("[Init Telegram Config] Admin group ready", logger.Field("group_chat_id", groupChatID))
 		}

@@ -16,7 +16,7 @@ import (
 	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/billing"
 	"github.com/perfect-panel/server/internal/orderstream"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/result"
@@ -25,6 +25,14 @@ import (
 )
 
 const v2SSEMaxConnectionsPerTicket = 3
+
+// EventStreamDeps contains only the infrastructure required by the V2 SSE
+// endpoint. Other order handlers depend on billing.Service directly.
+type EventStreamDeps struct {
+	Billing billing.Service
+	Redis   *redis.Client
+	Store   repository.Store
+}
 
 // V2CreateAndCheckoutHandler combines order creation and checkout initiation.
 // The idempotency key is intentionally a header so browser retry middleware
@@ -39,7 +47,7 @@ const v2SSEMaxConnectionsPerTicket = 3
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.V2OrderResponse}
 // @Failure 409 {object} result.ResponseErrorBean
 // @Router /v2/public/orders [post]
-func V2CreateAndCheckoutHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func V2CreateAndCheckoutHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		idempotencyKey := strings.TrimSpace(string(ctx.GetHeader("Idempotency-Key")))
 		if !validIdempotencyKey(idempotencyKey) {
@@ -51,7 +59,7 @@ func V2CreateAndCheckoutHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 			result.ParamErrorResult(ctx, err)
 			return
 		}
-		resp, err := svcCtx.Billing.V2CreateAndCheckout(c, &req, idempotencyKey)
+		resp, err := service.V2CreateAndCheckout(c, &req, idempotencyKey)
 		if stdErrors.Is(err, billing.ErrIdempotencyKeyReused) {
 			ctx.JSON(http.StatusConflict, result.Error(xerr.InvalidParams, "IDEMPOTENCY_KEY_REUSED"))
 			return
@@ -68,14 +76,14 @@ func V2CreateAndCheckoutHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 // @Param request body dto.V2CheckoutOrderRequest true "Checkout capability and return URL"
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.V2OrderResponse}
 // @Router /v2/public/orders/{orderNo}/checkout [post]
-func V2CheckoutHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func V2CheckoutHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.V2CheckoutOrderRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
 			result.ParamErrorResult(ctx, err)
 			return
 		}
-		resp, err := svcCtx.Billing.V2Checkout(c, ctx.Param("orderNo"), &req)
+		resp, err := service.V2Checkout(c, ctx.Param("orderNo"), &req)
 		result.HttpResult(ctx, resp, err)
 	}
 }
@@ -87,9 +95,9 @@ func V2CheckoutHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 // @Param checkout_token query string false "Guest checkout capability"
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.V2OrderResponse}
 // @Router /v2/public/orders/{orderNo} [get]
-func V2GetOrderHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func V2GetOrderHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
-		resp, err := svcCtx.Billing.V2GetOrder(c, ctx.Param("orderNo"), ctx.Query("checkout_token"))
+		resp, err := service.V2GetOrder(c, ctx.Param("orderNo"), ctx.Query("checkout_token"))
 		result.HttpResult(ctx, resp, err)
 	}
 }
@@ -102,14 +110,14 @@ func V2GetOrderHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 // @Param request body dto.V2EventTicketRequest true "Guest checkout capability when applicable"
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.V2EventTicketResponse}
 // @Router /v2/public/orders/{orderNo}/event-ticket [post]
-func V2EventTicketHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func V2EventTicketHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.V2EventTicketRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
 			result.ParamErrorResult(ctx, err)
 			return
 		}
-		resp, err := svcCtx.Billing.V2EventTicket(c, ctx.Param("orderNo"), req.CheckoutToken)
+		resp, err := service.V2EventTicket(c, ctx.Param("orderNo"), req.CheckoutToken)
 		result.HttpResult(ctx, resp, err)
 	}
 }
@@ -122,14 +130,14 @@ func V2EventTicketHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 // @Param request body dto.V2OrderSessionRequest true "Guest checkout capability"
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.V2OrderSessionResponse}
 // @Router /v2/public/orders/{orderNo}/session [post]
-func V2OrderSessionHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func V2OrderSessionHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.V2OrderSessionRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
 			result.ParamErrorResult(ctx, err)
 			return
 		}
-		resp, err := svcCtx.Billing.V2Session(c, ctx.Param("orderNo"), req.CheckoutToken)
+		resp, err := service.V2Session(c, ctx.Param("orderNo"), req.CheckoutToken)
 		result.HttpResult(ctx, resp, err)
 	}
 }
@@ -148,16 +156,16 @@ func V2OrderSessionHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 // @Param after query string false "Replay cursor when Last-Event-ID is unavailable"
 // @Success 200 {string} string
 // @Router /v2/public/orders/{orderNo}/events [get]
-func V2OrderEventsHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func V2OrderEventsHandler(deps EventStreamDeps) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		orderNo := ctx.Param("orderNo")
 		ticket := ctx.Query("ticket")
-		snapshot, expiresAt, err := svcCtx.Billing.V2AuthorizeEventStream(c, orderNo, ticket)
+		snapshot, expiresAt, err := deps.Billing.V2AuthorizeEventStream(c, orderNo, ticket)
 		if err != nil {
 			result.HttpResult(ctx, nil, err)
 			return
 		}
-		release, allowed := acquireSSEConnection(c, svcCtx.Redis, ticket, time.Until(expiresAt))
+		release, allowed := acquireSSEConnection(c, deps.Redis, ticket, time.Until(expiresAt))
 		if !allowed {
 			ctx.JSON(http.StatusTooManyRequests, result.Error(xerr.TooManyRequests, "too many concurrent SSE connections"))
 			return
@@ -171,7 +179,7 @@ func V2OrderEventsHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 
 		// Subscribe before querying the event table. Query and broadcast can
 		// overlap, but the monotonically increasing event id makes that safe.
-		pubsub, messages := subscribeOrderEvents(c, svcCtx.Redis, orderNo)
+		pubsub, messages := subscribeOrderEvents(c, deps.Redis, orderNo)
 		if pubsub != nil {
 			defer func() { _ = pubsub.Close() }()
 		}
@@ -181,7 +189,7 @@ func V2OrderEventsHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 		}
 		afterID := requestedEventID(ctx)
 		if afterID > 0 {
-			earliestID, err := svcCtx.Store.OrderEvent().EarliestID(c, orderNo)
+			earliestID, err := deps.Store.OrderEvent().EarliestID(c, orderNo)
 			if err != nil {
 				logger.WithContext(c).Errorw("[V2OrderEvents] inspect replay cursor failed", logger.Field("error", err.Error()), logger.Field("order_no", orderNo))
 			} else if earliestID > afterID {
@@ -191,7 +199,7 @@ func V2OrderEventsHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 				afterID = earliestID - 1
 			}
 		}
-		if err := replayOrderEvents(c, writer, svcCtx, orderNo, &afterID); err != nil {
+		if err := replayOrderEvents(c, writer, deps.Store, orderNo, &afterID); err != nil {
 			logger.WithContext(c).Errorw("[V2OrderEvents] initial replay failed", logger.Field("error", err.Error()), logger.Field("order_no", orderNo))
 		}
 
@@ -221,11 +229,11 @@ func V2OrderEventsHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 					}
 					continue
 				}
-				if err := replayOrderEvents(c, writer, svcCtx, orderNo, &afterID); err != nil {
+				if err := replayOrderEvents(c, writer, deps.Store, orderNo, &afterID); err != nil {
 					return
 				}
 			case <-catchUp.C:
-				if err := replayOrderEvents(c, writer, svcCtx, orderNo, &afterID); err != nil {
+				if err := replayOrderEvents(c, writer, deps.Store, orderNo, &afterID); err != nil {
 					return
 				}
 			case <-heartbeat.C:
@@ -234,7 +242,7 @@ func V2OrderEventsHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 				}
 			case <-resubscribe.C:
 				if messages == nil {
-					pubsub, messages = subscribeOrderEvents(c, svcCtx.Redis, orderNo)
+					pubsub, messages = subscribeOrderEvents(c, deps.Redis, orderNo)
 				}
 			}
 		}
@@ -281,9 +289,9 @@ func writeSSEReset(writer *sse.Writer, snapshot dto.V2OrderSnapshot) error {
 	return writer.WriteEvent("", "order.reset", data)
 }
 
-func replayOrderEvents(ctx context.Context, writer *sse.Writer, svcCtx *svc.ServiceContext, orderNo string, afterID *int64) error {
+func replayOrderEvents(ctx context.Context, writer *sse.Writer, store repository.Store, orderNo string, afterID *int64) error {
 	for {
-		events, err := svcCtx.Store.OrderEvent().ListAfter(ctx, orderNo, *afterID, 500)
+		events, err := store.OrderEvent().ListAfter(ctx, orderNo, *afterID, 500)
 		if err != nil {
 			return err
 		}

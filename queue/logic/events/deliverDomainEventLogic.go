@@ -7,7 +7,6 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/eventbus"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/queue/types"
 )
 
@@ -17,11 +16,11 @@ import (
 // archives it (the dead-letter queue); subscribers are idempotent, so
 // retries and duplicate deliveries are safe.
 type DeliverDomainEventLogic struct {
-	svcCtx *svc.ServiceContext
+	bus *eventbus.Bus
 }
 
-func NewDeliverDomainEventLogic(svcCtx *svc.ServiceContext) *DeliverDomainEventLogic {
-	return &DeliverDomainEventLogic{svcCtx: svcCtx}
+func NewDeliverDomainEventLogic(bus *eventbus.Bus) *DeliverDomainEventLogic {
+	return &DeliverDomainEventLogic{bus: bus}
 }
 
 func (l *DeliverDomainEventLogic) ProcessTask(ctx context.Context, task *asynq.Task) error {
@@ -30,7 +29,7 @@ func (l *DeliverDomainEventLogic) ProcessTask(ctx context.Context, task *asynq.T
 		// A malformed payload can never deliver; retrying cannot fix it.
 		return fmt.Errorf("unmarshal event payload: %v: %w", err, asynq.SkipRetry)
 	}
-	return l.svcCtx.EventBus.Deliver(ctx, eventbus.Event{
+	return l.bus.Deliver(ctx, eventbus.Event{
 		ID:      payload.ID,
 		Topic:   payload.Topic,
 		Key:     payload.Key,

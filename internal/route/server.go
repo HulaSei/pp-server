@@ -3,16 +3,15 @@ package route
 import (
 	"github.com/cloudwego/hertz/pkg/app/server"
 	serverHandler "github.com/perfect-panel/server/internal/handler/server"
-	"github.com/perfect-panel/server/internal/svc"
 )
 
-func registerServerRoutes(router *server.Hertz, serverCtx *svc.ServiceContext) {
-	serverGroup := router.Group("/v1/server", serverHandler.ServerMiddleware(serverCtx))
-	serverGroup.GET("/config", serverHandler.GetServerConfigHandler(serverCtx))
-	serverGroup.POST("/online", serverHandler.PushOnlineUsersHandler(serverCtx))
-	serverGroup.POST("/push", serverHandler.ServerPushUserTrafficHandler(serverCtx))
-	serverGroup.POST("/status", serverHandler.ServerPushStatusHandler(serverCtx))
-	serverGroup.GET("/user", serverHandler.GetServerUserListHandler(serverCtx))
+func registerServerRoutes(router *server.Hertz, deps Dependencies) {
+	serverGroup := router.Group("/v1/server", serverHandler.ServerMiddleware(deps.nodeSecret))
+	serverGroup.GET("/config", serverHandler.GetServerConfigHandler(deps.Network))
+	serverGroup.POST("/online", serverHandler.PushOnlineUsersHandler(deps.Network))
+	serverGroup.POST("/push", serverHandler.ServerPushUserTrafficHandler(deps.Network))
+	serverGroup.POST("/status", serverHandler.ServerPushStatusHandler(deps.Network))
+	serverGroup.GET("/user", serverHandler.GetServerUserListHandler(deps.Network))
 
-	router.GET("/v2/server/:server_id", serverHandler.QueryServerProtocolConfigHandler(serverCtx))
+	router.GET("/v2/server/:server_id", serverHandler.QueryServerProtocolConfigHandler(deps.Network, deps.nodeSecret))
 }

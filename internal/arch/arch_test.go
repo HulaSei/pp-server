@@ -30,35 +30,11 @@ const importPrefix = "github.com/perfect-panel/server/"
 // each new edge makes the future module split harder.
 var legacyLogicImports = map[string][]string{}
 
-// svcImporters is the frozen baseline of package directories that may import
-// internal/svc (the legacy god object). ADR-001 step 3 shrinks this list as
-// domains move behind module facades with injected dependencies; removing an
-// entry is always welcome, adding one requires updating the ADR.
+// svcImporters is the closed composition-root boundary. Only cmd may import
+// internal/svc to build the application; every runtime consumer receives a
+// module facade or a task/transport-specific dependency set.
 var svcImporters = map[string]bool{
-	"cmd": true, "initialize": true, "internal": true,
-	"internal/handler": true, "internal/handler/admin": true,
-	"internal/handler/admin/ads": true, "internal/handler/admin/announcement": true,
-	"internal/handler/admin/application": true, "internal/handler/admin/authMethod": true,
-	"internal/handler/admin/console": true, "internal/handler/admin/coupon": true,
-	"internal/handler/admin/document": true, "internal/handler/admin/log": true,
-	"internal/handler/admin/marketing": true, "internal/handler/admin/order": true,
-	"internal/handler/admin/payment": true, "internal/handler/admin/server": true,
-	"internal/handler/admin/subscribe": true, "internal/handler/admin/system": true,
-	"internal/handler/admin/ticket": true, "internal/handler/admin/tool": true,
-	"internal/handler/admin/user": true, "internal/handler/auth": true,
-	"internal/handler/auth/oauth": true, "internal/handler/common": true,
-	"internal/handler/edge": true, "internal/handler/notify": true,
-	"internal/handler/public/announcement": true, "internal/handler/public/document": true,
-	"internal/handler/public/order": true, "internal/handler/public/payment": true,
-	"internal/handler/public/portal": true, "internal/handler/public/subscribe": true,
-	"internal/handler/public/ticket": true, "internal/handler/public/user": true,
-	"internal/handler/server": true,
-	"internal/middleware":     true, "internal/route": true,
-	"internal/transport/httpserver": true,
-	"queue":                         true, "queue/handler": true,
-	"queue/logic/email": true, "queue/logic/events": true, "queue/logic/order": true, "queue/logic/sms": true,
-	"queue/logic/subscription": true, "queue/logic/task": true, "queue/logic/traffic": true,
-	"scheduler": true,
+	"cmd": true,
 }
 
 // skippedDirs are top-level directories that contain no production Go code

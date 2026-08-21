@@ -6,11 +6,10 @@ import (
 	"github.com/perfect-panel/server/pkg/logger"
 
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/tool"
 )
 
-func Subscribe(svc *svc.ServiceContext) {
+func Subscribe(svc *Dependencies) {
 	logger.Debug("Subscribe config initialization")
 	configs, err := svc.Store.System().GetSubscribeConfig(context.Background())
 	if err != nil {
@@ -20,5 +19,5 @@ func Subscribe(svc *svc.ServiceContext) {
 
 	var subscribeConfig config.SubscribeConfig
 	tool.SystemConfigSliceReflectToStruct(configs, &subscribeConfig)
-	svc.Config.Subscribe = subscribeConfig
+	svc.updateConfig(func(current *config.Config) { current.Subscribe = subscribeConfig })
 }

@@ -10,17 +10,16 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/billing"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/queue/types"
 )
 
 type DeferCloseOrderLogic struct {
-	svc *svc.ServiceContext
+	deps Dependencies
 }
 
-func NewDeferCloseOrderLogic(svc *svc.ServiceContext) *DeferCloseOrderLogic {
+func NewDeferCloseOrderLogic(deps Dependencies) *DeferCloseOrderLogic {
 	return &DeferCloseOrderLogic{
-		svc: svc,
+		deps: deps,
 	}
 }
 
@@ -34,7 +33,7 @@ func (l *DeferCloseOrderLogic) ProcessTask(ctx context.Context, task *asynq.Task
 		return nil
 	}
 
-	err := l.svc.Billing.CloseOrder(ctx, &dto.CloseOrderRequest{
+	err := l.deps.Billing.CloseOrder(ctx, &dto.CloseOrderRequest{
 		OrderNo: payload.OrderNo,
 	})
 	if err != nil && errors.Is(err, billing.ErrGatewayUnconfirmed) {

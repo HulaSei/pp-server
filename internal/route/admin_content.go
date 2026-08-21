@@ -7,60 +7,58 @@ import (
 	adminApplication "github.com/perfect-panel/server/internal/handler/admin/application"
 	adminDocument "github.com/perfect-panel/server/internal/handler/admin/document"
 	adminMarketing "github.com/perfect-panel/server/internal/handler/admin/marketing"
-	"github.com/perfect-panel/server/internal/middleware"
-	"github.com/perfect-panel/server/internal/svc"
 )
 
-func registerAdminAdsRoutes(router *server.Hertz, serverCtx *svc.ServiceContext) {
+func registerAdminAdsRoutes(router *server.Hertz, deps Dependencies) {
 	group := router.Group("/v1/admin/ads")
-	group.Use(middleware.AuthMiddleware(serverCtx))
-	group.POST("/", adminAds.CreateAdsHandler(serverCtx))
-	group.PUT("/", adminAds.UpdateAdsHandler(serverCtx))
-	group.DELETE("/", adminAds.DeleteAdsHandler(serverCtx))
-	group.GET("/detail", adminAds.GetAdsDetailHandler(serverCtx))
-	group.GET("/list", adminAds.GetAdsListHandler(serverCtx))
+	group.Use(deps.authMiddleware())
+	group.POST("/", adminAds.CreateAdsHandler(deps.Support))
+	group.PUT("/", adminAds.UpdateAdsHandler(deps.Support))
+	group.DELETE("/", adminAds.DeleteAdsHandler(deps.Support))
+	group.GET("/detail", adminAds.GetAdsDetailHandler(deps.Support))
+	group.GET("/list", adminAds.GetAdsListHandler(deps.Support))
 }
 
-func registerAdminAnnouncementRoutes(router *server.Hertz, serverCtx *svc.ServiceContext) {
+func registerAdminAnnouncementRoutes(router *server.Hertz, deps Dependencies) {
 	group := router.Group("/v1/admin/announcement")
-	group.Use(middleware.AuthMiddleware(serverCtx))
-	group.POST("/", adminAnnouncement.CreateAnnouncementHandler(serverCtx))
-	group.PUT("/", adminAnnouncement.UpdateAnnouncementHandler(serverCtx))
-	group.DELETE("/", adminAnnouncement.DeleteAnnouncementHandler(serverCtx))
-	group.GET("/detail", adminAnnouncement.GetAnnouncementHandler(serverCtx))
-	group.GET("/list", adminAnnouncement.GetAnnouncementListHandler(serverCtx))
+	group.Use(deps.authMiddleware())
+	group.POST("/", adminAnnouncement.CreateAnnouncementHandler(deps.Support))
+	group.PUT("/", adminAnnouncement.UpdateAnnouncementHandler(deps.Support))
+	group.DELETE("/", adminAnnouncement.DeleteAnnouncementHandler(deps.Support))
+	group.GET("/detail", adminAnnouncement.GetAnnouncementHandler(deps.Support))
+	group.GET("/list", adminAnnouncement.GetAnnouncementListHandler(deps.Support))
 }
 
-func registerAdminApplicationRoutes(router *server.Hertz, serverCtx *svc.ServiceContext) {
+func registerAdminApplicationRoutes(router *server.Hertz, deps Dependencies) {
 	group := router.Group("/v1/admin/application")
-	group.Use(middleware.AuthMiddleware(serverCtx))
-	group.POST("/", adminApplication.CreateSubscribeApplicationHandler(serverCtx))
-	group.GET("/preview", adminApplication.PreviewSubscribeTemplateHandler(serverCtx))
-	group.PUT("/subscribe_application", adminApplication.UpdateSubscribeApplicationHandler(serverCtx))
-	group.DELETE("/subscribe_application", adminApplication.DeleteSubscribeApplicationHandler(serverCtx))
-	group.GET("/subscribe_application_list", adminApplication.GetSubscribeApplicationListHandler(serverCtx))
+	group.Use(deps.authMiddleware())
+	group.POST("/", adminApplication.CreateSubscribeApplicationHandler(deps.Subscription))
+	group.GET("/preview", adminApplication.PreviewSubscribeTemplateHandler(deps.Subscription))
+	group.PUT("/subscribe_application", adminApplication.UpdateSubscribeApplicationHandler(deps.Subscription))
+	group.DELETE("/subscribe_application", adminApplication.DeleteSubscribeApplicationHandler(deps.Subscription))
+	group.GET("/subscribe_application_list", adminApplication.GetSubscribeApplicationListHandler(deps.Subscription))
 }
 
-func registerAdminDocumentRoutes(router *server.Hertz, serverCtx *svc.ServiceContext) {
+func registerAdminDocumentRoutes(router *server.Hertz, deps Dependencies) {
 	group := router.Group("/v1/admin/document")
-	group.Use(middleware.AuthMiddleware(serverCtx))
-	group.POST("/", adminDocument.CreateDocumentHandler(serverCtx))
-	group.PUT("/", adminDocument.UpdateDocumentHandler(serverCtx))
-	group.DELETE("/", adminDocument.DeleteDocumentHandler(serverCtx))
-	group.DELETE("/batch", adminDocument.BatchDeleteDocumentHandler(serverCtx))
-	group.GET("/detail", adminDocument.GetDocumentDetailHandler(serverCtx))
-	group.GET("/list", adminDocument.GetDocumentListHandler(serverCtx))
+	group.Use(deps.authMiddleware())
+	group.POST("/", adminDocument.CreateDocumentHandler(deps.Support))
+	group.PUT("/", adminDocument.UpdateDocumentHandler(deps.Support))
+	group.DELETE("/", adminDocument.DeleteDocumentHandler(deps.Support))
+	group.DELETE("/batch", adminDocument.BatchDeleteDocumentHandler(deps.Support))
+	group.GET("/detail", adminDocument.GetDocumentDetailHandler(deps.Support))
+	group.GET("/list", adminDocument.GetDocumentListHandler(deps.Support))
 }
 
-func registerAdminMarketingRoutes(router *server.Hertz, serverCtx *svc.ServiceContext) {
+func registerAdminMarketingRoutes(router *server.Hertz, deps Dependencies) {
 	group := router.Group("/v1/admin/marketing")
-	group.Use(middleware.AuthMiddleware(serverCtx))
-	group.GET("/email/batch/list", adminMarketing.GetBatchSendEmailTaskListHandler(serverCtx))
-	group.POST("/email/batch/pre-send-count", adminMarketing.GetPreSendEmailCountHandler(serverCtx))
-	group.POST("/email/batch/send", adminMarketing.CreateBatchSendEmailTaskHandler(serverCtx))
-	group.POST("/email/batch/status", adminMarketing.GetBatchSendEmailTaskStatusHandler(serverCtx))
-	group.POST("/email/batch/stop", adminMarketing.StopBatchSendEmailTaskHandler(serverCtx))
-	group.POST("/quota/create", adminMarketing.CreateQuotaTaskHandler(serverCtx))
-	group.GET("/quota/list", adminMarketing.QueryQuotaTaskListHandler(serverCtx))
-	group.POST("/quota/pre-count", adminMarketing.QueryQuotaTaskPreCountHandler(serverCtx))
+	group.Use(deps.authMiddleware())
+	group.GET("/email/batch/list", adminMarketing.GetBatchSendEmailTaskListHandler(deps.Support))
+	group.POST("/email/batch/pre-send-count", adminMarketing.GetPreSendEmailCountHandler(deps.Support))
+	group.POST("/email/batch/send", adminMarketing.CreateBatchSendEmailTaskHandler(deps.Support))
+	group.POST("/email/batch/status", adminMarketing.GetBatchSendEmailTaskStatusHandler(deps.Support))
+	group.POST("/email/batch/stop", adminMarketing.StopBatchSendEmailTaskHandler(deps.Support))
+	group.POST("/quota/create", adminMarketing.CreateQuotaTaskHandler(deps.Support))
+	group.GET("/quota/list", adminMarketing.QueryQuotaTaskListHandler(deps.Support))
+	group.POST("/quota/pre-count", adminMarketing.QueryQuotaTaskPreCountHandler(deps.Support))
 }

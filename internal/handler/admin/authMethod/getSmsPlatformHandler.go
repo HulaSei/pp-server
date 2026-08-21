@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/module/identity"
 	"github.com/perfect-panel/server/pkg/result"
 )
 
@@ -16,10 +16,10 @@ import (
 // @Security BearerAuth
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.PlatformResponse}
 // @Router /v1/admin/auth-method/sms_platform [get]
-func GetSmsPlatformHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func GetSmsPlatformHandler(service identity.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 
-		resp, err := svcCtx.Identity.GetSmsPlatform(ctx)
+		resp, err := service.GetSmsPlatform(ctx)
 		result.HttpResult(c, resp, err)
 	}
 }

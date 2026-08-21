@@ -8,7 +8,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"github.com/perfect-panel/server/internal/model/dto"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/module/network"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
 )
@@ -23,7 +23,7 @@ import (
 // @Param protocols query []string false "Protocols to include" collectionFormat(multi)
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.QueryServerConfigResponse}
 // @Router /v2/server/{server_id} [get]
-func QueryServerProtocolConfigHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func QueryServerProtocolConfigHandler(service network.Service, nodeSecret func() string) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		ctx.Header("Vary", "Accept")
 		acceptsProtobuf := acceptsProtobuf(ctx)
@@ -39,13 +39,13 @@ func QueryServerProtocolConfigHandler(svcCtx *svc.ServiceContext) app.HandlerFun
 			SecretKey: ctx.Query("secret_key"),
 			Protocols: queryValues(ctx, "protocols", "protocols[]"),
 		}
-		if !nodeSecretMatches(svcCtx, req.SecretKey) {
+		if !nodeSecretMatches(nodeSecret(), req.SecretKey) {
 			writeServerText(ctx, consts.StatusUnauthorized, "Unauthorized")
 			ctx.Abort()
 			return
 		}
 
-		resp, err := svcCtx.Network.QueryServerProtocolConfig(c, &req)
+		resp, err := service.QueryServerProtocolConfig(c, &req)
 		if err != nil {
 			writeServerReportResult(ctx, err)
 			return

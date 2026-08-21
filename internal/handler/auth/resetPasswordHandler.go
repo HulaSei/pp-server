@@ -5,8 +5,10 @@ import (
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/model/dto"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/module/identity"
+	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/result"
 	"github.com/perfect-panel/server/pkg/turnstile"
@@ -23,23 +25,24 @@ import (
 // @Param request body dto.ResetPasswordRequest true "Request parameters"
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.LoginResponse}
 // @Router /v1/auth/reset [post]
-func ResetPasswordHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func ResetPasswordHandler(service identity.Service, verifyConfig func() config.Verify) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		var req dto.ResetPasswordRequest
 		if err := httpx.ShouldBind(c, &req); err != nil {
 			result.ParamErrorResult(c, err)
 			return
 		}
-		validateErr := svcCtx.Validate(&req)
+		validateErr := validation.Validate(&req)
 		if validateErr != nil {
 			result.ParamErrorResult(c, validateErr)
 			return
 		}
 		// get client ip
 		req.IP = c.ClientIP()
-		if svcCtx.Config.Verify.ResetPasswordVerify {
+		verify := verifyConfig()
+		if verify.ResetPasswordVerify {
 			verifyTurns := turnstile.New(turnstile.Config{
-				Secret:  svcCtx.Config.Verify.TurnstileSecret,
+				Secret:  verify.TurnstileSecret,
 				Timeout: 3 * time.Second,
 			})
 			if verify, err := verifyTurns.Verify(ctx, req.CfToken, req.IP); err != nil || !verify {
@@ -48,7 +51,7 @@ func ResetPasswordHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 				return
 			}
 		}
-		resp, err := svcCtx.Identity.ResetPassword(ctx, &req)
+		resp, err := service.ResetPassword(ctx, &req)
 		result.HttpResult(c, resp, err)
 	}
 }

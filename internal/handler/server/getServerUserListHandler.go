@@ -7,7 +7,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"github.com/perfect-panel/server/internal/model/dto"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -22,7 +22,7 @@ import (
 // @Param request query dto.GetServerUserListRequest false "Request parameters"
 // @Success 200 {object} dto.GetServerUserListResponse
 // @Router /v1/server/user [get]
-func GetServerUserListHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func GetServerUserListHandler(service network.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		acceptsProtobuf := acceptsProtobuf(ctx)
 		commonReq, err := serverCommonRequest(ctx)
@@ -31,13 +31,13 @@ func GetServerUserListHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 			return
 		}
 		req := dto.GetServerUserListRequest{ServerCommon: commonReq}
-		if validateErr := svcCtx.Validate(&req); validateErr != nil {
+		if validateErr := validation.Validate(&req); validateErr != nil {
 			writeParamError(ctx, validateErr)
 			return
 		}
 
 		ifNoneMatch := string(ctx.GetHeader("If-None-Match"))
-		resp, respMeta, err := svcCtx.Network.GetServerUserList(c, &req, network.RequestMeta{
+		resp, respMeta, err := service.GetServerUserList(c, &req, network.RequestMeta{
 			IfNoneMatch: ifNoneMatchForRepresentation(ifNoneMatch, acceptsProtobuf),
 		})
 		writeHeaders(ctx, respMeta.Headers)

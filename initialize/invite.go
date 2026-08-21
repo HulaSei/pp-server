@@ -4,12 +4,11 @@ import (
 	"context"
 
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
 )
 
-func Invite(ctx *svc.ServiceContext) {
+func Invite(ctx *Dependencies) {
 	// Initialize the system configuration
 	logger.Debug("Register config initialization")
 	configs, err := ctx.Store.System().GetInviteConfig(context.Background())
@@ -19,5 +18,5 @@ func Invite(ctx *svc.ServiceContext) {
 	}
 	var inviteConfig config.InviteConfig
 	tool.SystemConfigSliceReflectToStruct(configs, &inviteConfig)
-	ctx.Config.Invite = inviteConfig
+	ctx.updateConfig(func(current *config.Config) { current.Invite = inviteConfig })
 }

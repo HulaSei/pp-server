@@ -6,12 +6,11 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/result"
 )
 
-func LoggerMiddleware(svc *svc.ServiceContext) app.HandlerFunc {
+func LoggerMiddleware() app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		start := time.Now()
 		ctx.Next(c)

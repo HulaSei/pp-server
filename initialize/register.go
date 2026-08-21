@@ -6,11 +6,10 @@ import (
 	"github.com/perfect-panel/server/pkg/logger"
 
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/tool"
 )
 
-func Register(ctx *svc.ServiceContext) {
+func Register(ctx *Dependencies) {
 	logger.Debug("Register config initialization")
 	configs, err := ctx.Store.System().GetRegisterConfig(context.Background())
 	if err != nil {
@@ -19,5 +18,5 @@ func Register(ctx *svc.ServiceContext) {
 	}
 	var registerConfig config.RegisterConfig
 	tool.SystemConfigSliceReflectToStruct(configs, &registerConfig)
-	ctx.Config.Register = registerConfig
+	ctx.updateConfig(func(current *config.Config) { current.Register = registerConfig })
 }

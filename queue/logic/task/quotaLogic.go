@@ -7,7 +7,6 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/module/subscription"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 
@@ -15,13 +14,11 @@ import (
 // the business logic lives in the subscription module (ADR-001 step 6
 // preparation).
 type QuotaTaskLogic struct {
-	svcCtx *svc.ServiceContext
+	service subscription.Service
 }
 
-func NewQuotaTaskLogic(svcCtx *svc.ServiceContext) *QuotaTaskLogic {
-	return &QuotaTaskLogic{
-		svcCtx: svcCtx,
-	}
+func NewQuotaTaskLogic(service subscription.Service) *QuotaTaskLogic {
+	return &QuotaTaskLogic{service: service}
 }
 
 func (l *QuotaTaskLogic) ProcessTask(ctx context.Context, t *asynq.Task) error {
@@ -29,7 +26,7 @@ func (l *QuotaTaskLogic) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	if err != nil {
 		return err
 	}
-	if err := l.svcCtx.Subscription.ProcessQuotaTask(ctx, taskID); err != nil {
+	if err := l.service.ProcessQuotaTask(ctx, taskID); err != nil {
 		if errors.Is(err, subscription.ErrQuotaTaskUnretryable) {
 			return asynq.SkipRetry
 		}
