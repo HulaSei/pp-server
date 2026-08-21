@@ -6,7 +6,7 @@ package checkout
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/coupon"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	paymentEntity "github.com/perfect-panel/server/internal/module/billing/entity/payment"
@@ -89,7 +89,7 @@ func NewService(deps Deps) *Service {
 	return &Service{deps: deps}
 }
 
-func getDiscount(discounts []dto.SubscribeDiscount, inputMonths int64) float64 {
+func getDiscount(discounts []dto.BillingSubscribeDiscount, inputMonths int64) float64 {
 	var finalDiscount float64 = 100
 
 	for _, discount := range discounts {

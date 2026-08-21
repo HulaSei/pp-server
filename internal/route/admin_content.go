@@ -2,11 +2,11 @@ package route
 
 import (
 	"github.com/cloudwego/hertz/pkg/app/server"
-	adminAds "github.com/perfect-panel/server/internal/handler/admin/ads"
-	adminAnnouncement "github.com/perfect-panel/server/internal/handler/admin/announcement"
-	adminApplication "github.com/perfect-panel/server/internal/handler/admin/application"
-	adminDocument "github.com/perfect-panel/server/internal/handler/admin/document"
-	adminMarketing "github.com/perfect-panel/server/internal/handler/admin/marketing"
+	adminApplication "github.com/perfect-panel/server/internal/module/subscription/transport/http/admin/application"
+	adminAds "github.com/perfect-panel/server/internal/module/support/transport/http/admin/ads"
+	adminAnnouncement "github.com/perfect-panel/server/internal/module/support/transport/http/admin/announcement"
+	adminDocument "github.com/perfect-panel/server/internal/module/support/transport/http/admin/document"
+	adminMarketing "github.com/perfect-panel/server/internal/module/support/transport/http/admin/marketing"
 )
 
 func registerAdminAdsRoutes(router *server.Hertz, deps Dependencies) {

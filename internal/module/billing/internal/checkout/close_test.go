@@ -16,7 +16,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	paymentEntity "github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	walletEntity "github.com/perfect-panel/server/internal/module/billing/entity/wallet"

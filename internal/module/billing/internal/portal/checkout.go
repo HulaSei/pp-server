@@ -23,7 +23,7 @@ import (
 	queueType "github.com/perfect-panel/server/queue/types"
 	"github.com/redis/go-redis/v9"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/module/billing/internal/checkout"

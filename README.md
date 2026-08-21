@@ -152,9 +152,8 @@ go test ./internal/route -run '^TestSwagger' -count=1
 ├── initialize/       # 系统初始化
 ├── internal/         # 内部模块
 │   ├── config/       # 配置文件解析
-│   ├── handler/      # HTTP 处理程序
 │   ├── middleware/   # HTTP 中间件
-│   ├── logic/        # 业务逻辑
+│   ├── module/       # 业务模块（门面、contract、transport/http 与内部实现）
 │   ├── model/        # 数据模型
 │   ├── svc/          # 服务层
 │   └── types/        # 类型定义

@@ -3,7 +3,7 @@ package adminserver
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -37,7 +37,7 @@ func (l *ResetSortWithServerLogic) ResetSortWithServer(req *dto.ResetSortRequest
 			currentSortMap[item.Id] = item.Sort
 		}
 
-		var itemsToUpdate []dto.SortItem
+		var itemsToUpdate []dto.NetworkSortItem
 		for _, item := range req.Sort {
 			if oldSort, exists := currentSortMap[item.Id]; exists && oldSort != item.Sort {
 				itemsToUpdate = append(itemsToUpdate, item)

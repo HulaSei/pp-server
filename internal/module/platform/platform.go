@@ -8,7 +8,7 @@ import (
 	"context"
 
 	"github.com/oschwald/geoip2-golang"
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 	"github.com/perfect-panel/server/internal/module/platform/internal/auditlog"
 	"github.com/perfect-panel/server/internal/module/platform/internal/dashboard"
 	"github.com/perfect-panel/server/internal/module/platform/internal/publicinfo"

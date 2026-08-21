@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	paymentModel "github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -245,8 +245,8 @@ func (s *Service) List(ctx context.Context, req *dto.GetPaymentMethodListRequest
 	return resp, nil
 }
 
-func (s *Service) Platforms(_ context.Context) (*dto.PlatformResponse, error) {
-	return &dto.PlatformResponse{List: payment.GetSupportedPlatforms()}, nil
+func (s *Service) Platforms(_ context.Context) (*dto.PaymentPlatformResponse, error) {
+	return &dto.PaymentPlatformResponse{List: payment.GetSupportedPlatforms()}, nil
 }
 
 func validatePaymentFee(mode uint, percent, amount int64) error {

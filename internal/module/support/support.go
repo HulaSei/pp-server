@@ -8,9 +8,9 @@ import (
 	"context"
 	"time"
 
-	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
+	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	"github.com/perfect-panel/server/internal/module/support/internal/ads"
 	"github.com/perfect-panel/server/internal/module/support/internal/announcement"
 	"github.com/perfect-panel/server/internal/module/support/internal/document"

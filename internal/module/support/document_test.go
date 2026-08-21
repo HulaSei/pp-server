@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/support"
+	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	docEntity "github.com/perfect-panel/server/internal/module/support/entity/document"
 	"github.com/perfect-panel/server/pkg/constant"
 )

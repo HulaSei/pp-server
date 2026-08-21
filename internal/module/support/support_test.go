@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/support"
+	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	entity "github.com/perfect-panel/server/internal/module/support/entity/announcement"
 )
 

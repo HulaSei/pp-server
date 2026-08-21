@@ -6,7 +6,7 @@ package identity
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/internal/adminuser"
 	"github.com/perfect-panel/server/internal/module/identity/internal/authmethodadmin"
 	authn "github.com/perfect-panel/server/internal/module/identity/internal/authn"
@@ -80,8 +80,8 @@ type Service interface {
 	GetAuthMethodList(ctx context.Context) (*dto.GetAuthMethodListResponse, error)
 	GetAuthMethodConfig(ctx context.Context, req *dto.GetAuthMethodConfigRequest) (*dto.AuthMethodConfig, error)
 	UpdateAuthMethodConfig(ctx context.Context, req *dto.UpdateAuthMethodConfigRequest) (*dto.AuthMethodConfig, error)
-	GetEmailPlatform(ctx context.Context) (*dto.PlatformResponse, error)
-	GetSmsPlatform(ctx context.Context) (*dto.PlatformResponse, error)
+	GetEmailPlatform(ctx context.Context) (*dto.AuthPlatformResponse, error)
+	GetSmsPlatform(ctx context.Context) (*dto.AuthPlatformResponse, error)
 	TestEmailSend(ctx context.Context, req *dto.TestEmailSendRequest) error
 	TestSmsSend(ctx context.Context, req *dto.TestSmsSendRequest) error
 
@@ -432,11 +432,11 @@ func (s *service) UpdateAuthMethodConfig(ctx context.Context, req *dto.UpdateAut
 	return s.methods.UpdateAuthMethodConfig(ctx, req)
 }
 
-func (s *service) GetEmailPlatform(ctx context.Context) (*dto.PlatformResponse, error) {
+func (s *service) GetEmailPlatform(ctx context.Context) (*dto.AuthPlatformResponse, error) {
 	return s.methods.GetEmailPlatform(ctx)
 }
 
-func (s *service) GetSmsPlatform(ctx context.Context) (*dto.PlatformResponse, error) {
+func (s *service) GetSmsPlatform(ctx context.Context) (*dto.AuthPlatformResponse, error) {
 	return s.methods.GetSmsPlatform(ctx)
 }
 

@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/model/dto"
 	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"
+	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/repository"
 )
 

@@ -9,7 +9,7 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/network/contract"
 )
 
 type ServerDataLogic struct {
@@ -23,20 +23,20 @@ func NewServerDataLogic(deps Dependencies) *ServerDataLogic {
 }
 
 func (l *ServerDataLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
-	serverData := dto.ServerTotalDataResponse{}
+	serverData := dto.NetworkServerTotalDataSnapshot{}
 
 	top10ServerToday, top10ServerYesterday, top10UserToday, top10UserYesterday := l.getRanking(ctx)
 	if len(top10ServerToday) == 0 {
-		top10ServerToday = make([]dto.ServerTrafficData, 0)
+		top10ServerToday = make([]dto.NetworkServerTrafficSnapshot, 0)
 	}
 	if len(top10ServerYesterday) == 0 {
-		top10ServerYesterday = make([]dto.ServerTrafficData, 0)
+		top10ServerYesterday = make([]dto.NetworkServerTrafficSnapshot, 0)
 	}
 	if len(top10UserToday) == 0 {
-		top10UserToday = make([]dto.UserTrafficData, 0)
+		top10UserToday = make([]dto.NetworkUserTrafficSnapshot, 0)
 	}
 	if len(top10UserYesterday) == 0 {
-		top10UserYesterday = make([]dto.UserTrafficData, 0)
+		top10UserYesterday = make([]dto.NetworkUserTrafficSnapshot, 0)
 	}
 	serverData.ServerTrafficRankingToday = top10ServerToday
 	serverData.ServerTrafficRankingYesterday = top10ServerYesterday
@@ -61,7 +61,7 @@ func (l *ServerDataLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error 
 	return nil
 }
 
-func (l *ServerDataLogic) getRanking(ctx context.Context) (top10ServerToday, top10ServerYesterday []dto.ServerTrafficData, top10UserToday, top10UserYesterday []dto.UserTrafficData) {
+func (l *ServerDataLogic) getRanking(ctx context.Context) (top10ServerToday, top10ServerYesterday []dto.NetworkServerTrafficSnapshot, top10UserToday, top10UserYesterday []dto.NetworkUserTrafficSnapshot) {
 	now := timeutil.Now()
 	// 获取服务器流量排行榜
 	serverToday, err := l.deps.Store.TrafficLog().TopServersTrafficByDay(ctx, now, 10)
@@ -77,7 +77,7 @@ func (l *ServerDataLogic) getRanking(ctx context.Context) (top10ServerToday, top
 				logger.Error("[ServerDataLogic] Find server failed", logger.Field("error", err.Error()))
 				continue
 			}
-			top10ServerToday = append(top10ServerToday, dto.ServerTrafficData{
+			top10ServerToday = append(top10ServerToday, dto.NetworkServerTrafficSnapshot{
 				ServerId: s.ServerId,
 				Name:     serverInfo.Name,
 				Upload:   s.Upload,
@@ -96,7 +96,7 @@ func (l *ServerDataLogic) getRanking(ctx context.Context) (top10ServerToday, top
 				logger.Error("[ServerDataLogic] Find server failed", logger.Field("error", err.Error()))
 				continue
 			}
-			top10ServerYesterday = append(top10ServerYesterday, dto.ServerTrafficData{
+			top10ServerYesterday = append(top10ServerYesterday, dto.NetworkServerTrafficSnapshot{
 				ServerId: s.ServerId,
 				Name:     serverInfo.Name,
 				Upload:   s.Upload,
@@ -111,7 +111,7 @@ func (l *ServerDataLogic) getRanking(ctx context.Context) (top10ServerToday, top
 		logger.Error("[ServerDataLogic] Get top users traffic by day failed", logger.Field("error", err.Error()))
 	} else {
 		for _, u := range userToday {
-			top10UserToday = append(top10UserToday, dto.UserTrafficData{
+			top10UserToday = append(top10UserToday, dto.NetworkUserTrafficSnapshot{
 				SID:      u.SubscribeId,
 				UID:      u.UserId,
 				Upload:   u.Upload,
@@ -125,7 +125,7 @@ func (l *ServerDataLogic) getRanking(ctx context.Context) (top10ServerToday, top
 		logger.Error("[ServerDataLogic] Get top users traffic by day failed", logger.Field("error", err.Error()))
 	} else {
 		for _, u := range userYesterday {
-			top10UserYesterday = append(top10UserYesterday, dto.UserTrafficData{
+			top10UserYesterday = append(top10UserYesterday, dto.NetworkUserTrafficSnapshot{
 				SID:      u.SubscribeId,
 				UID:      u.UserId,
 				Upload:   u.Upload,

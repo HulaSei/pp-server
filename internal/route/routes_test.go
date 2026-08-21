@@ -5,8 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -16,16 +20,17 @@ import (
 	"github.com/perfect-panel/server/pkg/xerr"
 )
 
-var routeHandlerName = regexp.MustCompile(`^(.*)\.[^.]+\.([^.]+)\.func[0-9]+$`)
+var routeHandlerName = regexp.MustCompile(`^(.*)\.([^.]+)\.([^.]+)\.func[0-9]+$`)
 
 func TestRegisterHandlers_routeInventory(t *testing.T) {
 	// Given
-	router := server.Default()
+	router := server.New()
 	RegisterHandlers(router, Dependencies{})
 	routes := router.Routes()
+	handlerOwners := routeHandlerOwners(t)
 	var actual strings.Builder
 	for _, route := range routes {
-		logicalHandler, err := normalizeRouteHandler(route.Handler)
+		logicalHandler, err := normalizeRouteHandler(route.Handler, handlerOwners)
 		if err != nil {
 			t.Fatalf("normalize route %s %s handler %q: %v", route.Method, route.Path, route.Handler, err)
 		}
@@ -48,22 +53,84 @@ func TestRegisterHandlers_routeInventory(t *testing.T) {
 		t.Fatalf("expected 245 routes, got %d", len(routes))
 	}
 	if !bytes.Equal([]byte(actual.String()), expected) {
-		t.Fatal("route inventory differs from golden")
+		t.Fatalf("route inventory differs from golden\nactual:\n%s", actual.String())
 	}
 }
 
-func normalizeRouteHandler(raw string) (string, error) {
+func normalizeRouteHandler(raw string, owners map[string]string) (string, error) {
 	matches := routeHandlerName.FindStringSubmatch(raw)
 	if matches == nil {
 		return "", errors.New("unsupported Hertz closure name")
 	}
+	key := matches[2] + "." + matches[3]
+	logicalHandler, ok := owners[key]
+	if !ok {
+		return "", errors.New("handler owner not found for " + key)
+	}
+	return logicalHandler, nil
+}
 
-	logicalHandler := matches[1] + "." + matches[2]
-	return strings.Replace(logicalHandler,
-		"github.com/perfect-panel/server/internal/route.",
-		"github.com/perfect-panel/server/internal/handler.",
-		1,
-	), nil
+// routeHandlerOwners derives the logical handler owner from route source
+// imports. Runtime closure names point at the route package after inlining, so
+// using those names directly would erase the module transport boundary that
+// this golden inventory is meant to protect.
+func routeHandlerOwners(t *testing.T) map[string]string {
+	t.Helper()
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read route package: %v", err)
+	}
+	owners := make(map[string]string)
+	fset := token.NewFileSet()
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		file, parseErr := parser.ParseFile(fset, entry.Name(), nil, 0)
+		if parseErr != nil {
+			t.Fatalf("parse %s: %v", entry.Name(), parseErr)
+		}
+		imports := make(map[string]string)
+		for _, spec := range file.Imports {
+			path := strings.Trim(spec.Path.Value, `"`)
+			if !strings.Contains(path, "/internal/module/") || !strings.Contains(path, "/transport/http") {
+				continue
+			}
+			name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+			if spec.Name != nil {
+				name = spec.Name.Name
+			}
+			imports[name] = path
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			ast.Inspect(fn.Body, func(node ast.Node) bool {
+				sel, ok := node.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				ident, ok := sel.X.(*ast.Ident)
+				if !ok {
+					return true
+				}
+				path, ok := imports[ident.Name]
+				if !ok || !strings.HasSuffix(sel.Sel.Name, "Handler") {
+					return true
+				}
+				key := fn.Name.Name + "." + sel.Sel.Name
+				owner := path + "." + sel.Sel.Name
+				if previous, exists := owners[key]; exists && previous != owner {
+					t.Fatalf("ambiguous route handler owner for %s: %s and %s", key, previous, owner)
+				}
+				owners[key] = owner
+				return true
+			})
+		}
+	}
+	return owners
 }
 
 func TestRegisterHandlers_edgeManifestHidesUnauthorizedRequests(t *testing.T) {

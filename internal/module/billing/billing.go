@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"time"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/internal/activation"
 	"github.com/perfect-panel/server/internal/module/billing/internal/adminorder"
 	"github.com/perfect-panel/server/internal/module/billing/internal/adminpayment"
@@ -37,7 +37,7 @@ type Service interface {
 	UpdatePaymentMethod(ctx context.Context, req *dto.UpdatePaymentMethodRequest) (*dto.PaymentConfig, error)
 	DeletePaymentMethod(ctx context.Context, req *dto.DeletePaymentMethodRequest) error
 	GetPaymentMethodList(ctx context.Context, req *dto.GetPaymentMethodListRequest) (*dto.GetPaymentMethodListResponse, error)
-	GetPaymentPlatform(ctx context.Context) (*dto.PlatformResponse, error)
+	GetPaymentPlatform(ctx context.Context) (*dto.PaymentPlatformResponse, error)
 
 	CreateCoupon(ctx context.Context, req *dto.CreateCouponRequest) error
 	UpdateCoupon(ctx context.Context, req *dto.UpdateCouponRequest) error
@@ -346,7 +346,7 @@ func (s *service) GetPaymentMethodList(ctx context.Context, req *dto.GetPaymentM
 	return s.payments.List(ctx, req)
 }
 
-func (s *service) GetPaymentPlatform(ctx context.Context) (*dto.PlatformResponse, error) {
+func (s *service) GetPaymentPlatform(ctx context.Context) (*dto.PaymentPlatformResponse, error) {
 	return s.payments.Platforms(ctx)
 }
 

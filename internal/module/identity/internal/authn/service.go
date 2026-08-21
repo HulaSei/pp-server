@@ -7,7 +7,7 @@ package auth
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/internal/authn/oauth"
 	"github.com/perfect-panel/server/internal/module/identity/internal/authn/registerpolicy"
 	"github.com/perfect-panel/server/internal/repository"

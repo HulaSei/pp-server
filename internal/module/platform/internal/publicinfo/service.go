@@ -6,7 +6,7 @@ package publicinfo
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 )
 
 // Service is the public-info subdomain entry point used by the platform

@@ -6,9 +6,10 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/config"
-	"github.com/perfect-panel/server/internal/handler"
 	"github.com/perfect-panel/server/internal/middleware"
+	billingHTTP "github.com/perfect-panel/server/internal/module/billing/transport/http"
 	"github.com/perfect-panel/server/internal/module/notification"
+	notificationHTTP "github.com/perfect-panel/server/internal/module/notification/transport/http"
 	"github.com/perfect-panel/server/internal/route"
 	"github.com/perfect-panel/server/pkg/logger"
 )
@@ -40,8 +41,8 @@ func newServer(deps Dependencies, opts []config.Option) *Server {
 	engine.Use(middleware.TraceMiddleware(), middleware.LoggerMiddleware(), middleware.CorsMiddleware)
 
 	route.RegisterHandlers(engine, deps.Routes)
-	handler.RegisterTelegramHandlers(engine, deps.Notification, deps.TelegramBotToken)
-	handler.RegisterNotifyHandlers(engine, deps.Routes.Store, deps.Routes.Billing)
+	notificationHTTP.RegisterTelegramHandlers(engine, deps.Notification, deps.TelegramBotToken)
+	billingHTTP.RegisterNotifyHandlers(engine, deps.Routes.Store, deps.Routes.Billing)
 
 	return &Server{h: engine}
 }

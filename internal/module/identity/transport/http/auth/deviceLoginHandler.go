@@ -1,0 +1,40 @@
+package auth
+
+import (
+	"context"
+
+	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/perfect-panel/server/internal/module/identity"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
+	"github.com/perfect-panel/server/internal/validation"
+	"github.com/perfect-panel/server/pkg/httpx"
+	"github.com/perfect-panel/server/pkg/result"
+)
+
+// DeviceLoginHandler documents Device Login.
+//
+// @Summary Device Login
+// @Tags common
+// @Accept json
+// @Produce json
+// @Param request body dto.DeviceLoginRequest true "Request parameters"
+// @Success 200 {object} result.ResponseSuccessBean{data=dto.LoginResponse}
+// @Router /v1/auth/login/device [post]
+func DeviceLoginHandler(service identity.Service) app.HandlerFunc {
+	return func(ctx context.Context, c *app.RequestContext) {
+		var req dto.DeviceLoginRequest
+		if err := httpx.ShouldBind(c, &req); err != nil {
+			result.ParamErrorResult(c, err)
+			return
+		}
+		validateErr := validation.Validate(&req)
+		if validateErr != nil {
+			result.ParamErrorResult(c, validateErr)
+			return
+		}
+		req.IP = c.ClientIP()
+
+		resp, err := service.DeviceLogin(ctx, &req)
+		result.HttpResult(c, resp, err)
+	}
+}

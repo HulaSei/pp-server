@@ -2,13 +2,13 @@ package route
 
 import (
 	"github.com/cloudwego/hertz/pkg/app/server"
-	adminAuthMethod "github.com/perfect-panel/server/internal/handler/admin/authMethod"
-	adminConsole "github.com/perfect-panel/server/internal/handler/admin/console"
-	adminLog "github.com/perfect-panel/server/internal/handler/admin/log"
-	adminServer "github.com/perfect-panel/server/internal/handler/admin/server"
-	adminSystem "github.com/perfect-panel/server/internal/handler/admin/system"
-	adminTicket "github.com/perfect-panel/server/internal/handler/admin/ticket"
-	adminTool "github.com/perfect-panel/server/internal/handler/admin/tool"
+	adminAuthMethod "github.com/perfect-panel/server/internal/module/identity/transport/http/admin/authMethod"
+	adminServer "github.com/perfect-panel/server/internal/module/network/transport/http/admin/server"
+	adminConsole "github.com/perfect-panel/server/internal/module/platform/transport/http/admin/console"
+	adminLog "github.com/perfect-panel/server/internal/module/platform/transport/http/admin/log"
+	adminSystem "github.com/perfect-panel/server/internal/module/platform/transport/http/admin/system"
+	adminTool "github.com/perfect-panel/server/internal/module/platform/transport/http/admin/tool"
+	adminTicket "github.com/perfect-panel/server/internal/module/support/transport/http/admin/ticket"
 )
 
 func registerAdminAuthMethodRoutes(router *server.Hertz, deps Dependencies) {
