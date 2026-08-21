@@ -147,6 +147,7 @@ func getServers() *service.Group {
 	queueDeps := queueHandler.Dependencies{
 		Email: emailLogic.Dependencies{
 			Store:    ctx.Store,
+			Queue:    ctx.Queue,
 			Email:    func() config.EmailConfig { return runtimeConfig().Email },
 			SiteName: func() string { return runtimeConfig().Site.SiteName },
 		},

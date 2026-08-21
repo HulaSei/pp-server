@@ -29,6 +29,10 @@ type Dependencies struct {
 }
 
 func RegisterHandlers(mux *asynq.ServeMux, deps Dependencies) {
+	var taskRepo repository.TaskRepo
+	if deps.Store != nil {
+		taskRepo = deps.Store.Task()
+	}
 	// Send email task
 	mux.Handle(types.ForthwithSendEmail, emailLogic.NewSendEmailLogic(deps.Email))
 	// Send sms task
@@ -76,7 +80,7 @@ func RegisterHandlers(mux *asynq.ServeMux, deps Dependencies) {
 	mux.Handle(types.SchedulerTrafficStat, traffic.NewStatLogic(deps.Traffic))
 
 	// ForthwithQuotaTask
-	mux.Handle(types.ForthwithQuotaTask, task.NewQuotaTaskLogic(deps.Subscription))
+	mux.Handle(types.ForthwithQuotaTask, task.NewQuotaTaskLogic(deps.Subscription, taskRepo))
 	// SchedulerExchangeRate
 	mux.Handle(types.SchedulerExchangeRate, task.NewRateLogic(task.RateDependencies{Store: deps.Store, ExchangeRate: deps.ExchangeRate}))
 }
