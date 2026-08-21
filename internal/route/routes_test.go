@@ -13,7 +13,6 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	appconfig "github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/xerr"
 )
 
@@ -22,7 +21,7 @@ var routeHandlerName = regexp.MustCompile(`^(.*)\.[^.]+\.([^.]+)\.func[0-9]+$`)
 func TestRegisterHandlers_routeInventory(t *testing.T) {
 	// Given
 	router := server.Default()
-	RegisterHandlers(router, &svc.ServiceContext{})
+	RegisterHandlers(router, Dependencies{})
 	routes := router.Routes()
 	var actual strings.Builder
 	for _, route := range routes {
@@ -70,7 +69,7 @@ func normalizeRouteHandler(raw string) (string, error) {
 func TestRegisterHandlers_edgeManifestHidesUnauthorizedRequests(t *testing.T) {
 	// Given
 	router := server.Default()
-	RegisterHandlers(router, &svc.ServiceContext{Config: appconfig.Config{
+	RegisterHandlers(router, Dependencies{Config: appconfig.Config{
 		EdgeSubscribe: appconfig.EdgeSubscribeConfig{Enabled: true},
 	}})
 	ctx := router.NewContext()
@@ -139,9 +138,9 @@ func TestRegisterHandlers_configuredRoutes(t *testing.T) {
 			if tc.name == "edge-manifest-enabled" {
 				config.EdgeSubscribe.Enabled = true
 			}
-			svcCtx := &svc.ServiceContext{Config: config}
+			deps := Dependencies{Config: config}
 			router := server.Default()
-			RegisterHandlers(router, svcCtx)
+			RegisterHandlers(router, deps)
 			routes := router.Routes()
 			paths := make(map[string]struct{}, len(routes))
 			for _, route := range routes {
@@ -205,7 +204,7 @@ func TestRegisterHandlers_configuredRoutes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Given
 			router := server.Default()
-			RegisterHandlers(router, &svc.ServiceContext{Config: appconfig.Config{Subscribe: tc.subscribe}})
+			RegisterHandlers(router, Dependencies{Config: appconfig.Config{Subscribe: tc.subscribe}})
 			ctx := router.NewContext()
 			ctx.Request.SetRequestURI(tc.path)
 			ctx.Request.Header.SetMethod(http.MethodGet)
@@ -256,7 +255,7 @@ func TestRegisterHandlers_middlewareContracts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Given
 			router := server.Default()
-			RegisterHandlers(router, &svc.ServiceContext{Config: tc.config})
+			RegisterHandlers(router, Dependencies{Config: tc.config})
 
 			for _, path := range tc.paths {
 				method := tc.method

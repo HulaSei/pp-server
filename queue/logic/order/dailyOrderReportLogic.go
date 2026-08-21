@@ -9,7 +9,6 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/module/billing"
 	"github.com/perfect-panel/server/internal/module/notification"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
 )
@@ -18,21 +17,21 @@ import (
 // the admin group's notification topic. It reports yesterday because it
 // runs after midnight, when the day it summarises is complete.
 type DailyOrderReportLogic struct {
-	svc *svc.ServiceContext
+	deps Dependencies
 }
 
-func NewDailyOrderReportLogic(svc *svc.ServiceContext) *DailyOrderReportLogic {
-	return &DailyOrderReportLogic{svc: svc}
+func NewDailyOrderReportLogic(deps Dependencies) *DailyOrderReportLogic {
+	return &DailyOrderReportLogic{deps: deps}
 }
 
 func (l *DailyOrderReportLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
 	log := logger.WithContext(ctx)
-	if !l.svc.Config.Telegram.EnableNotify {
+	if !l.deps.telegramConfig().EnableNotify {
 		return nil
 	}
 
 	date := timeutil.Now().AddDate(0, 0, -1)
-	report, err := l.svc.Billing.DailyOrderReport(ctx, date)
+	report, err := l.deps.Billing.DailyOrderReport(ctx, date)
 	if err != nil {
 		return err
 	}
@@ -51,7 +50,7 @@ func (l *DailyOrderReportLogic) ProcessTask(ctx context.Context, _ *asynq.Task) 
 
 	// The admin group's notification topic is the only administrator
 	// channel; without a usable group the report is skipped, not retried.
-	if err := l.svc.Notification.NotifyAdminsTelegram(ctx, text); err != nil {
+	if err := l.deps.Notification.NotifyAdminsTelegram(ctx, text); err != nil {
 		log.Infow("[DailyOrderReport] report skipped", logger.Field("reason", err.Error()))
 		return nil
 	}

@@ -5,14 +5,13 @@ import (
 	"strconv"
 
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/svc"
 	emailworker "github.com/perfect-panel/server/internal/worker/email"
 	"github.com/perfect-panel/server/pkg/email"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 
 type BatchEmailLogic struct {
-	svcCtx *svc.ServiceContext
+	deps Dependencies
 }
 
 type ErrorInfo struct {
@@ -21,9 +20,9 @@ type ErrorInfo struct {
 	Time  int64  `json:"time"`
 }
 
-func NewBatchEmailLogic(svcCtx *svc.ServiceContext) *BatchEmailLogic {
+func NewBatchEmailLogic(deps Dependencies) *BatchEmailLogic {
 	return &BatchEmailLogic{
-		svcCtx: svcCtx,
+		deps: deps,
 	}
 }
 
@@ -43,7 +42,7 @@ func (l *BatchEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) err
 		)
 		return asynq.SkipRetry
 	}
-	taskInfo, err := l.svcCtx.Store.Task().FindOne(ctx, taskID)
+	taskInfo, err := l.deps.Store.Task().FindOne(ctx, taskID)
 	if err != nil {
 		logger.WithContext(ctx).Error("[BatchEmailLogic] ProcessTask failed",
 			logger.Field("error", err.Error()),
@@ -60,12 +59,12 @@ func (l *BatchEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) err
 		return nil
 	}
 
-	sender, err := email.NewSender(l.svcCtx.Config.Email.Platform, l.svcCtx.Config.Email.PlatformConfig, l.svcCtx.Config.Site.SiteName)
+	sender, err := email.NewSender(l.deps.Email().Platform, l.deps.Email().PlatformConfig, l.deps.SiteName())
 	if err != nil {
 		logger.WithContext(ctx).Error("[BatchEmailLogic] NewSender failed", logger.Field("error", err.Error()))
 		return nil
 	}
-	manager := emailworker.NewWorkerManager(l.svcCtx.Store.Task(), sender)
+	manager := emailworker.NewWorkerManager(l.deps.Store.Task(), sender)
 	if manager == nil {
 		logger.WithContext(ctx).Error("[BatchEmailLogic] ProcessTask failed: worker manager is nil")
 		return asynq.SkipRetry

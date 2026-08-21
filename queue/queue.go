@@ -2,21 +2,21 @@ package queue
 
 import (
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/pkg/asynqx"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/queue/handler"
 )
 
 type Service struct {
-	svc    *svc.ServiceContext
+	deps   handler.Dependencies
 	server *asynq.Server
 }
 
-func NewService(svc *svc.ServiceContext) *Service {
+func NewService(redisConfig config.RedisConfig, deps handler.Dependencies) *Service {
 	return &Service{
-		svc:    svc,
-		server: initService(svc),
+		deps:   deps,
+		server: initService(redisConfig),
 	}
 }
 
@@ -27,7 +27,7 @@ func (m *Service) Start() {
 	// task execution before any handler runs.
 	mux.Use(asynqx.Middleware())
 	// register tasks
-	handler.RegisterHandlers(mux, m.svc)
+	handler.RegisterHandlers(mux, m.deps)
 	if err := m.server.Run(mux); err != nil {
 		logger.Error("consumer service error", logger.LogField{
 			Key:   "error",
@@ -41,9 +41,9 @@ func (m *Service) Stop() {
 	m.server.Stop()
 }
 
-func initService(svc *svc.ServiceContext) *asynq.Server {
+func initService(redisConfig config.RedisConfig) *asynq.Server {
 	return asynq.NewServer(
-		asynq.RedisClientOpt{Addr: svc.Config.Redis.Host, Password: svc.Config.Redis.Pass, DB: 5},
+		asynq.RedisClientOpt{Addr: redisConfig.Host, Password: redisConfig.Pass, DB: 5},
 		asynq.Config{
 			IsFailure: func(err error) bool {
 				logger.Error("consumer service error", logger.Field("error", err.Error()))

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/module/network"
 	"github.com/perfect-panel/server/pkg/result"
 )
 
@@ -16,10 +16,10 @@ import (
 // @Security BearerAuth
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.QueryNodeTagResponse}
 // @Router /v1/admin/server/node/tags [get]
-func QueryNodeTagHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func QueryNodeTagHandler(service network.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 
-		resp, err := svcCtx.Network.QueryNodeTag(c)
+		resp, err := service.QueryNodeTag(c)
 		result.HttpResult(ctx, resp, err)
 	}
 }

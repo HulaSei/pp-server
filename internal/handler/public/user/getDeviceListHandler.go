@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/module/identity"
 	"github.com/perfect-panel/server/pkg/result"
 )
 
@@ -16,10 +16,10 @@ import (
 // @Security BearerAuth
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.GetDeviceListResponse}
 // @Router /v1/public/user/devices [get]
-func GetDeviceListHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func GetDeviceListHandler(service identity.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 
-		resp, err := svcCtx.Identity.GetDeviceList(c)
+		resp, err := service.GetDeviceList(c)
 		result.HttpResult(ctx, resp, err)
 	}
 }

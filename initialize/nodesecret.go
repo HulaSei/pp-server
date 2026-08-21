@@ -5,7 +5,6 @@ import (
 
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/random"
 	"github.com/perfect-panel/server/pkg/tool"
@@ -28,7 +27,7 @@ const nodeSecretLength = 32
 // rotated: every node was configured with that secret, so rotating it here would
 // silently cut them off. The operator rotates it from the admin panel and
 // reconfigures the nodes in the same window.
-func NodeSecret(svcCtx *svc.ServiceContext) {
+func NodeSecret(svcCtx *Dependencies) {
 	logger.Debug("Node secret initialization")
 	// The read and the write share a transaction so the read goes to the
 	// database instead of Redis; GetNodeConfig is a cached query, and the write

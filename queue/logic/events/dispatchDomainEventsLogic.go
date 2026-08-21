@@ -7,20 +7,20 @@ import (
 	"context"
 
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/eventbus"
 )
 
 // DispatchDomainEventsLogic is the publish pump: it drains the generic
 // domain-event outbox onto the asynq queue. Enqueues deduplicate by outbox
 // event id, so the tick can retry freely.
 type DispatchDomainEventsLogic struct {
-	svcCtx *svc.ServiceContext
+	bus *eventbus.Bus
 }
 
-func NewDispatchDomainEventsLogic(svcCtx *svc.ServiceContext) *DispatchDomainEventsLogic {
-	return &DispatchDomainEventsLogic{svcCtx: svcCtx}
+func NewDispatchDomainEventsLogic(bus *eventbus.Bus) *DispatchDomainEventsLogic {
+	return &DispatchDomainEventsLogic{bus: bus}
 }
 
 func (l *DispatchDomainEventsLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
-	return l.svcCtx.EventBus.Publish(ctx, 500)
+	return l.bus.Publish(ctx, 500)
 }

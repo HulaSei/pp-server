@@ -5,12 +5,11 @@ import (
 	"fmt"
 
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
 )
 
-func Currency(ctx *svc.ServiceContext) {
+func Currency(ctx *Dependencies) {
 	// Retrieve system currency configuration
 	currency, err := ctx.Store.System().GetCurrencyConfig(context.Background())
 	if err != nil {
@@ -25,10 +24,15 @@ func Currency(ctx *svc.ServiceContext) {
 	}{}
 	tool.SystemConfigSliceReflectToStruct(currency, &configs)
 	ctx.ExchangeRate.Set(0) // Default exchange rate to 0
-	ctx.Config.Currency = config.Currency{
+	currencyConfig := config.Currency{
 		Unit:      configs.CurrencyUnit,
 		Symbol:    configs.CurrencySymbol,
 		AccessKey: configs.AccessKey,
 	}
-	logger.Infof("[INIT] Currency configuration: %v", ctx.Config.Currency)
+	ctx.updateConfig(func(current *config.Config) { current.Currency = currencyConfig })
+	logger.Info("[INIT] Currency configuration loaded",
+		logger.Field("unit", currencyConfig.Unit),
+		logger.Field("symbol", currencyConfig.Symbol),
+		logger.Field("provider_configured", currencyConfig.AccessKey != ""),
+	)
 }

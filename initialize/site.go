@@ -6,11 +6,10 @@ import (
 	"github.com/perfect-panel/server/pkg/logger"
 
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/tool"
 )
 
-func Site(ctx *svc.ServiceContext) {
+func Site(ctx *Dependencies) {
 	logger.Debug("initialize site config")
 	configs, err := ctx.Store.System().GetSiteConfig(context.Background())
 	if err != nil {
@@ -18,5 +17,5 @@ func Site(ctx *svc.ServiceContext) {
 	}
 	var siteConfig config.SiteConfig
 	tool.SystemConfigSliceReflectToStruct(configs, &siteConfig)
-	ctx.Config.Site = siteConfig
+	ctx.updateConfig(func(current *config.Config) { current.Site = siteConfig })
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/module/identity"
 	"github.com/perfect-panel/server/pkg/result"
 )
 
@@ -16,9 +16,9 @@ import (
 // @Security BearerAuth
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.User}
 // @Router /v1/admin/user/current [get]
-func CurrentUserHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func CurrentUserHandler(service identity.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
-		resp, err := svcCtx.Identity.CurrentUser(ctx)
+		resp, err := service.CurrentUser(ctx)
 		result.HttpResult(c, resp, err)
 	}
 }

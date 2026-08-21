@@ -9,16 +9,16 @@ import (
 	"github.com/perfect-panel/server/internal/repository"
 
 	"github.com/perfect-panel/server/initialize/migrate"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/orm"
 	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/uuidx"
 )
 
-func Migrate(ctx *svc.ServiceContext) {
+func Migrate(ctx *Dependencies) {
+	current := ctx.currentConfig()
 	mc := orm.Mysql{
-		Config: ctx.Config.DatabaseConfig(),
+		Config: current.DatabaseConfig(),
 	}
 	now := time.Now()
 	if err := migrate.Migrate(mc.Driver(), mc.MigrationDsn()).Up(); err != nil {
@@ -40,7 +40,7 @@ func Migrate(ctx *svc.ServiceContext) {
 		if count == 0 {
 			enable := true
 			admin := &user.User{
-				Password:  tool.EncodePassWord(ctx.Config.Administrator.Password),
+				Password:  tool.EncodePassWord(current.Administrator.Password),
 				Algo:      tool.PasswordAlgoArgon2id,
 				IsAdmin:   &enable,
 				ReferCode: uuidx.UserInviteCode(time.Now().Unix()),
@@ -52,7 +52,7 @@ func Migrate(ctx *svc.ServiceContext) {
 			if err := store.UserAuth().InsertUserAuthMethods(context.Background(), &user.AuthMethods{
 				UserId:         admin.Id,
 				AuthType:       "email",
-				AuthIdentifier: ctx.Config.Administrator.Email,
+				AuthIdentifier: current.Administrator.Email,
 				Verified:       true,
 			}); err != nil {
 				logger.Errorf("[Migrate] CreateAdminUser error: %v", err.Error())

@@ -11,7 +11,6 @@ import (
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	serverv1 "github.com/perfect-panel/server/api/server/v1"
 	"github.com/perfect-panel/server/internal/model/dto"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/result"
 	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -29,18 +28,17 @@ const certificateSHA256Header = "X-Node-Certificate-SHA256"
 // nodeSecretMatches reports whether key authenticates as the node secret. An
 // unprovisioned (empty) secret never authenticates: comparing it directly would
 // let a bare `?secret_key=` through.
-func nodeSecretMatches(svcCtx *svc.ServiceContext, key string) bool {
-	secret := svcCtx.Config.Node.NodeSecret
+func nodeSecretMatches(secret, key string) bool {
 	if secret == "" {
 		return false
 	}
 	return subtle.ConstantTimeCompare([]byte(key), []byte(secret)) == 1
 }
 
-func ServerMiddleware(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func ServerMiddleware(nodeSecret func() string) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		ctx.Header("Vary", "Accept")
-		if nodeSecretMatches(svcCtx, ctx.Query("secret_key")) {
+		if nodeSecretMatches(nodeSecret(), ctx.Query("secret_key")) {
 			ctx.Next(c)
 			return
 		}

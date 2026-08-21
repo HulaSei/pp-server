@@ -18,14 +18,13 @@ import (
 	subscribeEntity "github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/queue/types"
 	"gorm.io/gorm"
 )
 
-// newActivationSvc wires the real subscription/billing modules over the fake
+// newActivationDeps wires the real subscription/billing modules over the fake
 // store so the saga tests exercise the same facade path production uses.
-func newActivationSvc(store *activationStore, singleModel bool) *svc.ServiceContext {
+func newActivationDeps(store *activationStore, singleModel bool) Dependencies {
 	subMod := subscription.New(subscription.Deps{
 		Plans:       store.subscribes,
 		UserSubs:    store.users,
@@ -43,7 +42,7 @@ func newActivationSvc(store *activationStore, singleModel bool) *svc.ServiceCont
 		SingleModel:  func() bool { return false },
 		CurrencyUnit: func() string { return "CNY" },
 	})
-	return &svc.ServiceContext{Store: store, Subscription: subMod, Billing: bilMod}
+	return Dependencies{Store: store, Subscription: subMod, Billing: bilMod}
 }
 
 type activationStore struct {
@@ -277,7 +276,7 @@ func TestActivateRechargeCommitsSettlementOnlyOnce(t *testing.T) {
 		logs:   &activationLogRepo{},
 		inbox:  newActivationInboxRepo(),
 	}
-	logic := NewActivateOrderLogic(newActivationSvc(store, false))
+	logic := NewActivateOrderLogic(newActivationDeps(store, false))
 	payload, err := json.Marshal(types.ForthwithActivateOrderPayload{OrderNo: "recharge-order"})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
@@ -315,7 +314,7 @@ func TestActivateRechargeReplayAfterFulfillmentSkipsSecondCredit(t *testing.T) {
 		logs:   &activationLogRepo{},
 		inbox:  newActivationInboxRepo(),
 	}
-	logic := NewActivateOrderLogic(newActivationSvc(store, false))
+	logic := NewActivateOrderLogic(newActivationDeps(store, false))
 	payload, err := json.Marshal(types.ForthwithActivateOrderPayload{OrderNo: "recharge-replay"})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
@@ -362,7 +361,7 @@ func TestActivateRenewalReplayExtendsSubscriptionOnce(t *testing.T) {
 		logs:       &activationLogRepo{},
 		inbox:      newActivationInboxRepo(),
 	}
-	logic := NewActivateOrderLogic(newActivationSvc(store, false))
+	logic := NewActivateOrderLogic(newActivationDeps(store, false))
 	payload, err := json.Marshal(types.ForthwithActivateOrderPayload{OrderNo: "renewal-replay"})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
@@ -399,7 +398,7 @@ func TestFulfillmentEnforcesQuota(t *testing.T) {
 		subscribes: &activationSubscribeRepo{subscribe: &subscribeEntity.Subscribe{Id: 9, Quota: 1}},
 		inbox:      newActivationInboxRepo(),
 	}
-	svcCtx := newActivationSvc(store, false)
+	svcCtx := newActivationDeps(store, false)
 
 	_, err := svcCtx.Subscription.FulfillPaidOrder(context.Background(), "quota-order")
 	if err == nil {
@@ -418,7 +417,7 @@ func TestFulfillmentEnforcesSingleModel(t *testing.T) {
 		subscribes: &activationSubscribeRepo{subscribe: &subscribeEntity.Subscribe{Id: 9}},
 		inbox:      newActivationInboxRepo(),
 	}
-	svcCtx := newActivationSvc(store, true)
+	svcCtx := newActivationDeps(store, true)
 
 	_, err := svcCtx.Subscription.FulfillPaidOrder(context.Background(), "single-order")
 	if err == nil {
@@ -444,7 +443,7 @@ func TestFulfillResetTrafficClearsFinishedAt(t *testing.T) {
 		logs:       &activationLogRepo{},
 		inbox:      newActivationInboxRepo(),
 	}
-	svcCtx := newActivationSvc(store, false)
+	svcCtx := newActivationDeps(store, false)
 
 	if _, err := svcCtx.Subscription.FulfillPaidOrder(context.Background(), "reset-order"); err != nil {
 		t.Fatalf("activate reset traffic: %v", err)

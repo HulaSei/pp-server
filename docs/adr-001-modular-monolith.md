@@ -123,10 +123,13 @@ internal/module/<name>/
      过渡期保留：新购事务内的 user 行锁（按用户串行化配额检查，第 5 步移交 subscription 模块）；
      已知窗口：管理员在履约后、结算前关闭 Paid 订单会留下已履约的 Closed 订单（改造前由行锁互斥），
      补偿属 billing 关单流程的后续工作。
-3. **拆 ServiceContext**（进行中）：延续现有 DI 重构，每模块一个 deps 结构，`ServiceContext`
-   只在组装根出现。已落地：`internal/arch` 的 `TestSvcImportFreeze` 把 import `internal/svc`
-   的包目录冻结为基线（71 项，只许收窄）——新代码必须走模块门面注入依赖；每迁移一个域，
-   基线相应删项，收缩过程可度量。billing 模块（admin order/payment）已按此模式落地：
+3. **拆 ServiceContext**（已完成）：延续现有 DI 重构，每模块一个 deps 结构；原 `ServiceContext`
+   已删除，业务 handler、中间件、route、transport、queue、scheduler 与 initialize 全部改为模块门面或
+   任务专属窄依赖。`internal/arch` 的 `TestSvcImportFreeze` 将 import `internal/svc` 的包目录从初始
+   71 项收窄到 1 项，仅允许 `cmd` 组装根调用 `svc.NewApplication`，新代码不得向业务层回传组装对象。
+   管理端可热更新的配置、Telegram 客户端、节点倍率与生命周期回调由 `internal/appstate.State`
+   统一持有：配置以不可变快照原子发布，更新过程串行化，避免 HTTP 与队列读配置时和重初始化并发竞争。
+   billing 模块（admin order/payment）已按此模式落地：
    激活入队、网关模式探测、站点 Host 全部经 Deps 注入，`ActivationEnqueuer` 端口在组装根
    适配 asynq。**结账金流已整体迁入 billing**（`internal/module/billing/internal/checkout`）：
    purchase/renewal/resetTraffic/recharge/preCreate/close 六个流程 + 计价助手，端口化了

@@ -7,7 +7,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"github.com/perfect-panel/server/internal/model/dto"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -22,7 +22,7 @@ import (
 // @Param request query dto.GetServerConfigRequest false "Request parameters"
 // @Success 200 {object} dto.GetServerConfigResponse
 // @Router /v1/server/config [get]
-func GetServerConfigHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func GetServerConfigHandler(service network.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		acceptsProtobuf := acceptsProtobuf(ctx)
 		commonReq, err := serverCommonRequest(ctx)
@@ -31,13 +31,13 @@ func GetServerConfigHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 			return
 		}
 		req := dto.GetServerConfigRequest{ServerCommon: commonReq}
-		if validateErr := svcCtx.Validate(&req); validateErr != nil {
+		if validateErr := validation.Validate(&req); validateErr != nil {
 			writeParamError(ctx, validateErr)
 			return
 		}
 
 		ifNoneMatch := string(ctx.GetHeader("If-None-Match"))
-		resp, respMeta, err := svcCtx.Network.GetServerConfig(c, &req, network.RequestMeta{
+		resp, respMeta, err := service.GetServerConfig(c, &req, network.RequestMeta{
 			IfNoneMatch: ifNoneMatchForRepresentation(ifNoneMatch, acceptsProtobuf),
 		})
 		writeHeaders(ctx, respMeta.Headers)

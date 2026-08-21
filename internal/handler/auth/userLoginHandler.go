@@ -5,8 +5,10 @@ import (
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/model/dto"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/module/identity"
+	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/result"
 	"github.com/perfect-panel/server/pkg/turnstile"
@@ -23,7 +25,7 @@ import (
 // @Param request body dto.UserLoginRequest true "Request parameters"
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.LoginResponse}
 // @Router /v1/auth/login [post]
-func UserLoginHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func UserLoginHandler(service identity.Service, verifyConfig func() config.Verify) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		var req dto.UserLoginRequest
 		if err := httpx.ShouldBind(c, &req); err != nil {
@@ -33,9 +35,10 @@ func UserLoginHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 		// get client ip
 		req.IP = c.ClientIP()
 		req.UserAgent = string(c.UserAgent())
-		if svcCtx.Config.Verify.LoginVerify {
+		verify := verifyConfig()
+		if verify.LoginVerify {
 			verifyTurns := turnstile.New(turnstile.Config{
-				Secret:  svcCtx.Config.Verify.TurnstileSecret,
+				Secret:  verify.TurnstileSecret,
 				Timeout: 3 * time.Second,
 			})
 			if verify, err := verifyTurns.Verify(ctx, req.CfToken, req.IP); err != nil || !verify {
@@ -44,13 +47,13 @@ func UserLoginHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 				return
 			}
 		}
-		validateErr := svcCtx.Validate(&req)
+		validateErr := validation.Validate(&req)
 		if validateErr != nil {
 			result.ParamErrorResult(c, validateErr)
 			return
 		}
 
-		resp, err := svcCtx.Identity.UserLogin(ctx, &req)
+		resp, err := service.UserLogin(ctx, &req)
 		result.HttpResult(c, resp, err)
 	}
 }

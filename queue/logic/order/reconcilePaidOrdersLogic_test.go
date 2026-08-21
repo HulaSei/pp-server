@@ -11,7 +11,6 @@ import (
 	"github.com/hibiken/asynq"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/asynqx"
 	"github.com/perfect-panel/server/queue/types"
 )
@@ -41,7 +40,7 @@ type reconcileStore struct {
 
 func (s reconcileStore) Order() repository.OrderRepo { return s.orders }
 
-func newReconcileTestContext(t *testing.T, orders []*orderEntity.Order) (*svc.ServiceContext, *miniredis.Miniredis) {
+func newReconcileTestContext(t *testing.T, orders []*orderEntity.Order) (Dependencies, *miniredis.Miniredis) {
 	t.Helper()
 	redisServer := miniredis.RunT(t)
 	redisOpt := asynq.RedisClientOpt{Addr: redisServer.Addr()}
@@ -49,7 +48,7 @@ func newReconcileTestContext(t *testing.T, orders []*orderEntity.Order) (*svc.Se
 	t.Cleanup(func() { _ = queue.Close() })
 	inspector := asynq.NewInspector(redisOpt)
 	t.Cleanup(func() { _ = inspector.Close() })
-	return &svc.ServiceContext{
+	return Dependencies{
 		Store:     reconcileStore{orders: reconcileOrderRepo{orders: orders}},
 		Queue:     queue,
 		Inspector: inspector,
@@ -57,12 +56,12 @@ func newReconcileTestContext(t *testing.T, orders []*orderEntity.Order) (*svc.Se
 }
 
 func TestReconcilePaidOrdersEnqueuesEachPaidOrderIdempotently(t *testing.T) {
-	svcCtx, _ := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, _ := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: "paid-1", Status: OrderStatusPaid},
 		{Id: 2, OrderNo: "pending", Status: OrderStatusPending},
 		{Id: 3, OrderNo: "paid-2", Status: OrderStatusPaid},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 
 	if err := logic.ProcessTask(context.Background(), nil); err != nil {
 		t.Fatalf("ProcessTask: %v", err)
@@ -70,7 +69,7 @@ func TestReconcilePaidOrdersEnqueuesEachPaidOrderIdempotently(t *testing.T) {
 	if err := logic.ProcessTask(context.Background(), nil); err != nil {
 		t.Fatalf("duplicate ProcessTask: %v", err)
 	}
-	tasks, err := svcCtx.Inspector.ListPendingTasks("default")
+	tasks, err := deps.Inspector.ListPendingTasks("default")
 	if err != nil {
 		t.Fatalf("ListPendingTasks: %v", err)
 	}
@@ -81,22 +80,22 @@ func TestReconcilePaidOrdersEnqueuesEachPaidOrderIdempotently(t *testing.T) {
 
 func TestReconcilePaidOrdersArchivedRecovery(t *testing.T) {
 	orderNo := "archived-test-1"
-	svcCtx, _ := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, _ := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: orderNo, Status: OrderStatusPaid},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 	taskID := types.ActivationTaskID(orderNo)
 
 	if err := logic.ProcessTask(context.Background(), nil); err != nil {
 		t.Fatalf("first ProcessTask: %v", err)
 	}
 
-	err := svcCtx.Inspector.ArchiveTask("default", taskID)
+	err := deps.Inspector.ArchiveTask("default", taskID)
 	if err != nil {
 		t.Fatalf("ArchiveTask: %v", err)
 	}
 
-	archivedTasks, err := svcCtx.Inspector.ListArchivedTasks("default")
+	archivedTasks, err := deps.Inspector.ListArchivedTasks("default")
 	if err != nil {
 		t.Fatalf("ListArchivedTasks: %v", err)
 	}
@@ -108,7 +107,7 @@ func TestReconcilePaidOrdersArchivedRecovery(t *testing.T) {
 		t.Fatalf("recovery ProcessTask: %v", err)
 	}
 
-	taskInfo, err := svcCtx.Inspector.GetTaskInfo("default", taskID)
+	taskInfo, err := deps.Inspector.GetTaskInfo("default", taskID)
 	if err != nil {
 		t.Fatalf("GetTaskInfo: %v", err)
 	}
@@ -119,7 +118,7 @@ func TestReconcilePaidOrdersArchivedRecovery(t *testing.T) {
 		t.Fatalf("expected task type %s, got %s", types.ForthwithActivateOrder, taskInfo.Type)
 	}
 
-	pendingTasks, err := svcCtx.Inspector.ListPendingTasks("default")
+	pendingTasks, err := deps.Inspector.ListPendingTasks("default")
 	if err != nil {
 		t.Fatalf("ListPendingTasks: %v", err)
 	}
@@ -130,17 +129,17 @@ func TestReconcilePaidOrdersArchivedRecovery(t *testing.T) {
 
 func TestReconcilePaidOrdersNonArchivedPreserved(t *testing.T) {
 	orderNo := "preserved-test-1"
-	svcCtx, _ := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, _ := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: orderNo, Status: OrderStatusPaid},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 	taskID := types.ActivationTaskID(orderNo)
 
 	if err := logic.ProcessTask(context.Background(), nil); err != nil {
 		t.Fatalf("first ProcessTask: %v", err)
 	}
 
-	info, err := svcCtx.Inspector.GetTaskInfo("default", taskID)
+	info, err := deps.Inspector.GetTaskInfo("default", taskID)
 	if err != nil {
 		t.Fatalf("GetTaskInfo: %v", err)
 	}
@@ -152,7 +151,7 @@ func TestReconcilePaidOrdersNonArchivedPreserved(t *testing.T) {
 		t.Fatalf("second ProcessTask: %v", err)
 	}
 
-	info, err = svcCtx.Inspector.GetTaskInfo("default", taskID)
+	info, err = deps.Inspector.GetTaskInfo("default", taskID)
 	if err != nil {
 		t.Fatalf("GetTaskInfo: %v", err)
 	}
@@ -160,7 +159,7 @@ func TestReconcilePaidOrdersNonArchivedPreserved(t *testing.T) {
 		t.Fatalf("expected pending preserved, got %v", info.State)
 	}
 
-	pendingTasks, err := svcCtx.Inspector.ListPendingTasks("default")
+	pendingTasks, err := deps.Inspector.ListPendingTasks("default")
 	if err != nil {
 		t.Fatalf("ListPendingTasks: %v", err)
 	}
@@ -171,20 +170,20 @@ func TestReconcilePaidOrdersNonArchivedPreserved(t *testing.T) {
 
 func TestReconcilePaidOrdersArchivedTypeMismatch(t *testing.T) {
 	orderNo := "type-mismatch-1"
-	svcCtx, _ := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, _ := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: orderNo, Status: OrderStatusPaid},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 	taskID := types.ActivationTaskID(orderNo)
 
 	payload, _ := json.Marshal(types.ForthwithActivateOrderPayload{OrderNo: orderNo})
 	wrongTypeTask := asynq.NewTask("some-other-type", payload, asynq.MaxRetry(5))
-	_, err := svcCtx.Queue.EnqueueContext(context.Background(), wrongTypeTask, asynq.TaskID(taskID))
+	_, err := deps.Queue.EnqueueContext(context.Background(), wrongTypeTask, asynq.TaskID(taskID))
 	if err != nil {
 		t.Fatalf("EnqueueContext with wrong type: %v", err)
 	}
 
-	err = svcCtx.Inspector.ArchiveTask("default", taskID)
+	err = deps.Inspector.ArchiveTask("default", taskID)
 	if err != nil {
 		t.Fatalf("ArchiveTask: %v", err)
 	}
@@ -193,26 +192,26 @@ func TestReconcilePaidOrdersArchivedTypeMismatch(t *testing.T) {
 		t.Fatalf("ProcessTask must repair a type-mismatched task, got: %v", err)
 	}
 
-	assertRepairedActivationTask(t, svcCtx, taskID, orderNo)
+	assertRepairedActivationTask(t, deps, taskID, orderNo)
 }
 
 func TestReconcilePaidOrdersArchivedPayloadOrderNoMismatch(t *testing.T) {
 	orderNo := "order-match-1"
 	otherOrderNo := "order-match-other"
-	svcCtx, _ := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, _ := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: orderNo, Status: OrderStatusPaid},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 	taskID := types.ActivationTaskID(orderNo)
 
 	payload, _ := json.Marshal(types.ForthwithActivateOrderPayload{OrderNo: otherOrderNo})
 	task := asynq.NewTask(types.ForthwithActivateOrder, payload, asynq.MaxRetry(5))
-	_, err := svcCtx.Queue.EnqueueContext(context.Background(), task, asynq.TaskID(taskID))
+	_, err := deps.Queue.EnqueueContext(context.Background(), task, asynq.TaskID(taskID))
 	if err != nil {
 		t.Fatalf("EnqueueContext: %v", err)
 	}
 
-	err = svcCtx.Inspector.ArchiveTask("default", taskID)
+	err = deps.Inspector.ArchiveTask("default", taskID)
 	if err != nil {
 		t.Fatalf("ArchiveTask: %v", err)
 	}
@@ -221,7 +220,7 @@ func TestReconcilePaidOrdersArchivedPayloadOrderNoMismatch(t *testing.T) {
 		t.Fatalf("ProcessTask must repair an OrderNo-mismatched task, got: %v", err)
 	}
 
-	assertRepairedActivationTask(t, svcCtx, taskID, orderNo)
+	assertRepairedActivationTask(t, deps, taskID, orderNo)
 }
 
 // The 2026-08-05 production incident: an archived activation task whose
@@ -229,17 +228,17 @@ func TestReconcilePaidOrdersArchivedPayloadOrderNoMismatch(t *testing.T) {
 // retry forever. The run must repair the task and finish cleanly.
 func TestReconcilePaidOrdersArchivedEmptyPayloadRepaired(t *testing.T) {
 	orderNo := "empty-payload-1"
-	svcCtx, _ := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, _ := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: orderNo, Status: OrderStatusPaid},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 	taskID := types.ActivationTaskID(orderNo)
 
 	task := asynq.NewTask(types.ForthwithActivateOrder, []byte("{}"), asynq.MaxRetry(5))
-	if _, err := svcCtx.Queue.EnqueueContext(context.Background(), task, asynq.TaskID(taskID)); err != nil {
+	if _, err := deps.Queue.EnqueueContext(context.Background(), task, asynq.TaskID(taskID)); err != nil {
 		t.Fatalf("EnqueueContext: %v", err)
 	}
-	if err := svcCtx.Inspector.ArchiveTask("default", taskID); err != nil {
+	if err := deps.Inspector.ArchiveTask("default", taskID); err != nil {
 		t.Fatalf("ArchiveTask: %v", err)
 	}
 
@@ -247,14 +246,14 @@ func TestReconcilePaidOrdersArchivedEmptyPayloadRepaired(t *testing.T) {
 		t.Fatalf("ProcessTask must repair an empty-payload task, got: %v", err)
 	}
 
-	assertRepairedActivationTask(t, svcCtx, taskID, orderNo)
+	assertRepairedActivationTask(t, deps, taskID, orderNo)
 }
 
 // assertRepairedActivationTask verifies the corrupt task was replaced by a
 // pending activation task carrying the canonical payload.
-func assertRepairedActivationTask(t *testing.T, svcCtx *svc.ServiceContext, taskID, orderNo string) {
+func assertRepairedActivationTask(t *testing.T, deps Dependencies, taskID, orderNo string) {
 	t.Helper()
-	taskInfo, err := svcCtx.Inspector.GetTaskInfo("default", taskID)
+	taskInfo, err := deps.Inspector.GetTaskInfo("default", taskID)
 	if err != nil {
 		t.Fatalf("GetTaskInfo: %v", err)
 	}
@@ -275,17 +274,17 @@ func assertRepairedActivationTask(t *testing.T, svcCtx *svc.ServiceContext, task
 
 func TestReconcilePaidOrdersNotFoundReenqueue(t *testing.T) {
 	orderNo := "notfound-1"
-	svcCtx, redisSrv := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, redisSrv := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: orderNo, Status: OrderStatusPaid},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 	taskID := types.ActivationTaskID(orderNo)
 
 	if err := logic.ProcessTask(context.Background(), nil); err != nil {
 		t.Fatalf("first ProcessTask: %v", err)
 	}
 
-	err := svcCtx.Inspector.ArchiveTask("default", taskID)
+	err := deps.Inspector.ArchiveTask("default", taskID)
 	if err != nil {
 		t.Fatalf("ArchiveTask: %v", err)
 	}
@@ -297,7 +296,7 @@ func TestReconcilePaidOrdersNotFoundReenqueue(t *testing.T) {
 		t.Fatalf("recovery ProcessTask: %v", err)
 	}
 
-	taskInfo, err := svcCtx.Inspector.GetTaskInfo("default", taskID)
+	taskInfo, err := deps.Inspector.GetTaskInfo("default", taskID)
 	if err != nil {
 		t.Fatalf("GetTaskInfo: %v", err)
 	}
@@ -305,7 +304,7 @@ func TestReconcilePaidOrdersNotFoundReenqueue(t *testing.T) {
 		t.Fatalf("expected task to be re-enqueued as pending, got %v", taskInfo.State)
 	}
 
-	pendingTasks, err := svcCtx.Inspector.ListPendingTasks("default")
+	pendingTasks, err := deps.Inspector.ListPendingTasks("default")
 	if err != nil {
 		t.Fatalf("ListPendingTasks: %v", err)
 	}
@@ -315,19 +314,19 @@ func TestReconcilePaidOrdersNotFoundReenqueue(t *testing.T) {
 }
 
 func TestReconcilePaidOrdersOnlyPaidAreEnqueued(t *testing.T) {
-	svcCtx, _ := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, _ := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: "paid-1", Status: OrderStatusPaid},
 		{Id: 2, OrderNo: "close-1", Status: OrderStatusClose},
 		{Id: 3, OrderNo: "failed-1", Status: OrderStatusFailed},
 		{Id: 4, OrderNo: "finished-1", Status: OrderStatusFinished},
 		{Id: 5, OrderNo: "paid-2", Status: OrderStatusPaid},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 
 	if err := logic.ProcessTask(context.Background(), nil); err != nil {
 		t.Fatalf("ProcessTask: %v", err)
 	}
-	tasks, err := svcCtx.Inspector.ListPendingTasks("default")
+	tasks, err := deps.Inspector.ListPendingTasks("default")
 	if err != nil {
 		t.Fatalf("ListPendingTasks: %v", err)
 	}
@@ -360,17 +359,17 @@ func TestIsStalePaid(t *testing.T) {
 }
 
 func TestReconcilePaidOrdersStaleDetection(t *testing.T) {
-	svcCtx, _ := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, _ := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: "fresh", Status: OrderStatusPaid, UpdatedAt: time.Now()},
 		{Id: 2, OrderNo: "truly-stale", Status: OrderStatusPaid, UpdatedAt: time.Now().Add(-20 * time.Minute)},
 		{Id: 3, OrderNo: "recently-paid-old-creation", Status: OrderStatusPaid, CreatedAt: time.Now().Add(-20 * time.Minute), UpdatedAt: time.Now()},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 
 	if err := logic.ProcessTask(context.Background(), nil); err != nil {
 		t.Fatalf("ProcessTask: %v", err)
 	}
-	tasks, err := svcCtx.Inspector.ListPendingTasks("default")
+	tasks, err := deps.Inspector.ListPendingTasks("default")
 	if err != nil {
 		t.Fatalf("ListPendingTasks: %v", err)
 	}
@@ -381,10 +380,10 @@ func TestReconcilePaidOrdersStaleDetection(t *testing.T) {
 
 func TestReconcilePaidOrdersArchivedRunTaskRace(t *testing.T) {
 	orderNo := "race-test-1"
-	svcCtx, _ := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, _ := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: orderNo, Status: OrderStatusPaid},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 	taskID := types.ActivationTaskID(orderNo)
 
 	if err := logic.ProcessTask(context.Background(), nil); err != nil {
@@ -392,16 +391,16 @@ func TestReconcilePaidOrdersArchivedRunTaskRace(t *testing.T) {
 	}
 
 	var err error
-	err = svcCtx.Inspector.ArchiveTask("default", taskID)
+	err = deps.Inspector.ArchiveTask("default", taskID)
 	if err != nil {
 		t.Fatalf("ArchiveTask: %v", err)
 	}
 
-	err = svcCtx.Inspector.RunTask("default", taskID)
+	err = deps.Inspector.RunTask("default", taskID)
 	if err != nil {
 		t.Fatalf("RunTask (simulating concurrent recovery before reconcile): %v", err)
 	}
-	taskInfo, err := svcCtx.Inspector.GetTaskInfo("default", taskID)
+	taskInfo, err := deps.Inspector.GetTaskInfo("default", taskID)
 	if err != nil {
 		t.Fatalf("GetTaskInfo: %v", err)
 	}
@@ -413,7 +412,7 @@ func TestReconcilePaidOrdersArchivedRunTaskRace(t *testing.T) {
 		t.Fatalf("recovery ProcessTask: %v", err)
 	}
 
-	taskInfo, err = svcCtx.Inspector.GetTaskInfo("default", taskID)
+	taskInfo, err = deps.Inspector.GetTaskInfo("default", taskID)
 	if err != nil {
 		t.Fatalf("GetTaskInfo: %v", err)
 	}
@@ -421,7 +420,7 @@ func TestReconcilePaidOrdersArchivedRunTaskRace(t *testing.T) {
 		t.Fatalf("expected task to remain pending after race scenario, got %v", taskInfo.State)
 	}
 
-	pendingTasks, err := svcCtx.Inspector.ListPendingTasks("default")
+	pendingTasks, err := deps.Inspector.ListPendingTasks("default")
 	if err != nil {
 		t.Fatalf("ListPendingTasks: %v", err)
 	}
@@ -432,20 +431,20 @@ func TestReconcilePaidOrdersArchivedRunTaskRace(t *testing.T) {
 
 func TestReconcilePaidOrdersHandleArchivedBenignRace(t *testing.T) {
 	orderNo := "handle-archived-race-1"
-	svcCtx, _ := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, _ := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: orderNo, Status: OrderStatusPaid},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 	taskID := types.ActivationTaskID(orderNo)
 
 	payload, _ := json.Marshal(types.ForthwithActivateOrderPayload{OrderNo: orderNo})
 	task := asynq.NewTask(types.ForthwithActivateOrder, payload, asynq.MaxRetry(5))
-	_, err := svcCtx.Queue.EnqueueContext(context.Background(), task, asynq.TaskID(taskID))
+	_, err := deps.Queue.EnqueueContext(context.Background(), task, asynq.TaskID(taskID))
 	if err != nil {
 		t.Fatalf("EnqueueContext: %v", err)
 	}
 
-	info, err := svcCtx.Inspector.GetTaskInfo("default", taskID)
+	info, err := deps.Inspector.GetTaskInfo("default", taskID)
 	if err != nil {
 		t.Fatalf("GetTaskInfo: %v", err)
 	}
@@ -475,10 +474,10 @@ func TestReconcilePaidOrdersHandleArchivedBenignRace(t *testing.T) {
 
 func TestReconcilePaidOrdersHandleArchivedTypeMismatchReturnsError(t *testing.T) {
 	orderNo := "handle-archived-type-1"
-	svcCtx, _ := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, _ := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: orderNo, Status: OrderStatusPaid},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 	taskID := types.ActivationTaskID(orderNo)
 
 	payload, _ := json.Marshal(types.ForthwithActivateOrderPayload{OrderNo: orderNo})
@@ -498,10 +497,10 @@ func TestReconcilePaidOrdersHandleArchivedTypeMismatchReturnsError(t *testing.T)
 
 func TestReconcilePaidOrdersHandleArchivedOrderNoMismatchReturnsError(t *testing.T) {
 	orderNo := "handle-archived-oid-1"
-	svcCtx, _ := newReconcileTestContext(t, []*orderEntity.Order{
+	deps, _ := newReconcileTestContext(t, []*orderEntity.Order{
 		{Id: 1, OrderNo: orderNo, Status: OrderStatusPaid},
 	})
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	logic := NewReconcilePaidOrdersLogic(deps)
 	taskID := types.ActivationTaskID(orderNo)
 
 	wrongPayload, _ := json.Marshal(types.ForthwithActivateOrderPayload{OrderNo: "some-other-order"})
@@ -529,13 +528,13 @@ func TestReconcilePaidOrdersMultipleBatches(t *testing.T) {
 			Status:  OrderStatusPaid,
 		})
 	}
-	svcCtx, _ := newReconcileTestContext(t, orders)
-	logic := NewReconcilePaidOrdersLogic(svcCtx)
+	deps, _ := newReconcileTestContext(t, orders)
+	logic := NewReconcilePaidOrdersLogic(deps)
 
 	if err := logic.ProcessTask(context.Background(), nil); err != nil {
 		t.Fatalf("ProcessTask: %v", err)
 	}
-	tasks, err := svcCtx.Inspector.ListPendingTasks("default", asynq.PageSize(n+1))
+	tasks, err := deps.Inspector.ListPendingTasks("default", asynq.PageSize(n+1))
 	if err != nil {
 		t.Fatalf("ListPendingTasks: %v", err)
 	}

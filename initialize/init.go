@@ -1,21 +1,17 @@
 package initialize
 
-import (
-	"github.com/perfect-panel/server/internal/svc"
-)
-
-func StartInitSystemConfig(svc *svc.ServiceContext) {
-	Migrate(svc)
-	Site(svc)
-	NodeSecret(svc)
-	Node(svc)
-	Email(svc)
-	Device(svc)
-	Invite(svc)
-	Verify(svc)
-	Subscribe(svc)
-	Register(svc)
-	Mobile(svc)
-	Currency(svc)
-	Telegram(svc)
+func StartInitSystemConfig(deps *Dependencies) {
+	Migrate(deps)
+	Site(deps)
+	NodeSecret(deps)
+	Node(deps)
+	Email(deps)
+	Device(deps)
+	Invite(deps)
+	Verify(deps)
+	Subscribe(deps)
+	Register(deps)
+	Mobile(deps)
+	Currency(deps)
+	Telegram(deps)
 }

@@ -8,7 +8,6 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/billing"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 
@@ -21,11 +20,11 @@ const (
 // State transitions in CloseOrder remain conditional, so a late callback can
 // safely race this scan without turning a paid order back into a close order.
 type ReconcilePendingOrdersLogic struct {
-	svc *svc.ServiceContext
+	deps Dependencies
 }
 
-func NewReconcilePendingOrdersLogic(svc *svc.ServiceContext) *ReconcilePendingOrdersLogic {
-	return &ReconcilePendingOrdersLogic{svc: svc}
+func NewReconcilePendingOrdersLogic(deps Dependencies) *ReconcilePendingOrdersLogic {
+	return &ReconcilePendingOrdersLogic{deps: deps}
 }
 
 func (l *ReconcilePendingOrdersLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
@@ -33,7 +32,7 @@ func (l *ReconcilePendingOrdersLogic) ProcessTask(ctx context.Context, _ *asynq.
 	var unconfirmed int
 	cutoff := time.Now().Add(-pendingOrderExpiry)
 	for {
-		orders, err := l.svc.Store.Order().QueryOrdersByStatusAfterID(ctx, OrderStatusPending, afterID, pendingOrderReconcileBatchSize)
+		orders, err := l.deps.Store.Order().QueryOrdersByStatusAfterID(ctx, OrderStatusPending, afterID, pendingOrderReconcileBatchSize)
 		if err != nil {
 			return err
 		}
@@ -42,7 +41,7 @@ func (l *ReconcilePendingOrdersLogic) ProcessTask(ctx context.Context, _ *asynq.
 			if orderInfo.CreatedAt.After(cutoff) {
 				continue
 			}
-			if err := l.svc.Billing.CloseOrder(ctx, &dto.CloseOrderRequest{OrderNo: orderInfo.OrderNo}); err != nil {
+			if err := l.deps.Billing.CloseOrder(ctx, &dto.CloseOrderRequest{OrderNo: orderInfo.OrderNo}); err != nil {
 				// Staying pending until the gateway confirms payment is the
 				// intended behaviour for EPay orders, and the same orders
 				// recur every scan — count them once instead of emitting a

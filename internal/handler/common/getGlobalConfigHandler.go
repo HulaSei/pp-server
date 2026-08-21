@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/module/platform"
 	"github.com/perfect-panel/server/pkg/result"
 )
 
@@ -15,9 +15,9 @@ import (
 // @Produce json
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.GetGlobalConfigResponse}
 // @Router /v1/common/site/config [get]
-func GetGlobalConfigHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func GetGlobalConfigHandler(service platform.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
-		resp, err := svcCtx.Platform.GetGlobalConfig(ctx)
+		resp, err := service.GetGlobalConfig(ctx)
 		result.HttpResult(c, resp, err)
 	}
 }

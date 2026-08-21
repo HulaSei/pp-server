@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/module/platform"
 	"github.com/perfect-panel/server/pkg/result"
 )
 
@@ -16,10 +16,10 @@ import (
 // @Security BearerAuth
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.PreViewNodeMultiplierResponse}
 // @Router /v1/admin/system/node_multiplier/preview [get]
-func PreViewNodeMultiplierHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func PreViewNodeMultiplierHandler(service platform.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 
-		resp, err := svcCtx.Platform.PreViewNodeMultiplier(ctx)
+		resp, err := service.PreViewNodeMultiplier(ctx)
 		result.HttpResult(c, resp, err)
 	}
 }

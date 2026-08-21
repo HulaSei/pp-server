@@ -7,9 +7,7 @@ import (
 	"testing"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
-	appconfig "github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/module/notification"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/telegramsecret"
 )
 
@@ -23,10 +21,10 @@ func (f *fakeNotificationService) HandleTelegramWebhook(_ context.Context, paylo
 	return nil
 }
 
-func telegramWebhookContext(t *testing.T, svcCtx *svc.ServiceContext) (*server.Hertz, func(secret string, body []byte) uint32) {
+func telegramWebhookContext(t *testing.T, service notification.Service, botToken string) (*server.Hertz, func(secret string, body []byte) uint32) {
 	t.Helper()
 	engine := server.Default()
-	engine.POST("/v1/telegram/webhook", TelegramHandler(svcCtx))
+	engine.POST("/v1/telegram/webhook", TelegramHandler(service, func() string { return botToken }))
 	return engine, func(secret string, body []byte) uint32 {
 		ctx := engine.NewContext()
 		ctx.Request.SetRequestURI("/v1/telegram/webhook")
@@ -51,11 +49,7 @@ func telegramWebhookContext(t *testing.T, svcCtx *svc.ServiceContext) (*server.H
 
 func TestTelegramHandler_abortsAndWritesSuccessEnvelope_whenSecretIsInvalid(t *testing.T) {
 	fake := &fakeNotificationService{}
-	svcCtx := &svc.ServiceContext{
-		Config: appconfig.Config{Telegram: appconfig.Telegram{BotToken: "bot-token"}},
-	}
-	svcCtx.Notification = fake
-	_, post := telegramWebhookContext(t, svcCtx)
+	_, post := telegramWebhookContext(t, fake, "bot-token")
 
 	if code := post("invalid", []byte(`{"update_id":1}`)); code != 200 {
 		t.Fatalf("expected success envelope code 200, got %d", code)
@@ -69,9 +63,7 @@ func TestTelegramHandler_abortsAndWritesSuccessEnvelope_whenSecretIsInvalid(t *t
 // attacker could derive from the empty token.
 func TestTelegramHandler_rejectsAll_whenBotTokenIsEmpty(t *testing.T) {
 	fake := &fakeNotificationService{}
-	svcCtx := &svc.ServiceContext{Config: appconfig.Config{}}
-	svcCtx.Notification = fake
-	_, post := telegramWebhookContext(t, svcCtx)
+	_, post := telegramWebhookContext(t, fake, "")
 
 	post(telegramsecret.Derive(""), []byte(`{"update_id":1}`))
 	if len(fake.payloads) != 0 {
@@ -81,11 +73,7 @@ func TestTelegramHandler_rejectsAll_whenBotTokenIsEmpty(t *testing.T) {
 
 func TestTelegramHandler_dispatchesPayload_whenSecretMatches(t *testing.T) {
 	fake := &fakeNotificationService{}
-	svcCtx := &svc.ServiceContext{
-		Config: appconfig.Config{Telegram: appconfig.Telegram{BotToken: "bot-token"}},
-	}
-	svcCtx.Notification = fake
-	_, post := telegramWebhookContext(t, svcCtx)
+	_, post := telegramWebhookContext(t, fake, "bot-token")
 
 	body := []byte(`{"update_id":7}`)
 	if code := post(telegramsecret.Derive("bot-token"), body); code != 200 {

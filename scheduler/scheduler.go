@@ -6,19 +6,17 @@ import (
 	"github.com/perfect-panel/server/pkg/logger"
 
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/queue/types"
 )
 
 type Service struct {
-	svc    *svc.ServiceContext
 	server *asynq.Scheduler
 }
 
-func NewService(svc *svc.ServiceContext) *Service {
+func NewService(redisConfig config.RedisConfig, appLocation string) *Service {
 	return &Service{
-		svc:    svc,
-		server: initService(svc),
+		server: initService(redisConfig, appLocation),
 	}
 }
 
@@ -110,14 +108,14 @@ func (m *Service) Stop() {
 	m.server.Shutdown()
 }
 
-func initService(svc *svc.ServiceContext) *asynq.Scheduler {
-	location, err := time.LoadLocation(svc.Config.AppLocation)
+func initService(redisConfig config.RedisConfig, appLocation string) *asynq.Scheduler {
+	location, err := time.LoadLocation(appLocation)
 	if err != nil {
-		logger.Errorf("load timezone location %q failed: %v, falling back to Local", svc.Config.AppLocation, err)
+		logger.Errorf("load timezone location %q failed: %v, falling back to Local", appLocation, err)
 		location = time.Local
 	}
 	return asynq.NewScheduler(
-		asynq.RedisClientOpt{Addr: svc.Config.Redis.Host, Password: svc.Config.Redis.Pass, DB: 5},
+		asynq.RedisClientOpt{Addr: redisConfig.Host, Password: redisConfig.Pass, DB: 5},
 		&asynq.SchedulerOpts{
 			Location: location,
 		},

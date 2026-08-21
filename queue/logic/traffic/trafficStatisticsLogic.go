@@ -8,18 +8,17 @@ import (
 	"github.com/perfect-panel/server/pkg/logger"
 
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/queue/types"
 )
 
 //goland:noinspection GoNameStartsWithPackageName
 type TrafficStatisticsLogic struct {
-	svc *svc.ServiceContext
+	deps Dependencies
 }
 
-func NewTrafficStatisticsLogic(svc *svc.ServiceContext) *TrafficStatisticsLogic {
+func NewTrafficStatisticsLogic(deps Dependencies) *TrafficStatisticsLogic {
 	return &TrafficStatisticsLogic{
-		svc: svc,
+		deps: deps,
 	}
 }
 
@@ -37,7 +36,7 @@ func (l *TrafficStatisticsLogic) ProcessTask(ctx context.Context, task *asynq.Ta
 		return nil
 	}
 	// query server info
-	serverInfo, err := l.svc.Store.Node().FindOneServer(ctx, payload.ServerId)
+	serverInfo, err := l.deps.Store.Node().FindOneServer(ctx, payload.ServerId)
 	if err != nil {
 		logger.WithContext(ctx).Error("[TrafficStatistics] Find server info failed",
 			logger.Field("serverId", payload.ServerId),
@@ -45,7 +44,7 @@ func (l *TrafficStatisticsLogic) ProcessTask(ctx context.Context, task *asynq.Ta
 		)
 		return nil
 	}
-	if err = trafficagg.New(aggregatorDeps(l.svc)).AddReport(ctx, serverInfo, payload.Protocol, queueTrafficToAggregator(payload.Logs)); err != nil {
+	if err = trafficagg.New(l.deps.Aggregator).AddReport(ctx, serverInfo, payload.Protocol, queueTrafficToAggregator(payload.Logs)); err != nil {
 		logger.WithContext(ctx).Error("[TrafficStatistics] Aggregate traffic failed",
 			logger.Field("serverId", payload.ServerId),
 			logger.Field("error", err.Error()),

@@ -13,7 +13,6 @@ import (
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/perfect-panel/server/internal/handler"
 	"github.com/perfect-panel/server/internal/route"
-	"github.com/perfect-panel/server/internal/svc"
 )
 
 type swaggerDocument struct {
@@ -37,18 +36,18 @@ type swaggerParameter struct {
 }
 
 func TestSwaggerCoversHertzRoutes(t *testing.T) {
-	serverCtx := &svc.ServiceContext{}
+	deps := route.Dependencies{}
 	// Register both supported subscription URL forms. SubscribePath remains
 	// empty so that the documented default path is registered as well.
-	serverCtx.Config.Subscribe.PanDomain = true
+	deps.Config.Subscribe.PanDomain = true
 	// The Edge route is opt-in in production, but it is part of the complete
 	// documented API surface and is enabled for this contract test.
-	serverCtx.Config.EdgeSubscribe.Enabled = true
+	deps.Config.EdgeSubscribe.Enabled = true
 
 	engine := server.New()
-	route.RegisterHandlers(engine, serverCtx)
-	handler.RegisterTelegramHandlers(engine, serverCtx)
-	handler.RegisterNotifyHandlers(engine, serverCtx)
+	route.RegisterHandlers(engine, deps)
+	handler.RegisterTelegramHandlers(engine, nil, func() string { return "" })
+	handler.RegisterNotifyHandlers(engine, deps.Store, deps.Billing)
 
 	document := readSwaggerDocument(t)
 	want := make(map[string]bool)

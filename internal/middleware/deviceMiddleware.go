@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/config"
 	pkgaes "github.com/perfect-panel/server/pkg/aes"
 	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/result"
@@ -14,9 +14,10 @@ import (
 	"github.com/pkg/errors"
 )
 
-func DeviceMiddleware(srvCtx *svc.ServiceContext) app.HandlerFunc {
+func DeviceMiddleware(configProvider func() config.DeviceConfig) app.HandlerFunc {
 	return func(ctx context.Context, requestCtx *app.RequestContext) {
-		if !srvCtx.Config.Device.Enable {
+		deviceConfig := configProvider()
+		if !deviceConfig.Enable {
 			requestCtx.Next(ctx)
 			return
 		}
@@ -30,24 +31,24 @@ func DeviceMiddleware(srvCtx *svc.ServiceContext) app.HandlerFunc {
 			return
 		}
 		ctx = context.WithValue(ctx, constant.LoginType, "device")
-		if !srvCtx.Config.Device.EnableSecurity {
+		if !deviceConfig.EnableSecurity {
 			requestCtx.Next(ctx)
 			return
 		}
-		if srvCtx.Config.Device.SecuritySecret == "" {
+		if deviceConfig.SecuritySecret == "" {
 			result.HttpResult(requestCtx, nil, errors.Wrapf(xerr.NewErrCode(xerr.SecretIsEmpty), "Secret is empty"))
 			requestCtx.Abort()
 			return
 		}
 
-		if !DecryptDeviceRequest(requestCtx, srvCtx.Config.Device.SecuritySecret) {
+		if !DecryptDeviceRequest(requestCtx, deviceConfig.SecuritySecret) {
 			result.HttpResult(requestCtx, nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidCiphertext), "Invalid ciphertext"))
 			requestCtx.Abort()
 			return
 		}
 		ctx = context.WithValue(ctx, constant.CtxKeyDeviceSecure, true)
 		requestCtx.Next(ctx)
-		EncryptDeviceResponse(requestCtx, srvCtx.Config.Device.SecuritySecret)
+		EncryptDeviceResponse(requestCtx, deviceConfig.SecuritySecret)
 		requestCtx.Abort()
 	}
 }

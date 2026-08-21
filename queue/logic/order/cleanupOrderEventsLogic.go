@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 
@@ -15,15 +14,15 @@ const orderEventRetention = 30 * 24 * time.Hour
 // and are older than the replay contract. Unpublished events are never
 // deleted, even if an outage lasts longer than the normal retention period.
 type CleanupOrderEventsLogic struct {
-	svcCtx *svc.ServiceContext
+	deps Dependencies
 }
 
-func NewCleanupOrderEventsLogic(svcCtx *svc.ServiceContext) *CleanupOrderEventsLogic {
-	return &CleanupOrderEventsLogic{svcCtx: svcCtx}
+func NewCleanupOrderEventsLogic(deps Dependencies) *CleanupOrderEventsLogic {
+	return &CleanupOrderEventsLogic{deps: deps}
 }
 
 func (l *CleanupOrderEventsLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
-	deleted, err := l.svcCtx.Store.OrderEvent().DeletePublishedBefore(ctx, time.Now().Add(-orderEventRetention))
+	deleted, err := l.deps.Store.OrderEvent().DeletePublishedBefore(ctx, time.Now().Add(-orderEventRetention))
 	if err != nil {
 		return err
 	}
@@ -33,14 +32,14 @@ func (l *CleanupOrderEventsLogic) ProcessTask(ctx context.Context, _ *asynq.Task
 	// The idempotent inbox shares the retention contract: every consumer's
 	// replay window (deferred closes, activation retries, bucket flushes)
 	// resolves far inside it.
-	outboxDeleted, err := l.svcCtx.Store.Outbox().DeletePublishedBefore(ctx, time.Now().Add(-orderEventRetention))
+	outboxDeleted, err := l.deps.Store.Outbox().DeletePublishedBefore(ctx, time.Now().Add(-orderEventRetention))
 	if err != nil {
 		return err
 	}
 	if outboxDeleted > 0 {
 		logger.WithContext(ctx).Infof("cleaned up %d published domain events", outboxDeleted)
 	}
-	inboxDeleted, err := l.svcCtx.Store.Inbox().DeleteProcessedBefore(ctx, time.Now().Add(-orderEventRetention))
+	inboxDeleted, err := l.deps.Store.Inbox().DeleteProcessedBefore(ctx, time.Now().Add(-orderEventRetention))
 	if err != nil {
 		return err
 	}

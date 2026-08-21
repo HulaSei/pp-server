@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/module/platform"
 	"github.com/perfect-panel/server/pkg/result"
 )
 
@@ -16,10 +16,10 @@ import (
 // @Security BearerAuth
 // @Success 200 {object} result.ResponseSuccessBean
 // @Router /v1/admin/system/setting_telegram_bot [post]
-func SettingTelegramBotHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func SettingTelegramBotHandler(service platform.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 
-		err := svcCtx.Platform.SettingTelegramBot(ctx)
+		err := service.SettingTelegramBot(ctx)
 		result.HttpResult(c, nil, err)
 	}
 }

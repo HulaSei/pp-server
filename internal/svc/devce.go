@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func NewDeviceManager(srv *ServiceContext) *device.DeviceManager {
+func NewDeviceManager(srv *Application) *device.DeviceManager {
 	ctx := context.Background()
 	manager := device.NewDeviceManager(30, 30)
 

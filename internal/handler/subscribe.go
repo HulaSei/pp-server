@@ -6,12 +6,17 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
+	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/subscription"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
 )
+
+type SubscribeDeps struct {
+	Service subscription.Service
+	Config  func() config.SubscribeConfig
+}
 
 // SubscribeHandler returns a client subscription configuration.
 //
@@ -25,7 +30,7 @@ import (
 // @Param User-Agent header string false "Client user agent"
 // @Success 200 {string} string
 // @Router /v1/subscribe/config [get]
-func SubscribeHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func SubscribeHandler(deps SubscribeDeps) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		req := dto.SubscribeRequest{
 			Token:  string(ctx.GetHeader("token")),
@@ -38,7 +43,8 @@ func SubscribeHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 			req.Token = ctx.Query("token")
 		}
 
-		if svcCtx.Config.Subscribe.PanDomain {
+		config := deps.Config()
+		if config.PanDomain {
 			domainArr := strings.Split(string(ctx.Host()), ".")
 			if len(domainArr) == 0 {
 				ctx.String(consts.StatusForbidden, "Access denied")
@@ -57,11 +63,11 @@ func SubscribeHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 			}
 		}
 
-		if svcCtx.Config.Subscribe.UserAgentLimit && !svcCtx.Subscription.IsUserAgentAllowed(c, req.UA) {
+		if config.UserAgentLimit && !deps.Service.IsUserAgentAllowed(c, req.UA) {
 			ctx.String(consts.StatusForbidden, "Access denied")
 			return
 		}
-		writeSubscribeResponse(c, ctx, svcCtx, req)
+		writeSubscribeResponse(c, ctx, deps.Service, req)
 	}
 }
 
@@ -73,10 +79,11 @@ func SubscribeHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 // @Param User-Agent header string false "Client user agent"
 // @Success 200 {string} string
 // @Router / [get]
-func PanDomainSubscribeHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func PanDomainSubscribeHandler(deps SubscribeDeps) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
+		config := deps.Config()
 		ua := string(ctx.UserAgent())
-		if svcCtx.Config.Subscribe.UserAgentLimit && !svcCtx.Subscription.IsUserAgentAllowed(c, ua) {
+		if config.UserAgentLimit && !deps.Service.IsUserAgentAllowed(c, ua) {
 			ctx.String(consts.StatusForbidden, "Access denied")
 			return
 		}
@@ -87,7 +94,7 @@ func PanDomainSubscribeHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 			return
 		}
 
-		writeSubscribeResponse(c, ctx, svcCtx, dto.SubscribeRequest{
+		writeSubscribeResponse(c, ctx, deps.Service, dto.SubscribeRequest{
 			Token:  domainArr[0],
 			Flag:   domainArr[1],
 			UA:     ua,
@@ -96,8 +103,8 @@ func PanDomainSubscribeHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 	}
 }
 
-func writeSubscribeResponse(c context.Context, ctx *app.RequestContext, svcCtx *svc.ServiceContext, req dto.SubscribeRequest) {
-	resp, err := svcCtx.Subscription.Deliver(c, subscription.RequestMeta{
+func writeSubscribeResponse(c context.Context, ctx *app.RequestContext, service subscription.Service, req dto.SubscribeRequest) {
+	resp, err := service.Deliver(c, subscription.RequestMeta{
 		Host:       string(ctx.Host()),
 		RequestURI: string(ctx.URI().RequestURI()),
 		UserAgent:  string(ctx.UserAgent()),

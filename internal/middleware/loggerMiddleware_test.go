@@ -39,7 +39,7 @@ func TestLoggerMiddlewareOmitsRequestAndResponseData(t *testing.T) {
 	ctx.Response.SetBodyString(`{"token":"` + responseSecret + `"}`)
 	result.ParamErrorResult(ctx, &sensitiveValidationError{value: parameterValue})
 
-	LoggerMiddleware(nil)(context.Background(), ctx)
+	LoggerMiddleware()(context.Background(), ctx)
 
 	got := output.String()
 	for _, secret := range []string{pathSecret, querySecret, requestSecret, responseSecret, parameterValue} {

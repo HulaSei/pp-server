@@ -5,7 +5,8 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/model/dto"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/module/network"
+	"github.com/perfect-panel/server/internal/validation"
 )
 
 // PushOnlineUsersHandler documents Push online users.
@@ -18,7 +19,7 @@ import (
 // @Param request body dto.OnlineUsersRequest true "Request parameters"
 // @Success 200 {object} result.ResponseSuccessBean
 // @Router /v1/server/online [post]
-func PushOnlineUsersHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func PushOnlineUsersHandler(service network.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		req := dto.OnlineUsersRequest{}
 		if err := bindOnlineUsersRequest(ctx, &req); err != nil {
@@ -31,11 +32,11 @@ func PushOnlineUsersHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
 			return
 		}
 		req.ServerCommon = commonReq
-		if validateErr := svcCtx.Validate(&req); validateErr != nil {
+		if validateErr := validation.Validate(&req); validateErr != nil {
 			writeParamError(ctx, validateErr)
 			return
 		}
 
-		writeServerReportResult(ctx, svcCtx.Network.PushOnlineUsers(c, &req))
+		writeServerReportResult(ctx, service.PushOnlineUsers(c, &req))
 	}
 }

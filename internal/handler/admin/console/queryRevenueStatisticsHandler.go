@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/module/platform"
 	"github.com/perfect-panel/server/pkg/result"
 )
 
@@ -16,10 +16,10 @@ import (
 // @Security BearerAuth
 // @Success 200 {object} result.ResponseSuccessBean{data=dto.RevenueStatisticsResponse}
 // @Router /v1/admin/console/revenue [get]
-func QueryRevenueStatisticsHandler(svcCtx *svc.ServiceContext) app.HandlerFunc {
+func QueryRevenueStatisticsHandler(service platform.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 
-		resp, err := svcCtx.Platform.QueryRevenueStatistics(ctx)
+		resp, err := service.QueryRevenueStatistics(ctx)
 		result.HttpResult(c, resp, err)
 	}
 }
