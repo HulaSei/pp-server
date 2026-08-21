@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/module/billing/internal/settle"
 	"github.com/perfect-panel/server/pkg/constant"

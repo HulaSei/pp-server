@@ -3,7 +3,7 @@ package serverapi
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/trafficagg"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/pkg/errors"

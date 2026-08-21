@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
@@ -33,7 +33,7 @@ func (l *GetClientLogic) GetClient() (resp *dto.GetSubscribeClientResponse, err 
 	}
 	var list []dto.SubscribeClient
 	for _, item := range data {
-		var temp dto.DownloadLink
+		var temp dto.PlatformDownloadLinkSnapshot
 		if item.DownloadLink != "" {
 			_ = json.Unmarshal([]byte(item.DownloadLink), &temp)
 		}

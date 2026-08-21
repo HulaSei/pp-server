@@ -1,7 +1,7 @@
 package portal
 
 import (
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/coupon"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	paymentPlatform "github.com/perfect-panel/server/pkg/payment"
@@ -10,7 +10,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func getDiscount(discounts []dto.SubscribeDiscount, inputMonths int64) float64 {
+func getDiscount(discounts []dto.BillingSubscribeDiscount, inputMonths int64) float64 {
 	var finalDiscount float64 = 100
 
 	for _, discount := range discounts {

@@ -7,7 +7,7 @@ import (
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 
@@ -31,7 +31,7 @@ func (l *GetUserSubscribeDevicesLogic) GetUserSubscribeDevices(req *dto.GetUserS
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "GetUserSubscribeDevices failed: %v", err.Error())
 	}
-	userRespList := make([]dto.UserDevice, 0)
+	userRespList := make([]dto.SubscriptionUserDeviceSnapshot, 0)
 	tool.DeepCopy(&userRespList, list)
 	return &dto.GetUserSubscribeDevicesResponse{
 		Total: total,

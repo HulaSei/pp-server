@@ -11,7 +11,8 @@ import (
 	"testing"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/perfect-panel/server/internal/handler"
+	billingHTTP "github.com/perfect-panel/server/internal/module/billing/transport/http"
+	notificationHTTP "github.com/perfect-panel/server/internal/module/notification/transport/http"
 	"github.com/perfect-panel/server/internal/route"
 )
 
@@ -46,8 +47,8 @@ func TestSwaggerCoversHertzRoutes(t *testing.T) {
 
 	engine := server.New()
 	route.RegisterHandlers(engine, deps)
-	handler.RegisterTelegramHandlers(engine, nil, func() string { return "" })
-	handler.RegisterNotifyHandlers(engine, deps.Store, deps.Billing)
+	notificationHTTP.RegisterTelegramHandlers(engine, nil, func() string { return "" })
+	billingHTTP.RegisterNotifyHandlers(engine, deps.Store, deps.Billing)
 
 	document := readSwaggerDocument(t)
 	want := make(map[string]bool)
@@ -152,6 +153,26 @@ func TestSwaggerScopesPartitionFullDocument(t *testing.T) {
 	sort.Strings(extra)
 	if len(missing) > 0 || len(extra) > 0 {
 		t.Fatalf("scoped Swagger documents do not partition the full document\nmissing: %v\nextra: %v", missing, extra)
+	}
+}
+
+func TestSwaggerKeepsStableDTOModelNames(t *testing.T) {
+	document := readSwaggerDocument(t)
+	for name := range document.Definitions {
+		if strings.Contains(name, "contract.") || strings.Contains(name, "internal_module_") {
+			t.Errorf("unstable module-qualified Swagger definition %q", name)
+		}
+	}
+	for _, name := range []string{
+		"dto.BalanceLog",
+		"dto.PlatformResponse",
+		"dto.Protocol",
+		"dto.Subscribe",
+		"dto.User",
+	} {
+		if _, ok := document.Definitions[name]; !ok {
+			t.Errorf("stable Swagger definition %q is missing", name)
+		}
 	}
 }
 

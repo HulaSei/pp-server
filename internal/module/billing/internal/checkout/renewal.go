@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
@@ -65,7 +65,7 @@ func (s *Service) Renewal(ctx context.Context, req *dto.RenewalOrderRequest) (*d
 	}
 	var discount float64 = 1
 	if sub.Discount != "" {
-		var dis []dto.SubscribeDiscount
+		var dis []dto.BillingSubscribeDiscount
 		_ = json.Unmarshal([]byte(sub.Discount), &dis)
 		discount = getDiscount(dis, req.Quantity)
 	}

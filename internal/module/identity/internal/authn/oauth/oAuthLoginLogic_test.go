@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 )
 
 type fakeOAuthLoginURLPolicy struct {

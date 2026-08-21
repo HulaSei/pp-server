@@ -4,7 +4,7 @@ import (
 	"testing"
 
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/network/contract"
 )
 
 func TestOverrideModelAndApplyOverride(t *testing.T) {

@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/support"
+	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	ticketEntity "github.com/perfect-panel/server/internal/module/support/entity/ticket"
 )
 

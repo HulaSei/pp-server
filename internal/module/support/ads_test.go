@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/support"
+	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	adsEntity "github.com/perfect-panel/server/internal/module/support/entity/ads"
 )
 

@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	paymentModel "github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/repository"
 	"gorm.io/gorm"

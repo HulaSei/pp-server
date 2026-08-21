@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/billing"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 

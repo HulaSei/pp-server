@@ -7,7 +7,7 @@ import (
 	"context"
 
 	"github.com/oschwald/geoip2-golang"
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 )
 
 // Deps declares the subdomain's dependencies; the module facade forwards

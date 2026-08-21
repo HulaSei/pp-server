@@ -2,22 +2,24 @@ package route
 
 import (
 	"github.com/cloudwego/hertz/pkg/app/server"
-	common "github.com/perfect-panel/server/internal/handler/common"
+	identityCommon "github.com/perfect-panel/server/internal/module/identity/transport/http/common"
+	platformCommon "github.com/perfect-panel/server/internal/module/platform/transport/http/common"
+	supportCommon "github.com/perfect-panel/server/internal/module/support/transport/http/common"
 )
 
 func registerCommonRoutes(router *server.Hertz, deps Dependencies) {
 	commonGroupRouter := router.Group("/v1/common")
 	commonGroupRouter.Use(deps.deviceMiddleware())
 	{
-		commonGroupRouter.GET("/ads", common.GetAdsHandler(deps.Support))
-		commonGroupRouter.POST("/check_verification_code", common.CheckVerificationCodeHandler(deps.Identity))
-		commonGroupRouter.GET("/client", common.GetClientHandler(deps.Platform))
-		commonGroupRouter.GET("/heartbeat", common.HeartbeatHandler(deps.Platform))
-		commonGroupRouter.POST("/send_code", common.SendEmailCodeHandler(deps.Identity))
-		commonGroupRouter.POST("/send_sms_code", common.SendSmsCodeHandler(deps.Identity))
-		commonGroupRouter.GET("/site/config", common.GetGlobalConfigHandler(deps.Platform))
-		commonGroupRouter.GET("/site/privacy", common.GetPrivacyPolicyHandler(deps.Platform))
-		commonGroupRouter.GET("/site/stat", common.GetStatHandler(deps.Platform))
-		commonGroupRouter.GET("/site/tos", common.GetTosHandler(deps.Platform))
+		commonGroupRouter.GET("/ads", supportCommon.GetAdsHandler(deps.Support))
+		commonGroupRouter.POST("/check_verification_code", identityCommon.CheckVerificationCodeHandler(deps.Identity))
+		commonGroupRouter.GET("/client", platformCommon.GetClientHandler(deps.Platform))
+		commonGroupRouter.GET("/heartbeat", platformCommon.HeartbeatHandler(deps.Platform))
+		commonGroupRouter.POST("/send_code", identityCommon.SendEmailCodeHandler(deps.Identity))
+		commonGroupRouter.POST("/send_sms_code", identityCommon.SendSmsCodeHandler(deps.Identity))
+		commonGroupRouter.GET("/site/config", platformCommon.GetGlobalConfigHandler(deps.Platform))
+		commonGroupRouter.GET("/site/privacy", platformCommon.GetPrivacyPolicyHandler(deps.Platform))
+		commonGroupRouter.GET("/site/stat", platformCommon.GetStatHandler(deps.Platform))
+		commonGroupRouter.GET("/site/tos", platformCommon.GetTosHandler(deps.Platform))
 	}
 }

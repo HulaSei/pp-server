@@ -40,13 +40,17 @@
 
 ```
 internal/module/<name>/
-├── <name>.go        # 门面：接口 + 构造函数 New(deps) + 对外 DTO（不泄漏 GORM entity）
+├── <name>.go        # 门面：接口 + 构造函数 New(deps)
+├── contract/        # 本模块拥有的 Command / Query / Result 与跨域只读快照
 ├── events/          # 集成事件定义（其他模块可订阅）
+├── transport/http/  # 本模块的 Hertz handler（只依赖本模块门面与 contract）
 └── internal/        # 实现：service / repo / entity —— Go 编译器保证外部不可 import
 ```
 
-1. **门面**：模块根包只含接口、DTO 与 `New(...)` 构造函数。admin/public handler 都是薄壳，
-   调用同一个模块 service；访问面差异（权限、字段裁剪）留在 handler。
+1. **门面与契约**：模块根包只含接口与 `New(...)` 构造函数；业务 DTO 位于模块自己的
+   `contract/`。跨域嵌套数据使用属主模块自己的只读 JSON 快照，不让 contract 形成循环依赖。
+   admin/public handler 位于模块的 `transport/http/`，是调用同一模块 service 的薄壳；访问面差异
+   （权限、字段裁剪）留在 handler。顶层 `internal/route` 只负责 URL、中间件与 handler 组合。
 2. **集成事件**：模块间的写-写协作一律走事件（`OrderPaid`、`SubscriptionExpired`、
    `TrafficExceeded`…），复用订单域已验证的 outbox + 定时发布 + 对账兜底模式，
    泛化为 `pkg/eventbus`。**禁止新增跨模块事务**。
@@ -62,7 +66,10 @@ internal/module/<name>/
   - `TestLogicImportFreeze`：冻结存量 logic 跨包依赖为 8 条基线（见测试内
     `legacyLogicImports`），只许收窄，新增即失败；
   - `TestModulePurity`：`internal/module/**` 不得 import `internal/svc` 与 `internal/logic`；
-  - `TestModuleLayout`：模块只允许暴露门面包与 `events/`，其余必须在 `internal/` 内。
+  - `TestModuleLayout`：模块只允许暴露门面、`contract/`、`events/`、`entity/` 与 `transport/`；
+  - `TestModuleContractsAreIndependent`：禁止中央 DTO 与跨模块 contract 依赖；
+  - `TestModuleTransportOwnership`：handler 只能依赖所属模块门面与 contract；
+  - `TestLegacyHandlerTreeRemoved`：禁止恢复顶层 `internal/handler`。
 
 ## 迁移路径
 
@@ -212,13 +219,13 @@ builder 指向独立连接即可。不允许 import `internal/svc` 与 `internal
   归属即表属主映射（billing=order/payment/coupon/wallet，subscription=subscribe/usersub，
   identity=user/auth，network=node/traffic，support=ticket/announcement/ads/document，
   platform=system/log/task/client/inbox/outbox）。实体包是纯数据契约，允许跨模块 import；
-  `TestModuleLayout` 相应放行 `entity/`。`internal/model` 仅剩 `dto`。
-- **dto 不入模（2026-07-25 决策）**：dto 是 API 传输契约而非持久化契约，天然承载跨域
-  组装视图（用户详情=资料+订阅+钱包），没有单一模块属主。实测：22 个文件中 11 个被
-  多模块共用（`user.go` 被 4 个模块用），16 个互相引用且存在环（`user↔common`、
-  `node↔statistics`），按模块拆包必产生 import cycle，机械搬移不可行。dto 是纯数据、
-  无行为、无 DB 依赖，留在中立位置 `internal/model/dto` 不构成债务。它的"入模"时刻
-  在第 6 步：门面换 gRPC 时按服务蒸馏为 protobuf 契约，dto 被生成类型替代。
+  `TestModuleLayout` 相应放行 `entity/`。
+- **dto 入模（2026-08-21，取代 2026-07-25 的暂缓决策）**：原先 22 个中央 DTO 文件存在
+  `user↔common`、`node↔statistics` 等引用环，不能机械地按文件拆包。本次以门面方法的
+  业务属主为准蒸馏为各模块 `contract/`；跨域组合响应中的嵌套对象改为属主模块自己的
+  只读 JSON 快照。快照允许结构重复但禁止跨模块 contract import，因此既保持 HTTP JSON
+  兼容，也消除了中央 DTO 与 import cycle。未来换 gRPC 时，各模块 contract 可独立映射为
+  protobuf，不再需要先拆一轮共享 DTO。
 - 持久化消费者身份（禁止改名，改名即重放已提交阶段）：`identity.guest_account`、
   `subscription.fulfillment`、`identity.balance_recharge`、`identity.commission`、
   `subscription.trial_grant`、`subscription.quota_grant`、`billing.quota_gift`。
@@ -247,6 +254,16 @@ subscription→billing→identity 的构建顺序）；identity 的三座桥收�
 过滤器 AND 组合时的优先级缺陷（补括号）。
 
 **拆库时的共享表落位（设计预记，第 6 步执行）**：`domain_event_inbox`/
+**业务 DTO 与 handler 入模（2026-08-21）**：`internal/model/dto` 的 22 个中央 DTO 文件已按
+`identity`、`billing`、`subscription`、`network`、`support`、`platform` 的所有权迁入各模块
+`contract/`；跨域嵌套响应改为模块自有只读快照。原 `internal/handler` 的 HTTP 适配器按实际调用
+的模块门面迁入 `transport/http/`，混合的 admin/public user 与 common handler 已按函数拆分，
+路由数量、URL、中间件顺序与 HTTP/Swagger 契约保持不变。contract 的 Go 包名继续使用 `dto`，
+只为兼容既有 Swagger schema 标识；跨域副本必须使用属主限定的 Go 名称（例如
+`BillingSubscribeSnapshot`），并用 Swaggo `@name` 固定原 `dto.*` 文档名。架构测试禁止不同模块
+重复导出同名 contract 类型，也禁止模块核心反向导入 `transport/`；route golden 记录具体模块
+transport 子包，不再归一化成已删除的 `internal/handler`。
+
 `domain_event_outbox` 必须与本域事务同库提交——拆库时**每服务自带一份**（同构表），
 不共享；`system_logs` 每服务自带日志表（或改日志事件流）；迁移流按表归属切分历史，
 新迁移建议带域标记。
@@ -261,7 +278,7 @@ notification=17xxxx（`pkg/xerr/errCode.go` 的 Band* 常量）。
 
 **svc 导入基线现状**（第 3 步收官判定）：基线从 71 收缩后定格在 49（含事件总线的
 queue 壳 `queue/logic/events`），剩余条目全部为组装根/传输层性质——`cmd`、`initialize`、
-`internal`（server）、`internal/handler/**`（薄壳调门面）、`internal/middleware`、
+`internal`（server）、模块内 `transport/http/**`（薄壳调门面）、`internal/middleware`、
 `internal/route`、`internal/transport/httpserver`、`queue/**`、`scheduler`。业务逻辑对
 `ServiceContext` 的依赖已归零；`ServiceContext` 本身长期保留为组装根（基础设施连接 +
 七个模块门面 + EventBus + 运行时晚绑定），"拆 ServiceContext"拆的是业务依赖，
