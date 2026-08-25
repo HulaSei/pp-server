@@ -35,5 +35,6 @@ func (l *DeleteUserLogic) DeleteUser(req *dto.GetDetailRequest) error {
 	if err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseDeletedError), "delete user error: %v", err.Error())
 	}
+	l.clearDeletedUserAccessCaches([]int64{req.Id})
 	return nil
 }

@@ -216,7 +216,11 @@ func (l *SubscribeLogic) getUserSubscribe(token string) (*usersub.Subscribe, err
 		l.Infow("[Generate Subscribe] failed to get user info", logger.Field("error", err.Error()), logger.Field("userId", userSub.UserId))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "failed to get user info: %v", err.Error())
 	}
-	if !*userInfo.Enable {
+	if userInfo.DeletedAt.Valid {
+		l.Infow("[Generate Subscribe] user account is deleted", logger.Field("userId", userSub.UserId))
+		return nil, errors.Wrapf(xerr.NewErrCode(xerr.UserNotExist), "User account does not exist")
+	}
+	if userInfo.Enable == nil || !*userInfo.Enable {
 		l.Infow("[Generate Subscribe] user account is disabled", logger.Field("userId", userSub.UserId))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.UserDisabled), "User account is disabled")
 	}

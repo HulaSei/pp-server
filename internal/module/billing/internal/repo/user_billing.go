@@ -136,3 +136,48 @@ func (m *WalletRepo) InsertWithdrawal(ctx context.Context, data *walletEntity.Wi
 		return conn.Create(data).Error
 	})
 }
+
+func (m *WalletRepo) FindWithdrawalForUpdate(ctx context.Context, id int64) (*walletEntity.Withdrawal, error) {
+	var data walletEntity.Withdrawal
+	err := m.QueryNoCacheCtx(ctx, &data, func(conn *gorm.DB, v interface{}) error {
+		return conn.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("id = ?", id).
+			First(v).Error
+	})
+	return &data, err
+}
+
+func (m *WalletRepo) QueryWithdrawalList(ctx context.Context, userID int64, status *uint8, page, size int) ([]*walletEntity.Withdrawal, int64, error) {
+	var list []*walletEntity.Withdrawal
+	var total int64
+	page, size = repository.NormalizePage(page, size)
+	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
+		query := conn.Model(&walletEntity.Withdrawal{})
+		if userID != 0 {
+			query = query.Where("user_id = ?", userID)
+		}
+		if status != nil {
+			query = query.Where("status = ?", *status)
+		}
+		if err := query.Count(&total).Error; err != nil {
+			return err
+		}
+		return query.Order("id DESC").Limit(size).Offset((page - 1) * size).Find(v).Error
+	})
+	return list, total, err
+}
+
+func (m *WalletRepo) UpdateWithdrawalStatus(ctx context.Context, id int64, from, to uint8, reason string) (bool, error) {
+	updated := false
+	err := m.ExecNoCacheCtx(ctx, func(conn *gorm.DB) error {
+		result := conn.Model(&walletEntity.Withdrawal{}).
+			Where("id = ? AND status = ?", id, from).
+			Updates(map[string]interface{}{"status": to, "reason": reason})
+		if result.Error != nil {
+			return result.Error
+		}
+		updated = result.RowsAffected == 1
+		return nil
+	})
+	return updated, err
+}

@@ -85,6 +85,7 @@ func RegisterHandlers(router *server.Hertz, deps Dependencies) {
 	registerAdminMarketingRoutes(router, deps)
 	registerAdminOrderRoutes(router, deps)
 	registerAdminPaymentRoutes(router, deps)
+	registerAdminWithdrawalRoutes(router, deps)
 	registerAdminServerRoutes(router, deps)
 	registerAdminSubscribeRoutes(router, deps)
 	registerAdminSystemRoutes(router, deps)

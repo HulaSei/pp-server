@@ -38,5 +38,6 @@ func (l *BatchDeleteUserLogic) BatchDeleteUser(req *dto.BatchDeleteUserRequest) 
 		l.Logger.Error("[BatchDeleteUserLogic] BatchDeleteUser failed: ", logger.Field("error", err.Error()))
 		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseDeletedError), "BatchDeleteUser failed: %v", err.Error())
 	}
+	l.clearDeletedUserAccessCaches(req.Ids)
 	return nil
 }

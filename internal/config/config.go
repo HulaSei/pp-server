@@ -309,9 +309,10 @@ func hasDatabaseConfig(cfg orm.Config) bool {
 }
 
 type InviteConfig struct {
-	ForcedInvite       bool  `yaml:"ForcedInvite" default:"false"`
-	ReferralPercentage int64 `yaml:"ReferralPercentage" default:"0"`
-	OnlyFirstPurchase  bool  `yaml:"OnlyFirstPurchase" default:"false"`
+	ForcedInvite       bool   `yaml:"ForcedInvite" default:"false"`
+	ReferralPercentage int64  `yaml:"ReferralPercentage" default:"0"`
+	OnlyFirstPurchase  bool   `yaml:"OnlyFirstPurchase" default:"false"`
+	WithdrawalMethod   string `yaml:"WithdrawalMethod" default:""`
 }
 
 type Telegram struct {

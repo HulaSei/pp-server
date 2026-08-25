@@ -12,6 +12,7 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/pkg/email"
+	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/queue/types"
 )
 
@@ -19,11 +20,8 @@ type SendEmailLogic struct {
 	deps Dependencies
 }
 
-func emailLogContent(emailType string, content map[string]interface{}) map[string]interface{} {
-	if emailType == types.EmailTypeVerify {
-		return map[string]interface{}{"redacted": true}
-	}
-	return content
+func emailLogContent(emailType string, _ map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{"redacted": true, "email_type": emailType}
 }
 
 func renderEmailTemplate(name, text string, data map[string]interface{}) (string, error) {
@@ -124,17 +122,21 @@ func (l *SendEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) erro
 	subject := resolveSubject(ctx, subjectTemplate, payload.Subject, payload.Content)
 	messageLog := log.Message{
 		Platform: l.deps.Email().Platform,
-		To:       payload.Email,
-		Subject:  subject,
-		Content:  emailLogContent(payload.Type, payload.Content),
+		To:       tool.MaskEmail(payload.Email),
+		// Subjects are operator-controlled templates and may interpolate names,
+		// addresses or one-time credentials. Keep only the notification type in
+		// the audit record; the actual subject is used solely for delivery.
+		Subject: payload.Type,
+		Content: emailLogContent(payload.Type, payload.Content),
 	}
 
 	err = sender.Send([]string{payload.Email}, subject, content)
 	if err != nil {
+		messageLog.Status = 2
 		logger.WithContext(ctx).Error("[SendEmailLogic] Send email failed", logger.Field("error", err.Error()))
-		return nil
+	} else {
+		messageLog.Status = 1
 	}
-	messageLog.Status = 1
 	emailLog, err := messageLog.Marshal()
 	if err != nil {
 		logger.WithContext(ctx).Error("[SendEmailLogic] Marshal message log failed",

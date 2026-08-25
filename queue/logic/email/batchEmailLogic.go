@@ -81,7 +81,8 @@ func (l *BatchEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) err
 		return asynq.SkipRetry
 	}
 
-	err = manager.RunWorker(ctx, taskID, l.deps.Store.Task(), sender)
+	err = manager.RunWorker(ctx, taskID, l.deps.Store.Task(), sender,
+		emailworker.WithMessageLogs(l.deps.Store.Log(), l.deps.Email().Platform))
 	if errors.Is(err, emailworker.ErrTaskNotActive) {
 		return nil
 	}

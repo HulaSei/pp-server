@@ -5,6 +5,7 @@ import (
 	adminCoupon "github.com/perfect-panel/server/internal/module/billing/transport/http/admin/coupon"
 	adminOrder "github.com/perfect-panel/server/internal/module/billing/transport/http/admin/order"
 	adminPayment "github.com/perfect-panel/server/internal/module/billing/transport/http/admin/payment"
+	adminWithdrawal "github.com/perfect-panel/server/internal/module/billing/transport/http/admin/withdrawal"
 	adminSubscribe "github.com/perfect-panel/server/internal/module/subscription/transport/http/admin/subscribe"
 )
 
@@ -34,6 +35,13 @@ func registerAdminPaymentRoutes(router *server.Hertz, deps Dependencies) {
 	group.DELETE("/", adminPayment.DeletePaymentMethodHandler(deps.Billing))
 	group.GET("/list", adminPayment.GetPaymentMethodListHandler(deps.Billing))
 	group.GET("/platform", adminPayment.GetPaymentPlatformHandler(deps.Billing))
+}
+
+func registerAdminWithdrawalRoutes(router *server.Hertz, deps Dependencies) {
+	group := router.Group("/v1/admin/withdrawal")
+	group.Use(deps.authMiddleware())
+	group.GET("/list", adminWithdrawal.GetWithdrawalListHandler(deps.Billing))
+	group.PUT("/status", adminWithdrawal.ReviewWithdrawalHandler(deps.Billing))
 }
 
 func registerAdminSubscribeRoutes(router *server.Hertz, deps Dependencies) {

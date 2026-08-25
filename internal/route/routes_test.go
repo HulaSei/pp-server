@@ -20,7 +20,7 @@ import (
 	"github.com/perfect-panel/server/pkg/xerr"
 )
 
-var routeHandlerName = regexp.MustCompile(`^(.*)\.([^.]+)\.([^.]+)\.func[0-9]+$`)
+var routeHandlerName = regexp.MustCompile(`^(.*)\.func[0-9]+$`)
 
 func TestRegisterHandlers_routeInventory(t *testing.T) {
 	// Given
@@ -49,8 +49,8 @@ func TestRegisterHandlers_routeInventory(t *testing.T) {
 	}
 
 	// Then
-	if len(routes) != 245 {
-		t.Fatalf("expected 245 routes, got %d", len(routes))
+	if len(routes) != 247 {
+		t.Fatalf("expected 247 routes, got %d", len(routes))
 	}
 	if !bytes.Equal([]byte(actual.String()), expected) {
 		t.Fatalf("route inventory differs from golden\nactual:\n%s", actual.String())
@@ -62,12 +62,13 @@ func normalizeRouteHandler(raw string, owners map[string]string) (string, error)
 	if matches == nil {
 		return "", errors.New("unsupported Hertz closure name")
 	}
-	key := matches[2] + "." + matches[3]
-	logicalHandler, ok := owners[key]
-	if !ok {
-		return "", errors.New("handler owner not found for " + key)
+	closureOwner := matches[1]
+	for key, logicalHandler := range owners {
+		if closureOwner == logicalHandler || strings.HasSuffix(closureOwner, "."+key) {
+			return logicalHandler, nil
+		}
 	}
-	return logicalHandler, nil
+	return "", errors.New("handler owner not found for " + closureOwner)
 }
 
 // routeHandlerOwners derives the logical handler owner from route source
@@ -162,7 +163,7 @@ func TestRegisterHandlers_configuredRoutes(t *testing.T) {
 	}{
 		{
 			name:           "empty-fallback",
-			wantRouteCount: 245,
+			wantRouteCount: 247,
 			present:        []string{"/v1/subscribe/config"},
 			absent:         []string{"/"},
 		},
@@ -171,7 +172,7 @@ func TestRegisterHandlers_configuredRoutes(t *testing.T) {
 			subscribe: appconfig.SubscribeConfig{
 				SubscribePath: "/custom/subscribe",
 			},
-			wantRouteCount: 245,
+			wantRouteCount: 247,
 			present:        []string{"/custom/subscribe"},
 			absent:         []string{"/v1/subscribe/config", "/"},
 		},
@@ -180,7 +181,7 @@ func TestRegisterHandlers_configuredRoutes(t *testing.T) {
 			subscribe: appconfig.SubscribeConfig{
 				PanDomain: false,
 			},
-			wantRouteCount: 245,
+			wantRouteCount: 247,
 			present:        []string{"/v1/subscribe/config"},
 			absent:         []string{"/"},
 		},
@@ -189,12 +190,12 @@ func TestRegisterHandlers_configuredRoutes(t *testing.T) {
 			subscribe: appconfig.SubscribeConfig{
 				PanDomain: true,
 			},
-			wantRouteCount: 246,
+			wantRouteCount: 248,
 			present:        []string{"/v1/subscribe/config", "/"},
 		},
 		{
 			name:           "edge-manifest-enabled",
-			wantRouteCount: 246,
+			wantRouteCount: 248,
 			present:        []string{"/v1/subscribe/config", "/api/edge/v1/manifest"},
 		},
 	}

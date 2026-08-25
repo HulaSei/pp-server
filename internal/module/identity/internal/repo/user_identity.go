@@ -70,6 +70,22 @@ func (m *UserRepo) FindOne(ctx context.Context, id int64) (*user.User, error) {
 	return &resp, err
 }
 
+// FindEnabledUserIDs is the batch account-state gate used by node hot paths.
+// GORM's default scope excludes soft-deleted users; the explicit enable
+// predicate keeps disabled accounts from retaining service credentials.
+func (m *UserRepo) FindEnabledUserIDs(ctx context.Context, ids []int64) ([]int64, error) {
+	result := make([]int64, 0)
+	if len(ids) == 0 {
+		return result, nil
+	}
+	err := m.QueryNoCacheCtx(ctx, &result, func(conn *gorm.DB, v interface{}) error {
+		return conn.Model(&user.User{}).
+			Where("id IN ? AND enable = ?", ids, true).
+			Pluck("id", v).Error
+	})
+	return result, err
+}
+
 func (m *UserRepo) FindOneForUpdate(ctx context.Context, id int64) (*user.User, error) {
 	var resp user.User
 	err := m.QueryNoCacheCtx(ctx, &resp, func(conn *gorm.DB, v interface{}) error {

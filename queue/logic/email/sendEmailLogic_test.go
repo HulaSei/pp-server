@@ -59,10 +59,10 @@ func TestEmailLogContentRedactsVerificationCode(t *testing.T) {
 	}
 }
 
-func TestEmailLogContentPreservesNonVerificationContent(t *testing.T) {
+func TestEmailLogContentRedactsNonVerificationContent(t *testing.T) {
 	content := map[string]interface{}{"message": "maintenance"}
 
-	if got := emailLogContent(types.EmailTypeMaintenance, content); got["message"] != "maintenance" {
+	if got := emailLogContent(types.EmailTypeMaintenance, content); got["redacted"] != true || got["email_type"] != types.EmailTypeMaintenance {
 		t.Fatalf("non-verification log content = %#v", got)
 	}
 }

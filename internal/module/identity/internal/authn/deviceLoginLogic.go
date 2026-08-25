@@ -104,6 +104,12 @@ func (l *DeviceLoginLogic) DeviceLogin(req *dto.DeviceLoginRequest) (resp *dto.L
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "query user failed: %v", err.Error())
 		}
 	}
+	if userInfo.DeletedAt.Valid {
+		return nil, errors.Wrap(xerr.NewErrCode(xerr.UserNotExist), "user account does not exist")
+	}
+	if userInfo.Enable == nil || !*userInfo.Enable {
+		return nil, errors.Wrap(xerr.NewErrCode(xerr.UserDisabled), "user account is disabled")
+	}
 
 	// Generate session id
 	sessionId := uuidx.NewUUID().String()

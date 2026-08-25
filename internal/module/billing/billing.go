@@ -97,6 +97,8 @@ type Service interface {
 	QueryUserBalanceLog(ctx context.Context) (*dto.QueryUserBalanceLogListResponse, error)
 	QueryUserCommissionLog(ctx context.Context, req *dto.QueryUserCommissionLogListRequest) (*dto.QueryUserCommissionLogListResponse, error)
 	QueryWithdrawalLog(ctx context.Context, req *dto.QueryWithdrawalLogListRequest) (*dto.QueryWithdrawalLogListResponse, error)
+	GetWithdrawalList(ctx context.Context, req *dto.GetWithdrawalListRequest) (*dto.GetWithdrawalListResponse, error)
+	ReviewWithdrawal(ctx context.Context, req *dto.ReviewWithdrawalRequest) error
 	QueryUserAffiliate(ctx context.Context) (*dto.QueryUserAffiliateCountResponse, error)
 	QueryUserAffiliateList(ctx context.Context, req *dto.QueryUserAffiliateListRequest) (*dto.QueryUserAffiliateListResponse, error)
 
@@ -184,11 +186,12 @@ type OrderQueue interface {
 // migration and will own its persistence once the domain data moves in
 // (ADR-001 step 5).
 type Deps struct {
-	Orders   repository.OrderRepo
-	Payments repository.PaymentRepo
-	Coupons  repository.CouponRepo
-	Plans    PlanReader
-	UserSubs UserSubscriptionReader
+	Orders      repository.OrderRepo
+	Payments    repository.PaymentRepo
+	Coupons     repository.CouponRepo
+	Withdrawals repository.UserWithdrawalRepo
+	Plans       PlanReader
+	UserSubs    UserSubscriptionReader
 	// Store carries the scoped transactions, wallet view and inbox the
 	// checkout/portal subdomains need; it narrows further when modules own
 	// their persistence (ADR-001 step 6).
@@ -290,6 +293,7 @@ func New(deps Deps) Service {
 		}),
 		wallet: wallet.NewService(wallet.Deps{
 			Logs:        deps.Logs,
+			Withdrawals: deps.Withdrawals,
 			Cache:       deps.UserCache,
 			Affiliates:  deps.Affiliates,
 			AuthMethods: deps.AuthMethods,
@@ -484,6 +488,14 @@ func (s *service) QueryUserCommissionLog(ctx context.Context, req *dto.QueryUser
 
 func (s *service) QueryWithdrawalLog(ctx context.Context, req *dto.QueryWithdrawalLogListRequest) (*dto.QueryWithdrawalLogListResponse, error) {
 	return s.wallet.QueryWithdrawalLog(ctx, req)
+}
+
+func (s *service) GetWithdrawalList(ctx context.Context, req *dto.GetWithdrawalListRequest) (*dto.GetWithdrawalListResponse, error) {
+	return s.wallet.GetWithdrawalList(ctx, req)
+}
+
+func (s *service) ReviewWithdrawal(ctx context.Context, req *dto.ReviewWithdrawalRequest) error {
+	return s.wallet.ReviewWithdrawal(ctx, req)
 }
 
 func (s *service) QueryUserAffiliate(ctx context.Context) (*dto.QueryUserAffiliateCountResponse, error) {

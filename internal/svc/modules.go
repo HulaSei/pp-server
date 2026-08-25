@@ -43,6 +43,7 @@ func newBillingModule(c config.Config, store repository.Store, queue *asynqx.Cli
 		Orders:        store.Order(),
 		Payments:      store.Payment(),
 		Coupons:       store.Coupon(),
+		Withdrawals:   store.UserWithdrawal(),
 		Plans:         store.Subscribe(),
 		UserSubs:      store.UserSubscription(),
 		Store:         store,

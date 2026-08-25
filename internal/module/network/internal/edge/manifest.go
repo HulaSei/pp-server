@@ -60,7 +60,7 @@ func (l *ManifestLogic) Manifest(token string) (*dto.EdgeManifestResponse, error
 		}
 		return nil, err
 	}
-	if account == nil || account.Enable == nil || !*account.Enable {
+	if account == nil || account.DeletedAt.Valid || account.Enable == nil || !*account.Enable {
 		return nil, ErrManifestNotFound
 	}
 	plan, err := l.deps.Store.Subscribe().FindOne(l.ctx, userSubscribe.SubscribeId)

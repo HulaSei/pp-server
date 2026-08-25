@@ -101,12 +101,12 @@ func AuthenticateRequest(ctx context.Context, deps AuthDeps, token string, path 
 	}
 
 	// Check if user is enabled
-	if !*userInfo.Enable {
+	if userInfo.Enable == nil || !*userInfo.Enable {
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.UserDisabled), "User Disabled")
 	}
 
 	paths := strings.Split(path, "/")
-	if tool.StringSliceContains(paths, "admin") && !*userInfo.IsAdmin {
+	if tool.StringSliceContains(paths, "admin") && (userInfo.IsAdmin == nil || !*userInfo.IsAdmin) {
 		logger.WithContext(ctx).Debug("[AuthMiddleware] Not Admin User", logger.Field("userId", userId), logger.Field("sessionId", sessionId))
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
 	}

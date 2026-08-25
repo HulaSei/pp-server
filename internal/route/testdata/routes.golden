@@ -37,6 +37,7 @@ GET /v1/admin/marketing/quota/list github.com/perfect-panel/server/internal/modu
 GET /v1/admin/order/list github.com/perfect-panel/server/internal/module/billing/transport/http/admin/order.GetOrderListHandler
 GET /v1/admin/payment/list github.com/perfect-panel/server/internal/module/billing/transport/http/admin/payment.GetPaymentMethodListHandler
 GET /v1/admin/payment/platform github.com/perfect-panel/server/internal/module/billing/transport/http/admin/payment.GetPaymentPlatformHandler
+GET /v1/admin/withdrawal/list github.com/perfect-panel/server/internal/module/billing/transport/http/admin/withdrawal.GetWithdrawalListHandler
 GET /v1/admin/server/list github.com/perfect-panel/server/internal/module/network/transport/http/admin/server.FilterServerListHandler
 GET /v1/admin/server/node/list github.com/perfect-panel/server/internal/module/network/transport/http/admin/server.FilterNodeListHandler
 GET /v1/admin/server/node/tags github.com/perfect-panel/server/internal/module/network/transport/http/admin/server.QueryNodeTagHandler
@@ -198,6 +199,7 @@ PUT /v1/admin/coupon/ github.com/perfect-panel/server/internal/module/billing/tr
 PUT /v1/admin/document/ github.com/perfect-panel/server/internal/module/support/transport/http/admin/document.UpdateDocumentHandler
 PUT /v1/admin/order/status github.com/perfect-panel/server/internal/module/billing/transport/http/admin/order.UpdateOrderStatusHandler
 PUT /v1/admin/payment/ github.com/perfect-panel/server/internal/module/billing/transport/http/admin/payment.UpdatePaymentMethodHandler
+PUT /v1/admin/withdrawal/status github.com/perfect-panel/server/internal/module/billing/transport/http/admin/withdrawal.ReviewWithdrawalHandler
 PUT /v1/admin/subscribe/ github.com/perfect-panel/server/internal/module/subscription/transport/http/admin/subscribe.UpdateSubscribeHandler
 PUT /v1/admin/subscribe/group github.com/perfect-panel/server/internal/module/subscription/transport/http/admin/subscribe.UpdateSubscribeGroupHandler
 PUT /v1/admin/system/currency_config github.com/perfect-panel/server/internal/module/platform/transport/http/admin/system.UpdateCurrencyConfigHandler

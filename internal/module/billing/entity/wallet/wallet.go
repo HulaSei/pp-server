@@ -29,6 +29,12 @@ type Withdrawal struct {
 	UpdatedAt time.Time `gorm:"comment:Update Time"`
 }
 
+const (
+	WithdrawalStatusPending uint8 = iota
+	WithdrawalStatusApproved
+	WithdrawalStatusRejected
+)
+
 func (*Withdrawal) TableName() string {
-	return "user_withdrawal"
+	return "withdrawals"
 }

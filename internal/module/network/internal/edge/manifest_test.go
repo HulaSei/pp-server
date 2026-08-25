@@ -1,12 +1,44 @@
 package edge
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
+	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
+	"github.com/perfect-panel/server/internal/repository"
+	"gorm.io/gorm"
 )
+
+type edgeManifestUserSubs struct {
+	repository.UserSubscriptionRepo
+	sub *usersub.Subscribe
+}
+
+func (r edgeManifestUserSubs) FindOneSubscribeByToken(context.Context, string) (*usersub.Subscribe, error) {
+	return r.sub, nil
+}
+
+type edgeManifestUsers struct {
+	repository.UserRepo
+	user *userEntity.User
+}
+
+func (r edgeManifestUsers) FindOne(context.Context, int64) (*userEntity.User, error) {
+	return r.user, nil
+}
+
+type edgeManifestStore struct {
+	repository.Store
+	userSubs repository.UserSubscriptionRepo
+	users    repository.UserRepo
+}
+
+func (s edgeManifestStore) UserSubscription() repository.UserSubscriptionRepo { return s.userSubs }
+func (s edgeManifestStore) User() repository.UserRepo                         { return s.users }
 
 func TestProxyFromProtocol(t *testing.T) {
 	item := &node.Node{Id: 7, Name: "Tokyo", Address: "jp.example.com", Port: 443, Protocol: "vless", Tags: "asia, premium", Sort: 3}
@@ -61,5 +93,20 @@ func TestSubscriptionState(t *testing.T) {
 	}
 	if state := subscriptionState(&usersub.Subscribe{Status: 255}, now); state != "disabled" {
 		t.Fatalf("expected unknown status to be disabled, got %q", state)
+	}
+}
+
+func TestManifestHidesDeletedAccount(t *testing.T) {
+	enabled := true
+	store := edgeManifestStore{
+		userSubs: edgeManifestUserSubs{sub: &usersub.Subscribe{UserId: 9}},
+		users: edgeManifestUsers{user: &userEntity.User{
+			Id: 9, Enable: &enabled, DeletedAt: gorm.DeletedAt{Valid: true},
+		}},
+	}
+	logic := newManifestLogic(context.Background(), Deps{Store: store})
+
+	if _, err := logic.Manifest("deleted-user-token"); !errors.Is(err, ErrManifestNotFound) {
+		t.Fatalf("Manifest error = %v, want ErrManifestNotFound", err)
 	}
 }

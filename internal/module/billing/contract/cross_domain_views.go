@@ -28,7 +28,7 @@ type BillingCommissionLogSnapshot struct {
 
 type CommissionWithdrawRequest struct {
 	Amount  int64  `json:"amount" validate:"required,gt=0,lte=2000000000"`
-	Content string `json:"content"`
+	Content string `json:"content" validate:"required,max=4000"`
 }
 
 type GetSubscriptionRequest struct {
@@ -77,6 +77,24 @@ type QueryWithdrawalLogListRequest struct {
 type QueryWithdrawalLogListResponse struct {
 	List  []WithdrawalLog `json:"list"`
 	Total int64           `json:"total"`
+}
+
+type GetWithdrawalListRequest struct {
+	Page   int    `form:"page" validate:"required,gt=0"`
+	Size   int    `form:"size" validate:"required,gt=0,lte=100"`
+	UserId int64  `form:"user_id,omitempty" validate:"omitempty,gt=0"`
+	Status *uint8 `form:"status,omitempty" validate:"omitempty,oneof=0 1 2"`
+}
+
+type GetWithdrawalListResponse struct {
+	List  []WithdrawalLog `json:"list"`
+	Total int64           `json:"total"`
+}
+
+type ReviewWithdrawalRequest struct {
+	Id     int64  `json:"id" validate:"required,gt=0"`
+	Status uint8  `json:"status" validate:"oneof=1 2"`
+	Reason string `json:"reason,omitempty" validate:"omitempty,max=500"`
 }
 
 type BillingNodeIDList []int64 // @name dto.StringInt64Slice

@@ -9,6 +9,7 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
+	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/uuidx"
@@ -151,7 +152,11 @@ func (l *GetServerUserListLogic) GetServerUserList(req *dto.GetServerUserListReq
 		}
 		return l.storeUserListResponse(req.ServerId, generation, cacheKey, resp)
 	}
-	users := make([]dto.ServerUser, 0)
+	type candidate struct {
+		userSub *usersub.Subscribe
+		plan    *subscribe.Subscribe
+	}
+	candidates := make([]candidate, 0)
 	for _, sub := range subs {
 		if err := l.deps.Store.UserSubscription().ActivatePendingSubscribesBySubscribeId(l.ctx, sub.Id); err != nil {
 			return nil, err
@@ -161,13 +166,30 @@ func (l *GetServerUserListLogic) GetServerUserList(req *dto.GetServerUserListReq
 			return nil, err
 		}
 		for _, datum := range data {
-			users = append(users, dto.ServerUser{
-				Id:          datum.Id,
-				UUID:        datum.UUID,
-				SpeedLimit:  sub.SpeedLimit,
-				DeviceLimit: sub.DeviceLimit,
-			})
+			candidates = append(candidates, candidate{userSub: datum, plan: sub})
 		}
+	}
+	userIDs := make([]int64, 0, len(candidates))
+	for _, item := range candidates {
+		userIDs = append(userIDs, item.userSub.UserId)
+	}
+	enabledIDs, err := l.deps.Store.User().FindEnabledUserIDs(l.ctx, tool.RemoveDuplicateElements(userIDs...))
+	if err != nil {
+		return nil, err
+	}
+	enabled := make(map[int64]struct{}, len(enabledIDs))
+	for _, id := range enabledIDs {
+		enabled[id] = struct{}{}
+	}
+	users := make([]dto.ServerUser, 0, len(candidates))
+	for _, item := range candidates {
+		if _, ok := enabled[item.userSub.UserId]; !ok {
+			continue
+		}
+		users = append(users, dto.ServerUser{
+			Id: item.userSub.Id, UUID: item.userSub.UUID,
+			SpeedLimit: item.plan.SpeedLimit, DeviceLimit: item.plan.DeviceLimit,
+		})
 	}
 	if len(users) == 0 {
 		users = append(users, placeholderServerUser(req.ServerId, req.Protocol, l.deps.Config().Node.NodeSecret))

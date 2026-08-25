@@ -28,9 +28,10 @@ type GetTosResponse struct {
 }
 
 type InviteConfig struct {
-	ForcedInvite       bool  `json:"forced_invite"`
-	ReferralPercentage int64 `json:"referral_percentage"`
-	OnlyFirstPurchase  bool  `json:"only_first_purchase"`
+	ForcedInvite       bool   `json:"forced_invite"`
+	ReferralPercentage int64  `json:"referral_percentage"`
+	OnlyFirstPurchase  bool   `json:"only_first_purchase"`
+	WithdrawalMethod   string `json:"withdrawal_method"`
 }
 
 type ModuleConfig struct {

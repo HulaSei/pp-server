@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/module/platform/entity/task"
 	emailpkg "github.com/perfect-panel/server/pkg/email"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -33,14 +34,35 @@ func (e *DailyLimitReached) Error() string {
 }
 
 type Worker struct {
-	id     int64
-	tasks  TaskStore
-	ctx    context.Context
-	sender emailpkg.Sender
+	id       int64
+	tasks    TaskStore
+	ctx      context.Context
+	sender   emailpkg.Sender
+	logs     MessageLogStore
+	platform string
 }
 
-func NewWorker(ctx context.Context, id int64, tasks TaskStore, sender emailpkg.Sender) *Worker {
-	return &Worker{id: id, tasks: tasks, ctx: ctx, sender: sender}
+type WorkerOption func(*Worker)
+
+type MessageLogStore interface {
+	Insert(ctx context.Context, data *logEntity.SystemLog) error
+}
+
+func WithMessageLogs(logs MessageLogStore, platform string) WorkerOption {
+	return func(worker *Worker) {
+		worker.logs = logs
+		worker.platform = platform
+	}
+}
+
+func NewWorker(ctx context.Context, id int64, tasks TaskStore, sender emailpkg.Sender, options ...WorkerOption) *Worker {
+	worker := &Worker{id: id, tasks: tasks, ctx: ctx, sender: sender}
+	for _, option := range options {
+		if option != nil {
+			option(worker)
+		}
+	}
+	return worker
 }
 
 func (w *Worker) GetID() int64 { return w.id }
@@ -120,6 +142,7 @@ func (w *Worker) Start() error {
 			text, _ := json.Marshal(sendErrors)
 			taskInfo.Errors = string(text)
 		}
+		w.recordMessage(recipient, sendErr == nil)
 		taskInfo.Current = uint64(index + 1)
 		scope.DailySent++
 		if err := w.persist(taskInfo, &scope); err != nil {
@@ -149,6 +172,31 @@ func (w *Worker) Start() error {
 	}
 	logger.Info("Batch Send Email", logger.Field("message", "Task completed"), logger.Field("task_id", w.id), logger.Field("total_attempted", taskInfo.Current))
 	return nil
+}
+
+func (w *Worker) recordMessage(recipient string, sent bool) {
+	if w.logs == nil {
+		return
+	}
+	status := uint8(2)
+	if sent {
+		status = 1
+	}
+	message := logEntity.Message{
+		To: tool.MaskEmail(recipient), Subject: "custom", Platform: w.platform,
+		Content: map[string]interface{}{"redacted": true, "email_type": "custom", "batch_task_id": w.id},
+		Status:  status,
+	}
+	content, err := message.Marshal()
+	if err != nil {
+		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to marshal email log"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
+		return
+	}
+	if err := w.logs.Insert(w.ctx, &logEntity.SystemLog{
+		Type: logEntity.TypeEmailMessage.Uint8(), Date: timeutil.Now().Format("2006-01-02"), Content: string(content),
+	}); err != nil {
+		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to insert email log"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
+	}
 }
 
 func (w *Worker) send(recipient string, content task.EmailContent) error {

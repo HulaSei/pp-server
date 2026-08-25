@@ -95,6 +95,12 @@ func (l *OAuthLoginGetTokenLogic) OAuthLoginGetToken(req *dto.OAuthLoginGetToken
 	if err != nil {
 		return nil, err
 	}
+	if userInfo.DeletedAt.Valid {
+		return nil, errors.Wrap(xerr.NewErrCode(xerr.UserNotExist), "user account does not exist")
+	}
+	if userInfo.Enable == nil || !*userInfo.Enable {
+		return nil, errors.Wrap(xerr.NewErrCode(xerr.UserDisabled), "user account is disabled")
+	}
 
 	token, err := l.generateToken(userInfo, requestID)
 	if err != nil {
