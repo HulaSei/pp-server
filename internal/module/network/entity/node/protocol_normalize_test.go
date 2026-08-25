@@ -441,6 +441,29 @@ func TestSanitizeProtocolsForNodeDistributionFiltersIncompleteTLS(t *testing.T) 
 	}
 }
 
+func TestSanitizeProtocolsForNodeDistributionClearsSubscriptionECH(t *testing.T) {
+	input := Protocol{
+		Type: "vless", Port: 443, Enable: true, Security: "tls",
+		SNI: "node.example", CertMode: "http",
+		EchEnable: true, EchServerName: "ech.example",
+	}
+	stored, err := NormalizeProtocolForStorage(input)
+	if err != nil {
+		t.Fatalf("NormalizeProtocolForStorage() error = %v", err)
+	}
+	if !stored.EchEnable || stored.EchServerName != "ech.example" {
+		t.Fatalf("storage normalization discarded subscription ECH fields: %#v", stored)
+	}
+
+	protocols := SanitizeProtocolsForNodeDistribution([]Protocol{input})
+	if len(protocols) != 1 {
+		t.Fatalf("SanitizeProtocolsForNodeDistribution() len = %d, want 1", len(protocols))
+	}
+	if protocols[0].EchEnable || protocols[0].EchServerName != "" {
+		t.Fatalf("node distribution leaked subscription ECH fields: %#v", protocols[0])
+	}
+}
+
 func TestSanitizeProtocolsForNodeDistributionCleansHysteria2Alias(t *testing.T) {
 	protocols := SanitizeProtocolsForNodeDistribution([]Protocol{{
 		Type:                 "hysteria2",

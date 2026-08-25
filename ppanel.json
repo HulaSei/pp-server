@@ -14516,11 +14516,11 @@
                     "type": "integer"
                 },
                 "ech_enable": {
-                    "description": "TLS ECH 兼容字段：是否启用 Encrypted ClientHello；当前节点入站尚未实现。",
+                    "description": "订阅客户端字段：是否启用 Encrypted ClientHello；节点配置下发时会过滤。",
                     "type": "boolean"
                 },
                 "ech_server_name": {
-                    "description": "TLS ECH 兼容字段：ECH 外层 ServerName；当前节点入站尚未实现。",
+                    "description": "订阅客户端字段：ECH 外层 ServerName；节点配置下发时会过滤。",
                     "type": "string"
                 },
                 "enable": {

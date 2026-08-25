@@ -200,9 +200,9 @@ type Protocol struct {
 	EncryptionClientPadding string `json:"encryption_client_padding,omitempty"`
 	// VLESS Encryption 客户端信息字段：1-RTT/派生认证密码，用于订阅输出。
 	EncryptionPassword string `json:"encryption_password,omitempty"`
-	// TLS ECH 兼容字段：是否启用 Encrypted ClientHello；当前节点入站尚未实现。
+	// 订阅客户端字段：是否启用 Encrypted ClientHello；节点配置下发时会过滤。
 	EchEnable bool `json:"ech_enable,omitempty"`
-	// TLS ECH 兼容字段：ECH 外层 ServerName；当前节点入站尚未实现。
+	// 订阅客户端字段：ECH 外层 ServerName；节点配置下发时会过滤。
 	EchServerName string `json:"ech_server_name,omitempty"`
 	// 面板通用字段：流量计费倍率，默认值为 1；不参与节点协议握手。
 	Ratio float64 `json:"ratio,omitempty"`

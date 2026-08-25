@@ -47,6 +47,10 @@ func SanitizeProtocolsForNodeDistribution(protocols []Protocol) []Protocol {
 		if err != nil || !protocol.Enable {
 			continue
 		}
+		// ECH config is consumed only by subscription clients. Nodes receive the
+		// inbound runtime projection and must not see client-only ECH settings.
+		protocol.EchEnable = false
+		protocol.EchServerName = ""
 		if sanitizeRuntimeProtocol(&protocol) {
 			result = append(result, protocol)
 		}
