@@ -13,6 +13,7 @@ const (
 	Naive        = "naive"
 	Snell        = "snell"
 	Hysteria     = "hysteria"
+	Nowhere      = "nowhere"
 	// Deprecated: Hysteria2 is deprecated, use Hysteria instead
 	// TODO: remove in future versions
 	Hysteria2 = "hysteria2"

@@ -78,11 +78,11 @@ type GetUserSubscribeTrafficLogsResponse struct {
 }
 
 type SubscriptionProtocolSnapshot struct {
-	// 通用字段：协议类型标识，例如 shadowsocks、vless、vmess、hysteria2、tuic。
+	// 通用字段：协议类型标识，例如 shadowsocks、vless、vmess、hysteria2、tuic、nowhere。
 	Type string `json:"type"`
 	// 通用字段：入站监听端口。
 	Port uint16 `json:"port"`
-	// Snell/TUIC 共用字段：Snell 使用协议版本；TUIC 仅接受 5（0 表示默认）。
+	// 版本字段：Snell 接受 5/6，TUIC 接受 5，Nowhere 接受 1；0 表示使用协议默认值。
 	Version int `json:"version,omitempty"`
 	// Snell 专属字段：Snell v6 的工作模式；其他协议不应设置。
 	Mode string `json:"mode,omitempty"`
@@ -90,11 +90,11 @@ type SubscriptionProtocolSnapshot struct {
 	Enable bool `json:"enable"`
 	// TLS/REALITY 协议通用字段：选择 none、tls 或 reality；实际可选值由具体协议限制。
 	Security string `json:"security,omitempty"`
-	// 监听网络通用字段：选择 tcp、udp 或 both；Naive、Mieru、SSR、TUIC、Snell 等协议会按各自能力校验。
+	// 监听网络通用字段：选择 tcp、udp 或 both；Nowhere 规范化为 mix、tcp 或 udp，其他协议按各自能力校验。
 	Network string `json:"network,omitempty"`
 	// TLS 协议通用字段：证书域名及 TLS ServerName；REALITY 也用它作为服务端名称。
 	SNI string `json:"sni,omitempty"`
-	// TLS/HTTP/QUIC 协议通用字段：TLS ALPN 列表，当前主要用于 VLESS、VMess、Trojan、TUIC。
+	// TLS/HTTP/QUIC 协议通用字段：TLS ALPN 列表；Nowhere 必须且只能设置一个值，默认 now/1。
 	ALPN []string `json:"alpn,omitempty"`
 	// TLS 客户端兼容字段：允许跳过证书校验；入站配置通常不消费，不能作为服务端证书配置使用。
 	AllowInsecure bool `json:"allow_insecure,omitempty"`

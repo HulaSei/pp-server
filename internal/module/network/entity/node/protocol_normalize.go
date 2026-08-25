@@ -13,6 +13,14 @@ func NormalizeProtocolForStorage(protocol Protocol) (Protocol, error) {
 	if !supportedRuntimeProtocol(protocol.Type) {
 		return Protocol{}, fmt.Errorf("unsupported protocol type: %s", protocol.Type)
 	}
+	// Common cleanup intentionally discards fields that are irrelevant to most
+	// protocols. Nowhere's contract is stricter: enabled configs carrying any
+	// unrelated option must be rejected rather than accepted after cleanup.
+	if protocol.Type == "nowhere" && protocol.Enable {
+		if err := validateNowhereUnsupportedOptions(protocol); err != nil {
+			return Protocol{}, err
+		}
+	}
 	normalizeProtocolNoopFields(&protocol)
 	normalizeProtocolPluginName(&protocol)
 	if protocol.Enable {
@@ -59,7 +67,7 @@ func normalizeProtocolType(raw string) string {
 
 func supportedRuntimeProtocol(protocol string) bool {
 	switch protocol {
-	case "shadowsocks", "shadowsocksr", "mieru", "hysteria", "anytls", "trojan", "vless", "vmess", "naive", "snell", "tuic":
+	case "shadowsocks", "shadowsocksr", "mieru", "hysteria", "anytls", "trojan", "vless", "vmess", "naive", "snell", "tuic", "nowhere":
 		return true
 	default:
 		return false
@@ -190,6 +198,12 @@ func sanitizeRuntimeProtocol(protocol *Protocol) bool {
 			protocol.Obfs = ""
 		}
 		return protocol.Port > 0 && (protocol.Version == 5 || protocol.Version == 6)
+	case "nowhere":
+		protocol.Security = "tls"
+		clearTLSClient(protocol)
+		clearReality(protocol)
+		clearNowhereUnsupported(protocol)
+		return protocol.Port > 0 && protocol.Version == 1 && hasTLSCertificate(*protocol) && len(protocol.ALPN) == 1
 	case "hysteria":
 		protocol.Security = "tls"
 		// The node rejects a multiplex value on QUIC inbounds.
@@ -277,6 +291,38 @@ func sanitizeRuntimeProtocol(protocol *Protocol) bool {
 
 func validateRuntimeProtocol(protocol *Protocol) error {
 	switch protocol.Type {
+	case "nowhere":
+		if protocol.Port == 0 {
+			return fmt.Errorf("nowhere requires a non-zero port")
+		}
+		if protocol.Security != "tls" {
+			return fmt.Errorf("nowhere requires tls security")
+		}
+		if protocol.Version == 0 {
+			protocol.Version = 1
+		}
+		if protocol.Version != 1 {
+			return fmt.Errorf("nowhere requires version 1")
+		}
+		network, err := normalizeNowhereNetwork(protocol.Network)
+		if err != nil {
+			return err
+		}
+		protocol.Network = network
+		if len(protocol.ALPN) == 0 {
+			protocol.ALPN = []string{"now/1"}
+		}
+		if len(protocol.ALPN) != 1 {
+			return fmt.Errorf("nowhere requires exactly one alpn value")
+		}
+		protocol.ALPN[0] = strings.TrimSpace(protocol.ALPN[0])
+		if len(protocol.ALPN[0]) == 0 || len(protocol.ALPN[0]) > 255 {
+			return fmt.Errorf("nowhere alpn must be between 1 and 255 bytes")
+		}
+		protocol.SNI = strings.TrimSpace(protocol.SNI)
+		if err := validateNowhereUnsupportedOptions(*protocol); err != nil {
+			return err
+		}
 	case "hysteria", "naive", "tuic":
 		if protocol.Security != "tls" {
 			return fmt.Errorf("%s requires tls security", protocol.Type)
@@ -381,6 +427,42 @@ func validateRuntimeProtocol(protocol *Protocol) error {
 		if err := validateShadowsocksPlugin(protocol); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+func normalizeNowhereNetwork(raw string) (string, error) {
+	value := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(raw), " ", ""))
+	switch value {
+	case "", "mix", "mixed", "both", "tcp,udp", "udp,tcp", "tcp+udp", "udp+tcp":
+		return "mix", nil
+	case "tcp":
+		return "tcp", nil
+	case "udp", "quic":
+		return "udp", nil
+	default:
+		return "", fmt.Errorf("nowhere network must be mix, tcp, or udp")
+	}
+}
+
+func validateNowhereUnsupportedOptions(protocol Protocol) error {
+	if protocol.Mode != "" || protocol.AllowInsecure || protocol.Fingerprint != "" ||
+		protocol.RealityServerAddr != "" || protocol.RealityServerPort != 0 || protocol.RealityPrivateKey != "" ||
+		protocol.RealityPublicKey != "" || protocol.RealityShortId != "" || protocol.Transport != "" ||
+		protocol.Host != "" || protocol.Path != "" || protocol.ServiceName != "" || protocol.Cipher != "" ||
+		protocol.ServerKey != "" || protocol.Plugin != "" || protocol.PluginOptions != nil || protocol.Flow != "" ||
+		protocol.UoT || protocol.UoTVersion != 0 || protocol.AcceptProxyProtocol || protocol.HopPorts != "" ||
+		protocol.HopInterval != 0 || protocol.ObfsPassword != "" || protocol.DisableSNI || protocol.ReduceRtt ||
+		protocol.Heartbeat != 0 || protocol.UDPRelayMode != "" || protocol.CongestionController != "" ||
+		protocol.QUICCongestionControl != "" || protocol.Multiplex != "" || protocol.PaddingScheme != "" ||
+		protocol.TrafficPattern != "" || protocol.UserHintIsMandatory || protocol.UpMbps != 0 || protocol.DownMbps != 0 ||
+		protocol.Obfs != "" || protocol.SSRProtocol != "" || protocol.ProtocolParam != "" || protocol.ObfsParam != "" ||
+		protocol.ObfsHost != "" || protocol.ObfsPath != "" || protocol.XhttpMode != "" || protocol.XhttpExtra != "" ||
+		protocol.Encryption != "" || protocol.EncryptionMode != "" || protocol.EncryptionRtt != "" ||
+		protocol.EncryptionTicket != "" || protocol.EncryptionServerPadding != "" ||
+		protocol.EncryptionPrivateKey != "" || protocol.EncryptionClientPadding != "" ||
+		protocol.EncryptionPassword != "" || protocol.EchEnable || protocol.EchServerName != "" {
+		return fmt.Errorf("nowhere contains unsupported protocol options")
 	}
 	return nil
 }
@@ -881,7 +963,7 @@ func protocolRequiresTLSCertificate(protocol Protocol) bool {
 		return false
 	}
 	switch protocol.Type {
-	case "anytls", "hysteria", "naive", "trojan", "tuic", "vless", "vmess":
+	case "anytls", "hysteria", "naive", "nowhere", "trojan", "tuic", "vless", "vmess":
 		return true
 	default:
 		return false
@@ -910,6 +992,34 @@ func clearReality(protocol *Protocol) {
 	protocol.RealityPrivateKey = ""
 	protocol.RealityPublicKey = ""
 	protocol.RealityShortId = ""
+}
+
+func clearNowhereUnsupported(protocol *Protocol) {
+	protocol.Mode = ""
+	protocol.Cipher = ""
+	protocol.ServerKey = ""
+	protocol.Plugin = ""
+	protocol.PluginOptions = nil
+	protocol.Flow = ""
+	protocol.UoT = false
+	protocol.UoTVersion = 0
+	protocol.AcceptProxyProtocol = false
+	protocol.DisableSNI = false
+	protocol.Multiplex = ""
+	protocol.TrafficPattern = ""
+	protocol.UserHintIsMandatory = false
+	protocol.UpMbps = 0
+	protocol.DownMbps = 0
+	protocol.SSRProtocol = ""
+	protocol.ProtocolParam = ""
+	protocol.ObfsParam = ""
+	protocol.Encryption = ""
+	protocol.EchEnable = false
+	protocol.EchServerName = ""
+	clearStreamTransport(protocol)
+	clearLegacyObfs(protocol)
+	clearQUICControls(protocol)
+	clearEncryption(protocol)
 }
 
 func clearStreamTransport(protocol *Protocol) {

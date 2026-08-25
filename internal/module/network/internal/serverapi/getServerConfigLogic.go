@@ -78,14 +78,19 @@ func (l *GetServerConfigLogic) GetServerConfig(req *dto.GetServerConfigRequest) 
 		return nil, err
 	}
 	var cfg map[string]interface{}
+	matched := false
 	for _, protocol := range protocols {
 		if protocol.Enable && protocol.Type == protocolRequest {
+			matched = true
 			cfg = l.compatible(protocol)
 			break
 		}
 	}
 
 	if cfg == nil {
+		if matched {
+			return nil, fmt.Errorf("protocol %s is not supported by the legacy server config endpoint; use /v2/server/{server_id}", req.Protocol)
+		}
 		return nil, fmt.Errorf("protocol %s not found or disabled", req.Protocol)
 	}
 

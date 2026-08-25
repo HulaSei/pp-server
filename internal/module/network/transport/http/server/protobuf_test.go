@@ -162,16 +162,22 @@ func TestResponseConversions(t *testing.T) {
 		Outbound: []dto.NodeOutbound{{
 			Name: "direct", Protocol: "shadowsocks", Port: 443, PluginOptions: "mode=fast",
 		}},
-		Protocols: []dto.Protocol{{
-			Type: "vless", Port: 443, Enable: true, Transport: "xhttp", XhttpMode: "auto",
-			PluginOptions: map[string]string{"host": "example.com"},
-		}},
-		Total: 1,
+		Protocols: []dto.Protocol{
+			{
+				Type: "vless", Port: 443, Enable: true, Transport: "xhttp", XhttpMode: "auto",
+				PluginOptions: map[string]string{"host": "example.com"},
+			},
+			{
+				Type: "nowhere", Port: 8443, Version: 1, Enable: true, Security: "tls", Network: "mix",
+				SNI: "nowhere.example", ALPN: []string{"now/1"}, CertMode: "self",
+			},
+		},
+		Total: 2,
 	})
 	if err != nil {
 		t.Fatalf("queryServerProtocolConfigResponseToProtobuf() error = %v", err)
 	}
-	if protocols.Code != 200 || protocols.Data.Total != 1 || protocols.Data.IpStrategy != "prefer_ipv4" {
+	if protocols.Code != 200 || protocols.Data.Total != 2 || protocols.Data.IpStrategy != "prefer_ipv4" {
 		t.Fatalf("protocols = %+v, want protobuf protocol-config envelope", protocols)
 	}
 	if len(protocols.Data.Dns) != 1 || protocols.Data.Dns[0].Address != "https://dns.example/dns-query" {
@@ -180,8 +186,14 @@ func TestResponseConversions(t *testing.T) {
 	if len(protocols.Data.Outbound) != 1 || protocols.Data.Outbound[0].PluginOptions.GetStringValue() != "mode=fast" {
 		t.Fatalf("outbound = %+v, want strongly typed outbound configuration", protocols.Data.Outbound)
 	}
-	if len(protocols.Data.Protocols) != 1 || protocols.Data.Protocols[0].XhttpMode != "auto" || protocols.Data.Protocols[0].PluginOptions.GetStructValue().Fields["host"].GetStringValue() != "example.com" {
+	if len(protocols.Data.Protocols) != 2 || protocols.Data.Protocols[0].XhttpMode != "auto" || protocols.Data.Protocols[0].PluginOptions.GetStructValue().Fields["host"].GetStringValue() != "example.com" {
 		t.Fatalf("protocols = %+v, want strongly typed protocol configuration", protocols.Data.Protocols)
+	}
+	nowhere := protocols.Data.Protocols[1]
+	if nowhere.Type != "nowhere" || nowhere.Port != 8443 || nowhere.Version != 1 ||
+		nowhere.Security != "tls" || nowhere.Network != "mix" || nowhere.Sni != "nowhere.example" ||
+		len(nowhere.Alpn) != 1 || nowhere.Alpn[0] != "now/1" || nowhere.CertMode != "self" {
+		t.Fatalf("Nowhere protobuf protocol = %+v, want complete server contract", nowhere)
 	}
 }
 

@@ -189,3 +189,45 @@ func TestAdapterProxyCertPinForcesCertVerification(t *testing.T) {
 		t.Fatal("unpinned proxy AllowInsecure = false, want true (no pin, keep configured value)")
 	}
 }
+
+func TestAdapterPreservesNowhereContractAndUserSharedKey(t *testing.T) {
+	const pin = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+	const sharedKey = "550e8400-e29b-41d4-a716-446655440000"
+	srv := &node.Server{Id: 1, Name: "NowhereServer", Address: "example.com"}
+	if err := srv.MarshalProtocols([]node.Protocol{{
+		Type: "nowhere", Port: 443, Version: 1, Enable: true, Security: "tls", Network: "mix",
+		SNI: "nowhere.example", ALPN: []string{"now/1"}, CertMode: "self", CertPinSHA256: pin,
+	}}); err != nil {
+		t.Fatalf("marshal protocols: %v", err)
+	}
+
+	enabled := true
+	client, err := NewAdapter(
+		`{{ (index .Proxies 0).Type }}|{{ (index .Proxies 0).Network }}|{{ .UserInfo.Password }}`,
+		WithServers([]*node.Node{{
+			Id: 1, Name: "Nowhere", Port: 443, Address: "nowhere.example", ServerId: srv.Id,
+			Server: srv, Protocol: "nowhere", Enabled: &enabled,
+		}}),
+		WithUserInfo(User{Password: sharedKey}),
+		WithOutputFormat("text"),
+	).Client()
+	if err != nil {
+		t.Fatalf("Client() error = %v", err)
+	}
+	if len(client.Proxies) != 1 {
+		t.Fatalf("len(Proxies) = %d, want 1", len(client.Proxies))
+	}
+	proxy := client.Proxies[0]
+	if proxy.Type != "nowhere" || proxy.Version != 1 || proxy.Network != "mix" || proxy.Security != "tls" ||
+		proxy.SNI != "nowhere.example" || len(proxy.ALPN) != 1 || proxy.ALPN[0] != "now/1" ||
+		proxy.CertMode != "self" || proxy.CertPinSHA256 != pin {
+		t.Fatalf("Nowhere proxy fields were not preserved: %#v", proxy)
+	}
+	built, err := client.Build()
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if got, want := string(built), "nowhere|mix|"+sharedKey; got != want {
+		t.Fatalf("Build() = %q, want %q", got, want)
+	}
+}

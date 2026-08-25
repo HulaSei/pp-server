@@ -85,6 +85,31 @@ func TestApplyReportedCertPinMatchesProtocolTypeAliases(t *testing.T) {
 	}
 }
 
+func TestApplyReportedCertPinUpdatesNowhere(t *testing.T) {
+	server := new(Server)
+	if err := server.MarshalProtocols([]Protocol{{
+		Type: "nowhere", Port: 443, Version: 1, Enable: true, Security: "tls",
+		Network: "mix", SNI: "nowhere.example", ALPN: []string{"now/1"}, CertMode: "self",
+	}}); err != nil {
+		t.Fatalf("MarshalProtocols() error = %v", err)
+	}
+
+	changed, err := server.ApplyReportedCertPin("nowhere", strings.ToUpper(testCertPin))
+	if err != nil {
+		t.Fatalf("ApplyReportedCertPin() error = %v", err)
+	}
+	if !changed {
+		t.Fatal("ApplyReportedCertPin() changed = false, want true")
+	}
+	protocols, err := server.UnmarshalProtocols()
+	if err != nil {
+		t.Fatalf("UnmarshalProtocols() error = %v", err)
+	}
+	if len(protocols) != 1 || protocols[0].CertPinSHA256 != testCertPin {
+		t.Fatalf("Nowhere CertPinSHA256 = %#v, want %q", protocols, testCertPin)
+	}
+}
+
 func TestApplyReportedCertPinIgnoresNonSelfCertMode(t *testing.T) {
 	server := new(Server)
 	if err := server.MarshalProtocols([]Protocol{
