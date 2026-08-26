@@ -7,18 +7,17 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
 )
 
 type StatLogic struct {
-	svc *svc.ServiceContext
+	deps Dependencies
 }
 
-func NewStatLogic(svc *svc.ServiceContext) *StatLogic {
+func NewStatLogic(deps Dependencies) *StatLogic {
 	return &StatLogic{
-		svc: svc,
+		deps: deps,
 	}
 }
 
@@ -30,7 +29,7 @@ func (l *StatLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
 	start := time.Date(now.Year(), now.Month(), now.Day()-1, 0, 0, 0, 0, timeutil.Location())
 	end := start.Add(24 * time.Hour)
 
-	err := l.svc.Store.InNetworkTx(ctx, func(store repository.NetworkStore) error {
+	err := l.deps.Store.InNetworkTx(ctx, func(store repository.NetworkStore) error {
 		// 查询用户流量统计, 按用户和订阅分组
 		userTraffic, err := store.TrafficLog().QueryUserTrafficRanking(ctx, start, end)
 		if err != nil {
@@ -156,8 +155,8 @@ func (l *StatLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
 		}
 
 		// Delete old traffic logs
-		if l.svc.Config.Log.AutoClear {
-			threshold := end.AddDate(0, 0, int(-l.svc.Config.Log.ClearDays))
+		if l.deps.Log().AutoClear {
+			threshold := end.AddDate(0, 0, int(-l.deps.Log().ClearDays))
 			err = store.TrafficLog().DeleteBefore(ctx, threshold)
 			if err != nil {
 				logger.Errorf("[Traffic Stat Queue] Delete server traffic log failed: %v", err.Error())

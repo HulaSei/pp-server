@@ -19,7 +19,6 @@ import (
 	"github.com/perfect-panel/server/internal/module/notification"
 	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
@@ -51,11 +50,11 @@ var (
 
 // ActivateOrderLogic sequences the activation saga stages.
 type ActivateOrderLogic struct {
-	svc *svc.ServiceContext
+	deps Dependencies
 }
 
-func NewActivateOrderLogic(svc *svc.ServiceContext) *ActivateOrderLogic {
-	return &ActivateOrderLogic{svc: svc}
+func NewActivateOrderLogic(deps Dependencies) *ActivateOrderLogic {
+	return &ActivateOrderLogic{deps: deps}
 }
 
 func (l *ActivateOrderLogic) ProcessTask(ctx context.Context, task *asynq.Task) error {
@@ -63,7 +62,7 @@ func (l *ActivateOrderLogic) ProcessTask(ctx context.Context, task *asynq.Task) 
 	if err != nil {
 		return err
 	}
-	orderInfo, err := l.svc.Store.Order().FindOneByOrderNo(ctx, payload.OrderNo)
+	orderInfo, err := l.deps.Store.Order().FindOneByOrderNo(ctx, payload.OrderNo)
 	if err != nil {
 		return err
 	}
@@ -82,7 +81,7 @@ func (l *ActivateOrderLogic) ProcessTask(ctx context.Context, task *asynq.Task) 
 	}
 
 	if orderInfo.Type == OrderTypeRecharge {
-		balance, err := l.svc.Billing.ActivateRecharge(ctx, orderInfo.OrderNo)
+		balance, err := l.deps.Billing.ActivateRecharge(ctx, orderInfo.OrderNo)
 		if err != nil {
 			logger.WithContext(ctx).Error("[ActivateOrderLogic] Recharge stage failed", logger.Field("error", err.Error()), logger.Field("order_no", orderInfo.OrderNo))
 			return err
@@ -90,12 +89,12 @@ func (l *ActivateOrderLogic) ProcessTask(ctx context.Context, task *asynq.Task) 
 		// Load the notification context BEFORE the finalize CAS: once the
 		// order is Finished a retry short-circuits, so failing here (all
 		// prior stages are idempotent) keeps the notice at-least-once.
-		userInfo, err := l.svc.Store.User().FindOne(ctx, orderInfo.UserId)
+		userInfo, err := l.deps.Store.User().FindOne(ctx, orderInfo.UserId)
 		if err != nil {
 			logger.WithContext(ctx).Error("[ActivateOrderLogic] Load user for recharge notify failed", logger.Field("error", err.Error()))
 			return err
 		}
-		if err := l.svc.Billing.FinalizeOrder(ctx, orderInfo.OrderNo); err != nil {
+		if err := l.deps.Billing.FinalizeOrder(ctx, orderInfo.OrderNo); err != nil {
 			logger.WithContext(ctx).Error("[ActivateOrderLogic] Finalize stage failed", logger.Field("error", err.Error()), logger.Field("order_no", orderInfo.OrderNo))
 			return err
 		}
@@ -103,14 +102,14 @@ func (l *ActivateOrderLogic) ProcessTask(ctx context.Context, task *asynq.Task) 
 		return nil
 	}
 
-	outcome, err := l.svc.Subscription.FulfillPaidOrder(ctx, orderInfo.OrderNo)
+	outcome, err := l.deps.Subscription.FulfillPaidOrder(ctx, orderInfo.OrderNo)
 	if err != nil {
 		logger.WithContext(ctx).Error("[ActivateOrderLogic] Fulfillment stage failed", logger.Field("error", err.Error()), logger.Field("order_no", orderInfo.OrderNo))
 		return err
 	}
 
 	if orderInfo.Type == OrderTypeSubscribe || orderInfo.Type == OrderTypeRenewal {
-		if err := l.svc.Billing.SettleOrderCommission(ctx, orderInfo.OrderNo, outcome.UserID); err != nil {
+		if err := l.deps.Billing.SettleOrderCommission(ctx, orderInfo.OrderNo, outcome.UserID); err != nil {
 			logger.WithContext(ctx).Error("[ActivateOrderLogic] Commission stage failed", logger.Field("error", err.Error()), logger.Field("order_no", orderInfo.OrderNo))
 			return err
 		}
@@ -118,13 +117,13 @@ func (l *ActivateOrderLogic) ProcessTask(ctx context.Context, task *asynq.Task) 
 
 	// Load the notification context BEFORE the finalize CAS (see the
 	// recharge branch above for why).
-	userInfo, err := l.svc.Store.User().FindOne(ctx, orderInfo.UserId)
+	userInfo, err := l.deps.Store.User().FindOne(ctx, orderInfo.UserId)
 	if err != nil {
 		logger.WithContext(ctx).Error("[ActivateOrderLogic] Load user for notify failed", logger.Field("error", err.Error()))
 		return err
 	}
 
-	if err := l.svc.Billing.FinalizeOrder(ctx, orderInfo.OrderNo); err != nil {
+	if err := l.deps.Billing.FinalizeOrder(ctx, orderInfo.OrderNo); err != nil {
 		logger.WithContext(ctx).Error("[ActivateOrderLogic] Finalize stage failed", logger.Field("error", err.Error()), logger.Field("order_no", orderInfo.OrderNo))
 		return err
 	}
@@ -159,7 +158,7 @@ func (l *ActivateOrderLogic) notifyFulfillment(ctx context.Context, orderInfo *o
 // instead of creating a second one.
 func (l *ActivateOrderLogic) ensureGuestAccount(ctx context.Context, orderInfo *order.Order) error {
 	var userID int64
-	mark, err := l.svc.Store.Inbox().Find(ctx, inboxGuestAccount, orderInfo.OrderNo)
+	mark, err := l.deps.Store.Inbox().Find(ctx, inboxGuestAccount, orderInfo.OrderNo)
 	if err != nil {
 		return err
 	}
@@ -183,7 +182,7 @@ func (l *ActivateOrderLogic) ensureGuestAccount(ctx context.Context, orderInfo *
 			return fmt.Errorf("guest order password hash is missing")
 		}
 		userInfo := &user.User{Password: passwordHash, Algo: tool.PasswordAlgoForHash(passwordHash)}
-		err = l.svc.Store.InIdentityTx(ctx, func(store repository.IdentityStore) error {
+		err = l.deps.Store.InIdentityTx(ctx, func(store repository.IdentityStore) error {
 			if err := store.User().Insert(ctx, userInfo); err != nil {
 				return err
 			}
@@ -218,7 +217,7 @@ func (l *ActivateOrderLogic) ensureGuestAccount(ctx context.Context, orderInfo *
 	// Billing write: bind the account to the order. Replays write the same
 	// value, so this needs no transaction with the identity mutations above.
 	orderInfo.UserId = userID
-	return l.svc.Store.Order().Update(ctx, orderInfo)
+	return l.deps.Store.Order().Update(ctx, orderInfo)
 }
 
 // parsePayload unMarshals the task payload into a structured format
@@ -237,7 +236,7 @@ func (l *ActivateOrderLogic) parsePayload(ctx context.Context, payload []byte) (
 // getTempOrderInfo retrieves temporary order information from Redis cache
 func (l *ActivateOrderLogic) getTempOrderInfo(ctx context.Context, orderNo string) (*constant.TemporaryOrderInfo, error) {
 	cacheKey := fmt.Sprintf(constant.TempOrderCacheKey, orderNo)
-	data, err := l.svc.Redis.Get(ctx, cacheKey).Result()
+	data, err := l.deps.Redis.Get(ctx, cacheKey).Result()
 	if err != nil {
 		logger.WithContext(ctx).Error("Get temp order cache failed",
 			logger.Field("error", err.Error()),
@@ -353,10 +352,10 @@ func (l *ActivateOrderLogic) buildAdminNotificationData(orderInfo *order.Order, 
 // sendUserNotifyWithTelegram delivers rendered MarkdownV2 to the buyer's
 // bound Telegram; "no binding" and "no bot" both just mean nothing to send.
 func (l *ActivateOrderLogic) sendUserNotifyWithTelegram(ctx context.Context, userID int64, text string) {
-	if !l.svc.Config.Telegram.EnableNotify {
+	if !l.deps.telegramConfig().EnableNotify {
 		return
 	}
-	if err := l.svc.Notification.NotifyTelegramUser(ctx, userID, text); err != nil {
+	if err := l.deps.Notification.NotifyTelegramUser(ctx, userID, text); err != nil {
 		logger.WithContext(ctx).Info("Telegram user notice skipped",
 			logger.Field("reason", err.Error()), logger.Field("user_id", userID))
 	}
@@ -366,10 +365,10 @@ func (l *ActivateOrderLogic) sendUserNotifyWithTelegram(ctx context.Context, use
 // topic - the group is the only administrator channel, so an unconfigured
 // group means the notice is skipped.
 func (l *ActivateOrderLogic) sendAdminNotifyWithTelegram(ctx context.Context, text string) {
-	if !l.svc.Config.Telegram.EnableNotify {
+	if !l.deps.telegramConfig().EnableNotify {
 		return
 	}
-	if err := l.svc.Notification.NotifyAdminsTelegram(ctx, text); err != nil {
+	if err := l.deps.Notification.NotifyAdminsTelegram(ctx, text); err != nil {
 		logger.WithContext(ctx).Info("Telegram admin notice skipped", logger.Field("reason", err.Error()))
 	}
 }

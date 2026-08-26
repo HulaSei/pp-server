@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/perfect-panel/server/pkg/constant"
 
@@ -16,7 +17,10 @@ import (
 	"github.com/perfect-panel/server/initialize"
 	"github.com/perfect-panel/server/internal"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/route"
 	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/trafficagg"
+	"github.com/perfect-panel/server/internal/transport/httpserver"
 	"github.com/perfect-panel/server/pkg/conf"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/orm"
@@ -24,6 +28,11 @@ import (
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/queue"
+	queueHandler "github.com/perfect-panel/server/queue/handler"
+	emailLogic "github.com/perfect-panel/server/queue/logic/email"
+	orderLogic "github.com/perfect-panel/server/queue/logic/order"
+	smsLogic "github.com/perfect-panel/server/queue/logic/sms"
+	trafficLogic "github.com/perfect-panel/server/queue/logic/traffic"
 	"github.com/perfect-panel/server/scheduler"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
@@ -91,12 +100,96 @@ func getServers() *service.Group {
 	}
 
 	// init service context
-	ctx := svc.NewServiceContext(c)
+	ctx := svc.NewApplication(c)
+	runtimeConfig := ctx.Runtime.Config
+	initDeps := &initialize.Dependencies{
+		Config:                   runtimeConfig,
+		UpdateConfig:             ctx.Runtime.UpdateConfig,
+		Store:                    ctx.Store,
+		ExchangeRate:             ctx.ExchangeRate,
+		Notification:             ctx.Notification,
+		SetTelegramBot:           ctx.Runtime.SetTelegramBot,
+		SetNodeMultiplierManager: ctx.Runtime.SetNodeMultiplierManager,
+	}
+	routeDeps := func() route.Dependencies {
+		return route.Dependencies{
+			ConfigProvider: runtimeConfig,
+			Redis:          ctx.Redis,
+			Store:          ctx.Store,
+			Support:        ctx.Support,
+			Billing:        ctx.Billing,
+			Platform:       ctx.Platform,
+			Subscription:   ctx.Subscription,
+			Identity:       ctx.Identity,
+			Network:        ctx.Network,
+		}
+	}
+	trafficDeps := trafficLogic.Dependencies{
+		Store: ctx.Store,
+		Redis: ctx.Redis,
+		Queue: ctx.Queue,
+		Log:   func() config.Log { return runtimeConfig().Log },
+		Aggregator: trafficagg.Deps{
+			Store: ctx.Store,
+			Redis: ctx.Redis,
+			TrafficReportThreshold: func() int64 {
+				return runtimeConfig().Node.TrafficReportThreshold
+			},
+			Multiplier: func(at time.Time) float32 {
+				manager := ctx.Runtime.NodeMultiplierManager()
+				if manager == nil {
+					return 1
+				}
+				return manager.GetMultiplier(at)
+			},
+		},
+	}
+	queueDeps := queueHandler.Dependencies{
+		Email: emailLogic.Dependencies{
+			Store:    ctx.Store,
+			Queue:    ctx.Queue,
+			Email:    func() config.EmailConfig { return runtimeConfig().Email },
+			SiteName: func() string { return runtimeConfig().Site.SiteName },
+		},
+		SMS: smsLogic.Dependencies{
+			Store:  ctx.Store,
+			Mobile: func() config.MobileConfig { return runtimeConfig().Mobile },
+			Model:  func() string { return runtimeConfig().Model },
+		},
+		Order: orderLogic.Dependencies{
+			Store:        ctx.Store,
+			Redis:        ctx.Redis,
+			Queue:        ctx.Queue,
+			Inspector:    ctx.Inspector,
+			Billing:      ctx.Billing,
+			Subscription: ctx.Subscription,
+			Notification: ctx.Notification,
+			Telegram:     func() config.Telegram { return runtimeConfig().Telegram },
+		},
+		EventBus:     ctx.EventBus,
+		Traffic:      trafficDeps,
+		Subscription: ctx.Subscription,
+		Store:        ctx.Store,
+		ExchangeRate: ctx.ExchangeRate,
+	}
 
 	services := service.NewServiceGroup()
-	services.Add(internal.NewService(ctx))
-	services.Add(queue.NewService(ctx))
-	services.Add(scheduler.NewService(ctx))
+	services.Add(internal.NewService(internal.Dependencies{
+		Config:     runtimeConfig,
+		Store:      ctx.Store,
+		Initialize: initDeps,
+		HTTP: func() httpserver.Dependencies {
+			return httpserver.Dependencies{
+				Routes:           routeDeps(),
+				Notification:     ctx.Notification,
+				TelegramBotToken: func() string { return runtimeConfig().Telegram.BotToken },
+			}
+		},
+		SetRestart:             ctx.Runtime.SetRestart,
+		SetReinitializeHandler: ctx.Runtime.SetReinitialize,
+	}))
+	services.Add(queue.NewService(c.Redis, queueDeps))
+	services.Add(scheduler.NewService(c.Redis, c.AppLocation))
 	return services
 }
 

@@ -6,7 +6,7 @@ package verifycode
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/redis/go-redis/v9"
 )
 

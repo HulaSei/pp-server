@@ -6,7 +6,6 @@ import (
 	"github.com/perfect-panel/server/pkg/logger"
 
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/tool"
 )
 
@@ -18,7 +17,7 @@ type verifyConfig struct {
 	EnableResetPasswordVerify bool
 }
 
-func Verify(svc *svc.ServiceContext) {
+func Verify(svc *Dependencies) {
 	logger.Debug("Verify config initialization")
 	configs, err := svc.Store.System().GetVerifyConfig(context.Background())
 	if err != nil {
@@ -27,13 +26,14 @@ func Verify(svc *svc.ServiceContext) {
 	}
 	var verify verifyConfig
 	tool.SystemConfigSliceReflectToStruct(configs, &verify)
-	svc.Config.Verify = config.Verify{
+	verifyConfig := config.Verify{
 		TurnstileSiteKey:    verify.TurnstileSiteKey,
 		TurnstileSecret:     verify.TurnstileSecret,
 		LoginVerify:         verify.EnableLoginVerify,
 		RegisterVerify:      verify.EnableRegisterVerify,
 		ResetPasswordVerify: verify.EnableResetPasswordVerify,
 	}
+	svc.updateConfig(func(current *config.Config) { current.Verify = verifyConfig })
 
 	logger.Debug("Verify code config initialization")
 
@@ -44,5 +44,5 @@ func Verify(svc *svc.ServiceContext) {
 		return
 	}
 	tool.SystemConfigSliceReflectToStruct(cfg, &verifyCodeConfig)
-	svc.Config.VerifyCode = verifyCodeConfig
+	svc.updateConfig(func(current *config.Config) { current.VerifyCode = verifyCodeConfig })
 }

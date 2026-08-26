@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	couponEntity "github.com/perfect-panel/server/internal/module/billing/entity/coupon"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"

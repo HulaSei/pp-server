@@ -21,6 +21,11 @@ JSON。GET 接口只需使用 `Accept` 协商响应格式。既有的 `server_id
 协议消息。只有 `plugin_options` 使用 `google.protobuf.Value`，以保留对象和
 SIP003 字符串两种插件参数形式。
 
+Nowhere 节点使用 `GET /v2/server/{server_id}` 获取扁平协议配置，并复用现有的
+用户、状态和流量接口。服务端配置固定为 TLS，版本为 1；`network` 为 `mix`、
+`tcp` 或 `udp`，ALPN 默认且只能包含一个 `now/1`。用户列表中的 UUID 直接作为
+Nowhere shared key。旧版 `GET /v1/server/config` 不定义 Nowhere 配置结构。
+
 修改 schema 后，使用以下命令重新生成 Go 绑定：
 
 ```sh

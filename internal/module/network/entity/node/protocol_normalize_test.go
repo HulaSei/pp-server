@@ -5,6 +5,105 @@ import (
 	"testing"
 )
 
+func TestNormalizeProtocolForStorageDefaultsNowhere(t *testing.T) {
+	protocol, err := NormalizeProtocolForStorage(Protocol{
+		Type: " NOWHERE ", Port: 443, Enable: true, Security: " TLS ",
+		SNI: " node.example ", CertMode: " SELF ",
+	})
+	if err != nil {
+		t.Fatalf("NormalizeProtocolForStorage() error = %v", err)
+	}
+	if protocol.Type != "nowhere" || protocol.Version != 1 || protocol.Network != "mix" ||
+		protocol.Security != "tls" || protocol.SNI != "node.example" || protocol.CertMode != "self" ||
+		len(protocol.ALPN) != 1 || protocol.ALPN[0] != "now/1" {
+		t.Fatalf("Nowhere defaults were not normalized: %#v", protocol)
+	}
+}
+
+func TestNormalizeProtocolForStorageNormalizesNowhereNetwork(t *testing.T) {
+	tests := map[string]string{
+		"": "mix", "mix": "mix", "mixed": "mix", "both": "mix",
+		"tcp,udp": "mix", "udp,tcp": "mix", "tcp+udp": "mix", "udp+tcp": "mix",
+		"tcp": "tcp", "udp": "udp", "quic": "udp",
+	}
+	for input, want := range tests {
+		t.Run(input, func(t *testing.T) {
+			protocol, err := NormalizeProtocolForStorage(Protocol{
+				Type: "nowhere", Port: 443, Enable: true, Security: "tls", Network: input,
+				SNI: "node.example", CertMode: "self",
+			})
+			if err != nil {
+				t.Fatalf("NormalizeProtocolForStorage() error = %v", err)
+			}
+			if protocol.Network != want {
+				t.Fatalf("Network = %q, want %q", protocol.Network, want)
+			}
+		})
+	}
+}
+
+func TestNormalizeProtocolForStorageRejectsInvalidNowhere(t *testing.T) {
+	base := Protocol{
+		Type: "nowhere", Port: 443, Version: 1, Enable: true, Security: "tls",
+		Network: "mix", SNI: "node.example", ALPN: []string{"now/1"}, CertMode: "self",
+	}
+	tests := map[string]func(*Protocol){
+		"zero port":          func(p *Protocol) { p.Port = 0 },
+		"version":            func(p *Protocol) { p.Version = 2 },
+		"security":           func(p *Protocol) { p.Security = "reality" },
+		"missing sni":        func(p *Protocol) { p.SNI = " " },
+		"missing cert mode":  func(p *Protocol) { p.CertMode = "none" },
+		"network":            func(p *Protocol) { p.Network = "ws" },
+		"multiple alpn":      func(p *Protocol) { p.ALPN = []string{"now/1", "h2"} },
+		"empty alpn":         func(p *Protocol) { p.ALPN = []string{" "} },
+		"oversized alpn":     func(p *Protocol) { p.ALPN = []string{strings.Repeat("a", 256)} },
+		"transport":          func(p *Protocol) { p.Transport = "tcp" },
+		"uot":                func(p *Protocol) { p.UoT = true },
+		"multiplex":          func(p *Protocol) { p.Multiplex = "low" },
+		"quic option":        func(p *Protocol) { p.ReduceRtt = true },
+		"plugin":             func(p *Protocol) { p.Plugin = "obfs" },
+		"allow insecure":     func(p *Protocol) { p.AllowInsecure = true },
+		"reality public key": func(p *Protocol) { p.RealityPublicKey = "key" },
+	}
+	for name, mutate := range tests {
+		t.Run(name, func(t *testing.T) {
+			protocol := base
+			protocol.ALPN = append([]string(nil), base.ALPN...)
+			mutate(&protocol)
+			if _, err := NormalizeProtocolForStorage(protocol); err == nil {
+				t.Fatal("NormalizeProtocolForStorage() expected error")
+			}
+		})
+	}
+}
+
+func TestSanitizeProtocolsForNodeDistributionKeepsNowhere(t *testing.T) {
+	protocols := SanitizeProtocolsForNodeDistribution([]Protocol{{
+		Type: "nowhere", Port: 443, Enable: true, Security: "tls", Network: "mixed",
+		SNI: "node.example", CertMode: "self", CertPinSHA256: strings.ToUpper(testCertPin), Ratio: 1.5,
+	}})
+	if len(protocols) != 1 {
+		t.Fatalf("SanitizeProtocolsForNodeDistribution() len = %d, want 1", len(protocols))
+	}
+	protocol := protocols[0]
+	if protocol.Type != "nowhere" || protocol.Version != 1 || protocol.Network != "mix" ||
+		protocol.Security != "tls" || protocol.SNI != "node.example" || protocol.CertMode != "self" ||
+		protocol.CertPinSHA256 != testCertPin || protocol.Ratio != 1.5 ||
+		len(protocol.ALPN) != 1 || protocol.ALPN[0] != "now/1" {
+		t.Fatalf("Nowhere node distribution fields were not preserved: %#v", protocol)
+	}
+}
+
+func TestSanitizeProtocolsForNodeDistributionFiltersInvalidNowhere(t *testing.T) {
+	protocols := SanitizeProtocolsForNodeDistribution([]Protocol{{
+		Type: "nowhere", Port: 443, Enable: true, Security: "tls",
+		SNI: "node.example", CertMode: "self", Multiplex: "low",
+	}})
+	if len(protocols) != 0 {
+		t.Fatalf("SanitizeProtocolsForNodeDistribution() len = %d, want 0", len(protocols))
+	}
+}
+
 func TestNormalizeProtocolForStorageRejectsUnsupportedRuntimeProtocol(t *testing.T) {
 	for _, protocolType := range []string{"http", "socks"} {
 		if _, err := NormalizeProtocolForStorage(Protocol{Type: protocolType}); err == nil {
@@ -339,6 +438,29 @@ func TestSanitizeProtocolsForNodeDistributionFiltersIncompleteTLS(t *testing.T) 
 	}})
 	if len(protocols) != 0 {
 		t.Fatalf("SanitizeProtocolsForNodeDistribution() len = %d, want 0", len(protocols))
+	}
+}
+
+func TestSanitizeProtocolsForNodeDistributionClearsSubscriptionECH(t *testing.T) {
+	input := Protocol{
+		Type: "vless", Port: 443, Enable: true, Security: "tls",
+		SNI: "node.example", CertMode: "http",
+		EchEnable: true, EchServerName: "ech.example",
+	}
+	stored, err := NormalizeProtocolForStorage(input)
+	if err != nil {
+		t.Fatalf("NormalizeProtocolForStorage() error = %v", err)
+	}
+	if !stored.EchEnable || stored.EchServerName != "ech.example" {
+		t.Fatalf("storage normalization discarded subscription ECH fields: %#v", stored)
+	}
+
+	protocols := SanitizeProtocolsForNodeDistribution([]Protocol{input})
+	if len(protocols) != 1 {
+		t.Fatalf("SanitizeProtocolsForNodeDistribution() len = %d, want 1", len(protocols))
+	}
+	if protocols[0].EchEnable || protocols[0].EchServerName != "" {
+		t.Fatalf("node distribution leaked subscription ECH fields: %#v", protocols[0])
 	}
 }
 

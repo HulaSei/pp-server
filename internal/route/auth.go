@@ -2,31 +2,29 @@ package route
 
 import (
 	"github.com/cloudwego/hertz/pkg/app/server"
-	auth "github.com/perfect-panel/server/internal/handler/auth"
-	authOauth "github.com/perfect-panel/server/internal/handler/auth/oauth"
-	"github.com/perfect-panel/server/internal/middleware"
-	"github.com/perfect-panel/server/internal/svc"
+	auth "github.com/perfect-panel/server/internal/module/identity/transport/http/auth"
+	authOauth "github.com/perfect-panel/server/internal/module/identity/transport/http/auth/oauth"
 )
 
-func registerAuthRoutes(router *server.Hertz, serverCtx *svc.ServiceContext) {
+func registerAuthRoutes(router *server.Hertz, deps Dependencies) {
 	authGroupRouter := router.Group("/v1/auth")
-	authGroupRouter.Use(middleware.DeviceMiddleware(serverCtx))
+	authGroupRouter.Use(deps.deviceMiddleware())
 	{
-		authGroupRouter.GET("/check", auth.CheckUserHandler(serverCtx))
-		authGroupRouter.GET("/check/telephone", auth.CheckUserTelephoneHandler(serverCtx))
-		authGroupRouter.POST("/login", auth.UserLoginHandler(serverCtx))
-		authGroupRouter.POST("/login/device", auth.DeviceLoginHandler(serverCtx))
-		authGroupRouter.POST("/login/telephone", auth.TelephoneLoginHandler(serverCtx))
-		authGroupRouter.POST("/register", auth.UserRegisterHandler(serverCtx))
-		authGroupRouter.POST("/register/telephone", auth.TelephoneUserRegisterHandler(serverCtx))
-		authGroupRouter.POST("/reset", auth.ResetPasswordHandler(serverCtx))
-		authGroupRouter.POST("/reset/telephone", auth.TelephoneResetPasswordHandler(serverCtx))
+		authGroupRouter.GET("/check", auth.CheckUserHandler(deps.Identity))
+		authGroupRouter.GET("/check/telephone", auth.CheckUserTelephoneHandler(deps.Identity))
+		authGroupRouter.POST("/login", auth.UserLoginHandler(deps.Identity, deps.verifyConfig))
+		authGroupRouter.POST("/login/device", auth.DeviceLoginHandler(deps.Identity))
+		authGroupRouter.POST("/login/telephone", auth.TelephoneLoginHandler(deps.Identity, deps.verifyConfig))
+		authGroupRouter.POST("/register", auth.UserRegisterHandler(deps.Identity))
+		authGroupRouter.POST("/register/telephone", auth.TelephoneUserRegisterHandler(deps.Identity))
+		authGroupRouter.POST("/reset", auth.ResetPasswordHandler(deps.Identity, deps.verifyConfig))
+		authGroupRouter.POST("/reset/telephone", auth.TelephoneResetPasswordHandler(deps.Identity, deps.verifyConfig))
 	}
 
 	authOauthGroupRouter := router.Group("/v1/auth/oauth")
 	{
-		authOauthGroupRouter.POST("/callback/apple", authOauth.AppleLoginCallbackHandler(serverCtx))
-		authOauthGroupRouter.POST("/login", authOauth.OAuthLoginHandler(serverCtx))
-		authOauthGroupRouter.POST("/login/token", authOauth.OAuthLoginGetTokenHandler(serverCtx))
+		authOauthGroupRouter.POST("/callback/apple", authOauth.AppleLoginCallbackHandler(deps.Identity))
+		authOauthGroupRouter.POST("/login", authOauth.OAuthLoginHandler(deps.Identity))
+		authOauthGroupRouter.POST("/login/token", authOauth.OAuthLoginGetTokenHandler(deps.Identity))
 	}
 }

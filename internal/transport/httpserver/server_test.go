@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	appconfig "github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/route"
 )
 
 func TestServerSecretMiddlewareBlocksMigratedPost(t *testing.T) {
@@ -89,12 +89,12 @@ func TestCorsPreflightBypassesServerSecretMiddleware(t *testing.T) {
 }
 
 func newTestServer(secret string) *Server {
-	return New(&svc.ServiceContext{
-		Config: appconfig.Config{
+	return New(Dependencies{
+		Routes: route.Dependencies{Config: appconfig.Config{
 			Node: appconfig.NodeConfig{
 				NodeSecret: secret,
 			},
-		},
+		}},
 	}, "127.0.0.1:0", nil)
 }
 

@@ -6,7 +6,7 @@ import (
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/pkg/constant"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -44,7 +44,7 @@ func (l *QueryUserCommissionLogLogic) QueryUserCommissionLog(req *dto.QueryUserC
 		l.Errorw("Query User Commission Log failed", logger.Field("error", err.Error()))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "Query User Commission Log failed: %v", err)
 	}
-	var list []dto.CommissionLog
+	var list []dto.BillingCommissionLogSnapshot
 
 	for _, datum := range data {
 		var content log.Commission
@@ -52,7 +52,7 @@ func (l *QueryUserCommissionLogLogic) QueryUserCommissionLog(req *dto.QueryUserC
 			l.Errorf("unmarshal commission log content failed: %v", err.Error())
 			continue
 		}
-		list = append(list, dto.CommissionLog{
+		list = append(list, dto.BillingCommissionLogSnapshot{
 			UserId:    datum.ObjectID,
 			Type:      content.Type,
 			Amount:    content.Amount,

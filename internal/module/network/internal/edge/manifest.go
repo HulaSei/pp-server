@@ -12,8 +12,8 @@ import (
 	"time"
 
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
+	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
@@ -60,7 +60,7 @@ func (l *ManifestLogic) Manifest(token string) (*dto.EdgeManifestResponse, error
 		}
 		return nil, err
 	}
-	if account == nil || account.Enable == nil || !*account.Enable {
+	if account == nil || account.DeletedAt.Valid || account.Enable == nil || !*account.Enable {
 		return nil, ErrManifestNotFound
 	}
 	plan, err := l.deps.Store.Subscribe().FindOne(l.ctx, userSubscribe.SubscribeId)

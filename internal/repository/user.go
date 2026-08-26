@@ -26,6 +26,7 @@ type UserRepo interface {
 	BatchDeleteUser(ctx context.Context, ids []int64, tx ...*gorm.DB) error
 	QueryPageList(ctx context.Context, page, size int, filter *user.UserFilterParams) ([]*user.User, int64, error)
 	FindUsersByIds(ctx context.Context, ids []int64) ([]*user.User, error)
+	FindEnabledUserIDs(ctx context.Context, ids []int64) ([]int64, error)
 	CountAffiliates(ctx context.Context, refererId int64) (int64, error)
 	QueryAffiliateList(ctx context.Context, refererId int64, page, size int) ([]*user.User, int64, error)
 	QueryAdminUsers(ctx context.Context) ([]*user.User, error)
@@ -109,6 +110,9 @@ type UserDeviceRepo interface {
 // UserWithdrawalRepo manages affiliate withdrawal records.
 type UserWithdrawalRepo interface {
 	InsertWithdrawal(ctx context.Context, data *walletEntity.Withdrawal, tx ...*gorm.DB) error
+	FindWithdrawalForUpdate(ctx context.Context, id int64) (*walletEntity.Withdrawal, error)
+	QueryWithdrawalList(ctx context.Context, userID int64, status *uint8, page, size int) ([]*walletEntity.Withdrawal, int64, error)
+	UpdateWithdrawalStatus(ctx context.Context, id int64, from, to uint8, reason string) (bool, error)
 }
 
 // SubscriptionTrafficRepo manages scheduled subscription traffic resets.

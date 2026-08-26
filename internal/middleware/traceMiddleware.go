@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/result"
 	"github.com/perfect-panel/server/pkg/trace"
@@ -76,7 +75,7 @@ func remoteAddressParts(addr net.Addr) (string, string) {
 	return host, port
 }
 
-func TraceMiddleware(_ *svc.ServiceContext) app.HandlerFunc {
+func TraceMiddleware() app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		tracer := trace.TracerFromContext(c)
 		spanName := ctx.FullPath()

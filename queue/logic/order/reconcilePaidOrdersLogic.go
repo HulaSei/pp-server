@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/queue/types"
 )
@@ -35,11 +34,11 @@ const (
 // outbox. It repairs the database/Redis gap if a callback committed payment but
 // Redis was unavailable before the activation task could be inserted.
 type ReconcilePaidOrdersLogic struct {
-	svc *svc.ServiceContext
+	deps Dependencies
 }
 
-func NewReconcilePaidOrdersLogic(svc *svc.ServiceContext) *ReconcilePaidOrdersLogic {
-	return &ReconcilePaidOrdersLogic{svc: svc}
+func NewReconcilePaidOrdersLogic(deps Dependencies) *ReconcilePaidOrdersLogic {
+	return &ReconcilePaidOrdersLogic{deps: deps}
 }
 
 func (l *ReconcilePaidOrdersLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
@@ -63,7 +62,7 @@ func (l *ReconcilePaidOrdersLogic) ProcessTask(ctx context.Context, _ *asynq.Tas
 	)
 
 	for {
-		orders, err := l.svc.Store.Order().QueryOrdersByStatusAfterID(ctx, OrderStatusPaid, afterID, paidOrderReconcileBatchSize)
+		orders, err := l.deps.Store.Order().QueryOrdersByStatusAfterID(ctx, OrderStatusPaid, afterID, paidOrderReconcileBatchSize)
 		if err != nil {
 			return err
 		}
@@ -82,7 +81,7 @@ func (l *ReconcilePaidOrdersLogic) ProcessTask(ctx context.Context, _ *asynq.Tas
 			}
 			task := asynq.NewTask(types.ForthwithActivateOrder, payload)
 			taskID := types.ActivationTaskID(orderInfo.OrderNo)
-			_, err = l.svc.Queue.EnqueueContext(ctx, task, asynq.MaxRetry(5), asynq.TaskID(taskID))
+			_, err = l.deps.Queue.EnqueueContext(ctx, task, asynq.MaxRetry(5), asynq.TaskID(taskID))
 			if err == nil {
 				totalEnqueued++
 				afterID = orderInfo.Id
@@ -168,7 +167,7 @@ func (l *ReconcilePaidOrdersLogic) ProcessTask(ctx context.Context, _ *asynq.Tas
 }
 
 func (l *ReconcilePaidOrdersLogic) handleConflict(ctx context.Context, orderNo, taskID string) (conflictAction, asynq.TaskState, error) {
-	info, err := l.svc.Inspector.GetTaskInfo("default", taskID)
+	info, err := l.deps.Inspector.GetTaskInfo("default", taskID)
 	if err != nil {
 		if errors.Is(err, asynq.ErrTaskNotFound) {
 			if enqErr := l.enqueueActivation(ctx, orderNo, taskID); enqErr != nil {
@@ -219,7 +218,7 @@ func (l *ReconcilePaidOrdersLogic) enqueueActivation(ctx context.Context, orderN
 		return fmt.Errorf("marshal activation payload: %w", err)
 	}
 	task := asynq.NewTask(types.ForthwithActivateOrder, payload)
-	if _, err = l.svc.Queue.EnqueueContext(ctx, task, asynq.MaxRetry(5), asynq.TaskID(taskID)); err != nil {
+	if _, err = l.deps.Queue.EnqueueContext(ctx, task, asynq.MaxRetry(5), asynq.TaskID(taskID)); err != nil {
 		return fmt.Errorf("enqueue activation: %w", err)
 	}
 	return nil
@@ -230,7 +229,7 @@ func (l *ReconcilePaidOrdersLogic) enqueueActivation(ctx context.Context, orderN
 // task id) and replaces it with a fresh activation task. Production showed
 // that failing on these loops the whole reconcile run forever.
 func (l *ReconcilePaidOrdersLogic) discardAndReplace(ctx context.Context, orderNo, taskID string) (conflictAction, asynq.TaskState, error) {
-	if err := l.svc.Inspector.DeleteTask("default", taskID); err != nil {
+	if err := l.deps.Inspector.DeleteTask("default", taskID); err != nil {
 		return conflictKept, asynq.TaskStateArchived, fmt.Errorf("delete corrupt task: %w", err)
 	}
 	if err := l.enqueueActivation(ctx, orderNo, taskID); err != nil {
@@ -267,8 +266,8 @@ func (l *ReconcilePaidOrdersLogic) handleArchived(ctx context.Context, orderNo, 
 		return l.discardAndReplace(ctx, orderNo, taskID)
 	}
 
-	if err := l.svc.Inspector.RunTask("default", taskID); err != nil {
-		reInfo, reErr := l.svc.Inspector.GetTaskInfo("default", taskID)
+	if err := l.deps.Inspector.RunTask("default", taskID); err != nil {
+		reInfo, reErr := l.deps.Inspector.GetTaskInfo("default", taskID)
 		if reErr != nil {
 			return conflictKept, 0, fmt.Errorf("run archived task: %w; re-read also failed: %v", err, reErr)
 		}

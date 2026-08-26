@@ -5,7 +5,7 @@ import (
 
 	"github.com/perfect-panel/server/pkg/sms"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 
@@ -24,8 +24,8 @@ func newGetSmsPlatformLogic(ctx context.Context, deps Deps) *GetSmsPlatformLogic
 	}
 }
 
-func (l *GetSmsPlatformLogic) GetSmsPlatform() (resp *dto.PlatformResponse, err error) {
-	return &dto.PlatformResponse{
+func (l *GetSmsPlatformLogic) GetSmsPlatform() (resp *dto.AuthPlatformResponse, err error) {
+	return &dto.AuthPlatformResponse{
 		List: sms.GetSupportedPlatforms(),
 	}, nil
 }

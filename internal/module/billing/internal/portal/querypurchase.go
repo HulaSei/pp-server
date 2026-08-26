@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/constant"
@@ -100,18 +100,18 @@ func (s *Service) authorizePurchaseOrder(ctx context.Context, orderInfo *order.O
 }
 
 // fetchOrderDetails retrieves subscription and payment details
-func (s *Service) fetchOrderDetails(ctx context.Context, orderInfo *order.Order) (dto.Subscribe, dto.PaymentMethod, error) {
+func (s *Service) fetchOrderDetails(ctx context.Context, orderInfo *order.Order) (dto.BillingSubscribeSnapshot, dto.PaymentMethod, error) {
 	sub, err := s.deps.Plans.FindOne(ctx, orderInfo.SubscribeId)
 	if err != nil {
-		return dto.Subscribe{}, dto.PaymentMethod{}, wrapDatabaseError(err)
+		return dto.BillingSubscribeSnapshot{}, dto.PaymentMethod{}, wrapDatabaseError(err)
 	}
 
-	var subscribeInfo dto.Subscribe
+	var subscribeInfo dto.BillingSubscribeSnapshot
 	tool.DeepCopy(&subscribeInfo, sub)
 
 	payment, err := s.deps.Payments.FindOne(ctx, orderInfo.PaymentId)
 	if err != nil {
-		return dto.Subscribe{}, dto.PaymentMethod{}, wrapDatabaseError(err)
+		return dto.BillingSubscribeSnapshot{}, dto.PaymentMethod{}, wrapDatabaseError(err)
 	}
 
 	var paymentInfo dto.PaymentMethod

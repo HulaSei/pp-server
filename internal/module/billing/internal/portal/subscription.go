@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
@@ -15,7 +15,7 @@ import (
 // GetSubscription lists the storefront's visible subscription plans.
 func (s *Service) GetSubscription(ctx context.Context, req *dto.GetSubscriptionRequest) (*dto.GetSubscriptionResponse, error) {
 	resp := &dto.GetSubscriptionResponse{
-		List: make([]dto.Subscribe, 0),
+		List: make([]dto.BillingSubscribeSnapshot, 0),
 	}
 	// Get the subscription list
 	_, data, err := s.deps.Plans.FilterList(ctx, &subscribe.FilterParams{
@@ -29,12 +29,12 @@ func (s *Service) GetSubscription(ctx context.Context, req *dto.GetSubscriptionR
 		logger.WithContext(ctx).Errorw("[Site GetSubscription]", logger.Field("err", err.Error()))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "get subscription list error: %v", err.Error())
 	}
-	list := make([]dto.Subscribe, len(data))
+	list := make([]dto.BillingSubscribeSnapshot, len(data))
 	for i, item := range data {
-		var sub dto.Subscribe
+		var sub dto.BillingSubscribeSnapshot
 		tool.DeepCopy(&sub, item)
 		if item.Discount != "" {
-			var discount []dto.SubscribeDiscount
+			var discount []dto.BillingSubscribeDiscount
 			_ = json.Unmarshal([]byte(item.Discount), &discount)
 			sub.Discount = discount
 			list[i] = sub

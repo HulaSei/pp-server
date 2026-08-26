@@ -4,9 +4,9 @@ on:
   push:
     # Pushes to dev are covered by nightly.yml, which gates publishing on the
     # same checks; running them here too would double every dev push.
-    branches: [master]
+    branches: [master, main]
   pull_request:
-    branches: [master, dev]
+    branches: [master, main, dev]
 
 jobs:
   check:
@@ -39,3 +39,11 @@ jobs:
 
       - name: Test
         run: go test ./...
+
+      # master is the LTS line and main takes the features, so the two can each
+      # gain migrations. This keeps their numbering compatible; see the script for
+      # what an incompatible pair does to an upgrading database.
+      - name: Check migration lines
+        run: |
+          git fetch --quiet origin master
+          ./script/check-migration-lines.sh

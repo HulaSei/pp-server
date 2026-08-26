@@ -6,6 +6,7 @@ import (
 	"github.com/perfect-panel/server/pkg/device"
 	"github.com/perfect-panel/server/pkg/exchangeRate"
 
+	"github.com/perfect-panel/server/internal/appstate"
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/eventbus"
 	"github.com/perfect-panel/server/internal/module/billing"
@@ -18,24 +19,22 @@ import (
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/asynqx"
 	"github.com/perfect-panel/server/pkg/limit"
-	"github.com/perfect-panel/server/pkg/nodeMultiplier"
 	"github.com/perfect-panel/server/pkg/orm"
 
-	tgbot "github.com/go-telegram/bot"
 	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 )
 
-type ServiceContext struct {
+type Application struct {
 	Redis        *redis.Client
-	Config       config.Config
+	Runtime      *appstate.State
 	Queue        *asynqx.Client
 	Inspector    *asynq.Inspector
 	ExchangeRate *exchangeRate.Cache
 	GeoIP        *IPLocation
 	Store        repository.Store
 
-	// Domain modules (see docs/adr-001-modular-monolith.md). ServiceContext is
+	// Domain modules (see docs/adr-001-modular-monolith.md). Application is
 	// their composition root; handlers call the module facades.
 	Support      support.Service
 	Billing      billing.Service
@@ -47,18 +46,11 @@ type ServiceContext struct {
 	EventBus     *eventbus.Bus
 
 	//NodeCache   *cache.NodeCacheClient
-	Restart func() error
-	// ReinitSubsystem re-runs a subsystem's initialization after its
-	// configuration changed; assigned by the transport server alongside
-	// Restart (the initialize package cannot be imported here).
-	ReinitSubsystem       func(subsystem string)
-	TelegramBot           *tgbot.Bot
-	NodeMultiplierManager *nodeMultiplier.Manager
-	AuthLimiter           *limit.PeriodLimit
-	DeviceManager         *device.DeviceManager
+	AuthLimiter   *limit.PeriodLimit
+	DeviceManager *device.DeviceManager
 }
 
-func NewServiceContext(c config.Config) *ServiceContext {
+func NewApplication(c config.Config) *Application {
 	// gorm initialize
 	db, err := orm.ConnectMysql(orm.Mysql{
 		Config: c.DatabaseConfig(),
@@ -87,9 +79,9 @@ func NewServiceContext(c config.Config) *ServiceContext {
 	store := NewStore(db, rds)
 	queue := NewAsynqClient(c)
 	rate := exchangeRate.NewCache(0)
-	srv := &ServiceContext{
+	srv := &Application{
 		Redis:        rds,
-		Config:       c,
+		Runtime:      appstate.New(c),
 		Queue:        queue,
 		Inspector:    NewAsynqInspector(c),
 		ExchangeRate: rate,

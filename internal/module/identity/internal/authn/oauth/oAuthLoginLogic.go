@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
 	"github.com/perfect-panel/server/pkg/logger"
 	facebookoauth "github.com/perfect-panel/server/pkg/oauth/facebook"

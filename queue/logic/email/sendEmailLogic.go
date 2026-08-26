@@ -11,20 +11,17 @@ import (
 
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/email"
+	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/queue/types"
 )
 
 type SendEmailLogic struct {
-	svcCtx *svc.ServiceContext
+	deps Dependencies
 }
 
-func emailLogContent(emailType string, content map[string]interface{}) map[string]interface{} {
-	if emailType == types.EmailTypeVerify {
-		return map[string]interface{}{"redacted": true}
-	}
-	return content
+func emailLogContent(emailType string, _ map[string]interface{}) map[string]interface{} {
+	return map[string]interface{}{"redacted": true, "email_type": emailType}
 }
 
 func renderEmailTemplate(name, text string, data map[string]interface{}) (string, error) {
@@ -59,9 +56,9 @@ func resolveSubject(ctx context.Context, configured, fallback string, data map[s
 	return rendered
 }
 
-func NewSendEmailLogic(svcCtx *svc.ServiceContext) *SendEmailLogic {
+func NewSendEmailLogic(deps Dependencies) *SendEmailLogic {
 	return &SendEmailLogic{
-		svcCtx: svcCtx,
+		deps: deps,
 	}
 }
 func (l *SendEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) error {
@@ -72,7 +69,7 @@ func (l *SendEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) erro
 		)
 		return nil
 	}
-	sender, err := email.NewSender(l.svcCtx.Config.Email.Platform, l.svcCtx.Config.Email.PlatformConfig, l.svcCtx.Config.Site.SiteName)
+	sender, err := email.NewSender(l.deps.Email().Platform, l.deps.Email().PlatformConfig, l.deps.SiteName())
 	if err != nil {
 		logger.WithContext(ctx).Error("[SendEmailLogic] NewSender failed", logger.Field("error", err.Error()))
 		return nil
@@ -84,17 +81,17 @@ func (l *SendEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) erro
 	switch payload.Type {
 	case types.EmailTypeVerify:
 		payload.Content["Type"] = uint8(payload.Content["Type"].(float64))
-		bodyTemplate = l.svcCtx.Config.Email.VerifyEmailTemplate
-		subjectTemplate = l.svcCtx.Config.Email.VerifyEmailSubject
+		bodyTemplate = l.deps.Email().VerifyEmailTemplate
+		subjectTemplate = l.deps.Email().VerifyEmailSubject
 	case types.EmailTypeMaintenance:
-		bodyTemplate = l.svcCtx.Config.Email.MaintenanceEmailTemplate
-		subjectTemplate = l.svcCtx.Config.Email.MaintenanceEmailSubject
+		bodyTemplate = l.deps.Email().MaintenanceEmailTemplate
+		subjectTemplate = l.deps.Email().MaintenanceEmailSubject
 	case types.EmailTypeExpiration:
-		bodyTemplate = l.svcCtx.Config.Email.ExpirationEmailTemplate
-		subjectTemplate = l.svcCtx.Config.Email.ExpirationEmailSubject
+		bodyTemplate = l.deps.Email().ExpirationEmailTemplate
+		subjectTemplate = l.deps.Email().ExpirationEmailSubject
 	case types.EmailTypeTrafficExceed:
-		bodyTemplate = l.svcCtx.Config.Email.TrafficExceedEmailTemplate
-		subjectTemplate = l.svcCtx.Config.Email.TrafficExceedEmailSubject
+		bodyTemplate = l.deps.Email().TrafficExceedEmailTemplate
+		subjectTemplate = l.deps.Email().TrafficExceedEmailSubject
 	case types.EmailTypeCustom:
 		if payload.Content == nil {
 			logger.WithContext(ctx).Error("[SendEmailLogic] Custom email content is empty")
@@ -124,18 +121,22 @@ func (l *SendEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) erro
 	}
 	subject := resolveSubject(ctx, subjectTemplate, payload.Subject, payload.Content)
 	messageLog := log.Message{
-		Platform: l.svcCtx.Config.Email.Platform,
-		To:       payload.Email,
-		Subject:  subject,
-		Content:  emailLogContent(payload.Type, payload.Content),
+		Platform: l.deps.Email().Platform,
+		To:       tool.MaskEmail(payload.Email),
+		// Subjects are operator-controlled templates and may interpolate names,
+		// addresses or one-time credentials. Keep only the notification type in
+		// the audit record; the actual subject is used solely for delivery.
+		Subject: payload.Type,
+		Content: emailLogContent(payload.Type, payload.Content),
 	}
 
 	err = sender.Send([]string{payload.Email}, subject, content)
 	if err != nil {
+		messageLog.Status = 2
 		logger.WithContext(ctx).Error("[SendEmailLogic] Send email failed", logger.Field("error", err.Error()))
-		return nil
+	} else {
+		messageLog.Status = 1
 	}
-	messageLog.Status = 1
 	emailLog, err := messageLog.Marshal()
 	if err != nil {
 		logger.WithContext(ctx).Error("[SendEmailLogic] Marshal message log failed",
@@ -144,7 +145,7 @@ func (l *SendEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) erro
 		return nil
 	}
 
-	if err = l.svcCtx.Store.Log().Insert(ctx, &log.SystemLog{
+	if err = l.deps.Store.Log().Insert(ctx, &log.SystemLog{
 		Type:     log.TypeEmailMessage.Uint8(),
 		Date:     timeutil.Now().Format("2006-01-02"),
 		ObjectID: 0,

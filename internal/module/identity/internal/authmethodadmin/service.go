@@ -6,7 +6,7 @@ package authmethodadmin
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/repository"
 )
 
@@ -53,11 +53,11 @@ func (s *Service) UpdateAuthMethodConfig(ctx context.Context, req *dto.UpdateAut
 	return newUpdateAuthMethodConfigLogic(ctx, s.deps).UpdateAuthMethodConfig(req)
 }
 
-func (s *Service) GetEmailPlatform(ctx context.Context) (*dto.PlatformResponse, error) {
+func (s *Service) GetEmailPlatform(ctx context.Context) (*dto.AuthPlatformResponse, error) {
 	return newGetEmailPlatformLogic(ctx, s.deps).GetEmailPlatform()
 }
 
-func (s *Service) GetSmsPlatform(ctx context.Context) (*dto.PlatformResponse, error) {
+func (s *Service) GetSmsPlatform(ctx context.Context) (*dto.AuthPlatformResponse, error) {
 	return newGetSmsPlatformLogic(ctx, s.deps).GetSmsPlatform()
 }
 

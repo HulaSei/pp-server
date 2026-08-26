@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -24,7 +24,7 @@ func (s *Service) PrePurchase(ctx context.Context, req *dto.PrePurchaseOrderRequ
 	}
 	var discount float64 = 1
 	if sub.Discount != "" {
-		var dis []dto.SubscribeDiscount
+		var dis []dto.BillingSubscribeDiscount
 		_ = json.Unmarshal([]byte(sub.Discount), &dis)
 		discount = getDiscount(dis, req.Quantity)
 	}

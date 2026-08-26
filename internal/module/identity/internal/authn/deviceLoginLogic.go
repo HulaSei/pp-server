@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/repository"
@@ -103,6 +103,12 @@ func (l *DeviceLoginLogic) DeviceLogin(req *dto.DeviceLoginRequest) (resp *dto.L
 			)
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "query user failed: %v", err.Error())
 		}
+	}
+	if userInfo.DeletedAt.Valid {
+		return nil, errors.Wrap(xerr.NewErrCode(xerr.UserNotExist), "user account does not exist")
+	}
+	if userInfo.Enable == nil || !*userInfo.Enable {
+		return nil, errors.Wrap(xerr.NewErrCode(xerr.UserDisabled), "user account is disabled")
 	}
 
 	// Generate session id

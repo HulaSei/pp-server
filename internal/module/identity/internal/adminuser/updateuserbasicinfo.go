@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -40,6 +40,7 @@ func (l *UpdateUserBasicInfoLogic) UpdateUserBasicInfo(req *dto.UpdateUserBasice
 	// then leaves the money untouched. A failure after the profile commit
 	// leaves the money unadjusted for the admin to retry — the same
 	// partial-failure surface the flows will have as services.
+	accessStateChanged := false
 	err := l.deps.Store.InIdentityTx(l.ctx, func(store repository.IdentityStore) error {
 		userInfo, err := store.User().FindOneForUpdate(l.ctx, req.UserId)
 		if err != nil {
@@ -53,6 +54,7 @@ func (l *UpdateUserBasicInfoLogic) UpdateUserBasicInfo(req *dto.UpdateUserBasice
 		userInfo.RefererId = req.RefererId
 		userInfo.OnlyFirstPurchase = &req.OnlyFirstPurchase
 		userInfo.ReferralPercentage = req.ReferralPercentage
+		accessStateChanged = userInfo.Enable == nil || *userInfo.Enable != req.Enable
 		userInfo.Enable = &req.Enable
 		userInfo.IsAdmin = &req.IsAdmin
 		if req.Password != "" && req.Password != "***" {
@@ -71,6 +73,12 @@ func (l *UpdateUserBasicInfoLogic) UpdateUserBasicInfo(req *dto.UpdateUserBasice
 	if err != nil {
 		l.Errorw("[UpdateUserBasicInfoLogic] Update User Error:", logger.Field("err", err.Error()), logger.Field("userId", req.UserId))
 		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseUpdateError), "Update User Error")
+	}
+	// Account state changes must invalidate both subscription-token caches and
+	// node-facing user lists. In particular, disabling a user takes effect at
+	// the service plane immediately instead of waiting for the five-minute TTL.
+	if accessStateChanged {
+		clearUserAccessCaches(l.ctx, l.deps, []int64{req.UserId})
 	}
 
 	err = l.deps.Store.InBillingTx(l.ctx, func(store repository.BillingStore) error {

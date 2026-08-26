@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	tgbot "github.com/go-telegram/bot"
 	"strconv"
 	"time"
 
@@ -13,12 +12,12 @@ import (
 	"github.com/oschwald/geoip2-golang"
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/eventbus"
-	"github.com/perfect-panel/server/internal/model/dto"
 	"github.com/perfect-panel/server/internal/module/billing"
 	"github.com/perfect-panel/server/internal/module/identity"
 	"github.com/perfect-panel/server/internal/module/network"
 	"github.com/perfect-panel/server/internal/module/notification"
 	"github.com/perfect-panel/server/internal/module/platform"
+	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/module/support"
 	ticket "github.com/perfect-panel/server/internal/module/support/entity/ticket"
@@ -39,18 +38,19 @@ import (
 
 // newBillingModule wires the billing module against the legacy store and the
 // asynq client (ADR-001 step 4).
-func newBillingModule(c config.Config, store repository.Store, queue *asynqx.Client, rds *redis.Client, rate *exchangeRate.Cache, srv *ServiceContext) billing.Service {
+func newBillingModule(c config.Config, store repository.Store, queue *asynqx.Client, rds *redis.Client, rate *exchangeRate.Cache, srv *Application) billing.Service {
 	return billing.New(billing.Deps{
 		Orders:        store.Order(),
 		Payments:      store.Payment(),
 		Coupons:       store.Coupon(),
+		Withdrawals:   store.UserWithdrawal(),
 		Plans:         store.Subscribe(),
 		UserSubs:      store.UserSubscription(),
 		Store:         store,
 		Tx:            store,
 		Queue:         activationQueue{client: queue},
-		SingleModel:   func() bool { return srv.Config.Subscribe.SingleModel },
-		CurrencyUnit:  func() string { return srv.Config.Currency.Unit },
+		SingleModel:   func() bool { return srv.Runtime.Config().Subscribe.SingleModel },
+		CurrencyUnit:  func() string { return srv.Runtime.Config().Currency.Unit },
 		Host:          c.Host,
 		IsGatewayMode: report.IsGatewayMode,
 
@@ -61,7 +61,8 @@ func newBillingModule(c config.Config, store repository.Store, queue *asynqx.Cli
 
 		UserProfiles: store.User(),
 		InvitePolicy: func() (uint8, bool) {
-			return uint8(srv.Config.Invite.ReferralPercentage), srv.Config.Invite.OnlyFirstPurchase
+			current := srv.Runtime.Config().Invite
+			return uint8(current.ReferralPercentage), current.OnlyFirstPurchase
 		},
 
 		PortalPlans:        store.Subscribe(),
@@ -72,9 +73,9 @@ func newBillingModule(c config.Config, store repository.Store, queue *asynqx.Cli
 		ExchangeRate:       rate,
 		Portal: billing.PortalConfig{
 			Host:              c.Host,
-			SiteName:          func() string { return srv.Config.Site.SiteName },
-			CurrencyUnit:      func() string { return srv.Config.Currency.Unit },
-			CurrencyAccessKey: func() string { return srv.Config.Currency.AccessKey },
+			SiteName:          func() string { return srv.Runtime.Config().Site.SiteName },
+			CurrencyUnit:      func() string { return srv.Runtime.Config().Currency.Unit },
+			CurrencyAccessKey: func() string { return srv.Runtime.Config().Currency.AccessKey },
 			JwtSecret:         c.JwtAuth.AccessSecret,
 			JwtExpire:         c.JwtAuth.AccessExpire,
 			IsGatewayMode:     report.IsGatewayMode,
@@ -117,7 +118,7 @@ func (q activationQueue) EnqueueDeferredClose(ctx context.Context, orderNo strin
 // newPlatformModule wires the platform module against the legacy store. The
 // log-retention callbacks read and mutate the running configuration exactly
 // as the legacy logic did.
-func newPlatformModule(store repository.Store, srv *ServiceContext) platform.Service {
+func newPlatformModule(store repository.Store, srv *Application) platform.Service {
 	return platform.New(platform.Deps{
 		Logs:    store.Log(),
 		System:  store.System(),
@@ -129,33 +130,35 @@ func newPlatformModule(store repository.Store, srv *ServiceContext) platform.Ser
 		Nodes:   store.Node(),
 		Cache:   srv.Redis,
 		OnLogSettingChanged: func(autoClear bool, clearDays int64) {
-			srv.Config.Log = config.Log{AutoClear: autoClear, ClearDays: clearDays}
+			srv.Runtime.UpdateConfig(func(current *config.Config) {
+				current.Log = config.Log{AutoClear: autoClear, ClearDays: clearDays}
+			})
 		},
 		LogRetention: func() (bool, int64) {
-			return srv.Config.Log.AutoClear, srv.Config.Log.ClearDays
+			current := srv.Runtime.Config().Log
+			return current.AutoClear, current.ClearDays
 		},
-		Reinitialize: func(subsystem string) {
-			if srv.ReinitSubsystem != nil {
-				srv.ReinitSubsystem(subsystem)
-			}
+		Reinitialize: srv.Runtime.Reinitialize,
+		Restart:      srv.Runtime.Restart,
+		SubscribePath: func() string {
+			return srv.Runtime.Config().Subscribe.SubscribePath
 		},
-		Restart: func() error {
-			if srv.Restart == nil {
-				return nil
-			}
-			return srv.Restart()
-		},
-		SubscribePath: func() string { return srv.Config.Subscribe.SubscribePath },
 		ApplyVerifyConfig: func(req *dto.VerifyConfig) {
-			tool.DeepCopy(&srv.Config.Verify, req)
+			srv.Runtime.UpdateConfig(func(current *config.Config) {
+				tool.DeepCopy(&current.Verify, req)
+			})
 		},
 		Multiplier: func(at time.Time) float32 {
-			return srv.NodeMultiplierManager.GetMultiplier(at)
+			manager := srv.Runtime.NodeMultiplierManager()
+			if manager == nil {
+				return 1
+			}
+			return manager.GetMultiplier(at)
 		},
 		FullStore: store,
 		Redis:     srv.Redis,
 		PublicConfig: func() platform.GlobalConfigSnapshot {
-			c := srv.Config
+			c := srv.Runtime.Config()
 			return platform.GlobalConfigSnapshot{
 				Site:      c.Site,
 				Subscribe: c.Subscribe,
@@ -166,7 +169,7 @@ func newPlatformModule(store repository.Store, srv *ServiceContext) platform.Ser
 				Invite:    c.Invite,
 			}
 		},
-		LogPath: srv.Config.Logger.Path,
+		LogPath: srv.Runtime.Config().Logger.Path,
 		GeoIP: func() *geoip2.Reader {
 			if srv.GeoIP == nil {
 				return nil
@@ -179,7 +182,7 @@ func newPlatformModule(store repository.Store, srv *ServiceContext) platform.Ser
 // newSubscriptionModule wires the subscription module against the legacy
 // store; device broadcast and the runtime-mutable trial plan are closures
 // over the service context.
-func newSubscriptionModule(store repository.Store, srv *ServiceContext) subscription.Service {
+func newSubscriptionModule(store repository.Store, srv *Application) subscription.Service {
 	return subscription.New(subscription.Deps{
 		Plans:    store.Subscribe(),
 		UserSubs: store.UserSubscription(),
@@ -190,9 +193,10 @@ func newSubscriptionModule(store repository.Store, srv *ServiceContext) subscrip
 				srv.DeviceManager.Broadcast(device.SubscribeUpdate)
 			}
 		},
-		Host: srv.Config.Host,
+		Host: srv.Runtime.Config().Host,
 		IsTrialPlan: func(planID int64) bool {
-			return srv.Config.Register.EnableTrial && srv.Config.Register.TrialSubscribe == planID
+			current := srv.Runtime.Config().Register
+			return current.EnableTrial && current.TrialSubscribe == planID
 		},
 		Clients:     store.Client(),
 		Users:       store.User(),
@@ -203,9 +207,9 @@ func newSubscriptionModule(store repository.Store, srv *ServiceContext) subscrip
 		Orders:      store.Order(),
 		Inbox:       store.Inbox(),
 		FullStore:   store,
-		SingleModel: func() bool { return srv.Config.Subscribe.SingleModel },
+		SingleModel: func() bool { return srv.Runtime.Config().Subscribe.SingleModel },
 		TrialPolicy: func() subscription.TrialPolicy {
-			c := srv.Config.Register
+			c := srv.Runtime.Config().Register
 			return subscription.TrialPolicy{
 				Enabled:  c.EnableTrial,
 				PlanID:   c.TrialSubscribe,
@@ -216,13 +220,14 @@ func newSubscriptionModule(store repository.Store, srv *ServiceContext) subscrip
 		UserAuths:       store.UserAuth(),
 		LifecycleNotify: lifecycleNotifier{srv: srv},
 		DeliveryConfig: func() subscription.DeliveryConfig {
+			current := srv.Runtime.Config()
 			return subscription.DeliveryConfig{
-				SiteName:              srv.Config.Site.SiteName,
-				Host:                  srv.Config.Host,
-				SubscribeDomain:       srv.Config.Subscribe.SubscribeDomain,
-				ProfileUpdateInterval: srv.Config.Subscribe.ProfileUpdateInterval,
-				ProfileWebPageURL:     srv.Config.Subscribe.ProfileWebPageURL,
-				UserAgentList:         srv.Config.Subscribe.UserAgentList,
+				SiteName:              current.Site.SiteName,
+				Host:                  current.Host,
+				SubscribeDomain:       current.Subscribe.SubscribeDomain,
+				ProfileUpdateInterval: current.Subscribe.ProfileUpdateInterval,
+				ProfileWebPageURL:     current.Subscribe.ProfileWebPageURL,
+				UserAgentList:         current.Subscribe.UserAgentList,
 				GatewayMode:           report.IsGatewayMode(),
 			}
 		},
@@ -234,7 +239,7 @@ func newSubscriptionModule(store repository.Store, srv *ServiceContext) subscrip
 // the pre-expiry reminder goes over Telegram. Site branding is read per send
 // because the admin can change it at runtime.
 type lifecycleNotifier struct {
-	srv *ServiceContext
+	srv *Application
 }
 
 func (n lifecycleNotifier) enqueue(ctx context.Context, payload queuetypes.SendEmailPayload, userEmail string) {
@@ -254,26 +259,28 @@ func (n lifecycleNotifier) enqueue(ctx context.Context, payload queuetypes.SendE
 }
 
 func (n lifecycleNotifier) NotifySubscriptionExpired(ctx context.Context, email string, expiredAt time.Time) {
+	current := n.srv.Runtime.Config()
 	n.enqueue(ctx, queuetypes.SendEmailPayload{
 		Type:    queuetypes.EmailTypeExpiration,
 		Email:   email,
 		Subject: emailpkg.DefaultExpirationEmailSubject,
 		Content: map[string]interface{}{
-			"SiteLogo":   n.srv.Config.Site.SiteLogo,
-			"SiteName":   n.srv.Config.Site.SiteName,
+			"SiteLogo":   current.Site.SiteLogo,
+			"SiteName":   current.Site.SiteName,
 			"ExpireDate": expiredAt.Format("2006-01-02 15:04:05"),
 		},
 	}, email)
 }
 
 func (n lifecycleNotifier) NotifyTrafficExceeded(ctx context.Context, email string) {
+	current := n.srv.Runtime.Config()
 	n.enqueue(ctx, queuetypes.SendEmailPayload{
 		Type:    queuetypes.EmailTypeTrafficExceed,
 		Email:   email,
 		Subject: emailpkg.DefaultTrafficExceedEmailSubject,
 		Content: map[string]interface{}{
-			"SiteLogo": n.srv.Config.Site.SiteLogo,
-			"SiteName": n.srv.Config.Site.SiteName,
+			"SiteLogo": current.Site.SiteLogo,
+			"SiteName": current.Site.SiteName,
 		},
 	}, email)
 }
@@ -283,7 +290,7 @@ func (n lifecycleNotifier) NotifyTrafficExceeded(ctx context.Context, email stri
 // cover expiry after the fact, and the notice is gated on the operator's
 // notification switch like every other bot message.
 func (n lifecycleNotifier) NotifySubscriptionExpiring(ctx context.Context, userID int64, planName string, expireAt time.Time, renewalAmount int64) {
-	if !n.srv.Config.Telegram.EnableNotify {
+	if !n.srv.Runtime.Config().Telegram.EnableNotify {
 		return
 	}
 	if planName == "" {
@@ -308,7 +315,7 @@ func (n lifecycleNotifier) NotifySubscriptionExpiring(ctx context.Context, userI
 
 // newIdentityModule wires the identity module against the legacy store;
 // device kicking is a closure over the service context's device manager.
-func newIdentityModule(store repository.Store, srv *ServiceContext) identity.Service {
+func newIdentityModule(store repository.Store, srv *Application) identity.Service {
 	return identity.New(identity.Deps{
 		Users:     store.User(),
 		UserAuths: store.UserAuth(),
@@ -329,14 +336,15 @@ func newIdentityModule(store repository.Store, srv *ServiceContext) identity.Ser
 		Auths:  store.Auth(),
 		Redis:  srv.Redis,
 		EmailDomains: func() (string, bool) {
-			return srv.Config.Email.DomainSuffixList, srv.Config.Email.EnableDomainSuffix
+			current := srv.Runtime.Config().Email
+			return current.DomainSuffixList, current.EnableDomainSuffix
 		},
-		TelegramBotName: func() string { return srv.Config.Telegram.BotName },
+		TelegramBotName: func() string { return srv.Runtime.Config().Telegram.BotName },
 		NotifyTelegramUnbind: func(userID, chatID int64) error {
 			return srv.Notification.NotifyTelegramUnbind(userID, chatID)
 		},
 		AuthConfig: func() identity.AuthSnapshot {
-			c := srv.Config
+			c := srv.Runtime.Config()
 			return identity.AuthSnapshot{
 				JWTAccessSecret: c.JwtAuth.AccessSecret,
 				JWTAccessExpire: c.JwtAuth.AccessExpire,
@@ -368,7 +376,7 @@ func newIdentityModule(store repository.Store, srv *ServiceContext) identity.Ser
 		},
 		VerifyQueue: srv.Queue,
 		SenderConfig: func() identity.SenderSnapshot {
-			c := srv.Config
+			c := srv.Runtime.Config()
 			return identity.SenderSnapshot{
 				EmailPlatform:        c.Email.Platform,
 				EmailPlatformConfig:  c.Email.PlatformConfig,
@@ -377,13 +385,9 @@ func newIdentityModule(store repository.Store, srv *ServiceContext) identity.Ser
 				SiteName:             c.Site.SiteName,
 			}
 		},
-		Reinitialize: func(subsystem string) {
-			if srv.ReinitSubsystem != nil {
-				srv.ReinitSubsystem(subsystem)
-			}
-		},
+		Reinitialize: srv.Runtime.Reinitialize,
 		VerifyCodeConfig: func() identity.VerifyCodeSnapshot {
-			c := srv.Config
+			c := srv.Runtime.Config()
 			return identity.VerifyCodeSnapshot{
 				DomainSuffixList:   c.Email.DomainSuffixList,
 				EnableDomainSuffix: c.Email.EnableDomainSuffix,
@@ -400,21 +404,23 @@ func newIdentityModule(store repository.Store, srv *ServiceContext) identity.Ser
 // newNetworkModule wires the network module against the legacy store; the
 // node/subscribe configuration is runtime-mutable, so the module receives a
 // per-request snapshot closure.
-func newNetworkModule(store repository.Store, srv *ServiceContext) network.Service {
+func newNetworkModule(store repository.Store, srv *Application) network.Service {
 	return network.New(network.Deps{
 		Store: store,
 		Redis: srv.Redis,
 		Config: func() network.Snapshot {
+			current := srv.Runtime.Config()
 			return network.Snapshot{
-				Node:      srv.Config.Node,
-				Subscribe: srv.Config.Subscribe,
+				Node:      current.Node,
+				Subscribe: current.Subscribe,
 			}
 		},
 		Multiplier: func(at time.Time) float32 {
-			if srv.NodeMultiplierManager == nil {
+			manager := srv.Runtime.NodeMultiplierManager()
+			if manager == nil {
 				return 1
 			}
-			return srv.NodeMultiplierManager.GetMultiplier(at)
+			return manager.GetMultiplier(at)
 		},
 	})
 }
@@ -469,7 +475,7 @@ func originContext(ctx context.Context, carrier string) context.Context {
 // enqueues each event as an events:deliver task; the queue worker delivers
 // it through these subscriptions. Handlers call module facades and rely on
 // the modules' inbox idempotency.
-func newEventBus(store repository.Store, srv *ServiceContext) *eventbus.Bus {
+func newEventBus(store repository.Store, srv *Application) *eventbus.Bus {
 	bus := eventbus.New(store.Outbox(), asynqEventPublisher{client: srv.Queue})
 	bus.Subscribe("identity.user_registered", "subscription.trial_grant", func(ctx context.Context, event eventbus.Event) error {
 		userID, err := strconv.ParseInt(event.Key, 10, 64)
@@ -485,10 +491,10 @@ func newEventBus(store repository.Store, srv *ServiceContext) *eventbus.Bus {
 // newNotificationModule wires the notification module against the legacy
 // store; the bot client is runtime-recreated, so the module reads it per
 // call.
-func newNotificationModule(store repository.Store, srv *ServiceContext) notification.Service {
+func newNotificationModule(store repository.Store, srv *Application) notification.Service {
 	return notification.New(notification.Deps{
-		Bot:           func() *tgbot.Bot { return srv.TelegramBot },
-		GroupChatID:   func() int64 { return srv.Config.Telegram.GroupChatID },
+		Bot:           srv.Runtime.TelegramBot,
+		GroupChatID:   func() int64 { return srv.Runtime.Config().Telegram.GroupChatID },
 		Topics:        store.TelegramTopic(),
 		Redis:         srv.Redis,
 		Users:         store.User(),
@@ -506,7 +512,7 @@ func newNotificationModule(store repository.Store, srv *ServiceContext) notifica
 // newSupportModule wires the support module against the legacy store. The
 // adapters below satisfy the module's ports until the owning modules exist
 // (ADR-001).
-func newSupportModule(store repository.Store, queue *asynqx.Client, srv *ServiceContext) support.Service {
+func newSupportModule(store repository.Store, queue *asynqx.Client, srv *Application) support.Service {
 	return support.New(support.Deps{
 		Announcements: store.Announcement(),
 		Ads:           store.Ads(),
@@ -527,10 +533,10 @@ func newSupportModule(store repository.Store, queue *asynqx.Client, srv *Service
 // or unreachable only logs — the ticket operation already succeeded. The
 // mirror runs detached from the request: a user submitting a ticket must
 // not wait on Telegram round-trips (the bot client's HTTP timeout is 60s).
-type ticketTopicNotifier struct{ srv *ServiceContext }
+type ticketTopicNotifier struct{ srv *Application }
 
 func (n ticketTopicNotifier) enabled() bool {
-	return n.srv.Config.Telegram.GroupChatID != 0 && n.srv.Notification != nil
+	return n.srv.Runtime.Config().Telegram.GroupChatID != 0 && n.srv.Notification != nil
 }
 
 func (n ticketTopicNotifier) mirror(ctx context.Context, ticketID int64, what string, call func(ctx context.Context) error) {

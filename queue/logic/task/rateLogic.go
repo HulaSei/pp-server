@@ -4,25 +4,22 @@ import (
 	"context"
 
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/exchangeRate"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
 )
 
 type RateLogic struct {
-	svcCtx *svc.ServiceContext
+	deps RateDependencies
 }
 
-func NewRateLogic(svcCtx *svc.ServiceContext) *RateLogic {
-	return &RateLogic{
-		svcCtx: svcCtx,
-	}
+func NewRateLogic(deps RateDependencies) *RateLogic {
+	return &RateLogic{deps: deps}
 }
 
 func (l *RateLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
 	// Retrieve system currency configuration
-	currency, err := l.svcCtx.Store.System().GetCurrencyConfig(ctx)
+	currency, err := l.deps.Store.System().GetCurrencyConfig(ctx)
 	if err != nil {
 		logger.Errorw("[PurchaseCheckout] GetCurrencyConfig error", logger.Field("error", err.Error()))
 		return err
@@ -46,7 +43,7 @@ func (l *RateLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
 		logger.Errorw("[RateLogic] GetExchangeRete error", logger.Field("error", err.Error()))
 		return err
 	}
-	l.svcCtx.ExchangeRate.Set(result)
+	l.deps.ExchangeRate.Set(result)
 	logger.WithContext(ctx).Infof("[RateLogic] GetExchangeRete success, result: %+v", result)
 	return nil
 }

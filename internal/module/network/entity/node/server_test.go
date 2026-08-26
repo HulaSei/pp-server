@@ -32,6 +32,10 @@ func TestServerProtocolRoundTripPreservesExtendedNodeFields(t *testing.T) {
 		{Type: "anytls", Port: 448, Enable: true, PaddingScheme: "stop=8"},
 		{Type: "hysteria", Port: 449, Enable: true, QUICCongestionControl: "bbr", Heartbeat: 10},
 		{Type: "tuic", Port: 450, Enable: true, QUICCongestionControl: "bbr"},
+		{
+			Type: "nowhere", Port: 451, Version: 1, Enable: true, Security: "tls", Network: "mix",
+			SNI: "nowhere.example", ALPN: []string{"now/1"}, CertMode: "self", CertPinSHA256: testCertPin,
+		},
 	}
 	server := new(Server)
 	if err := server.MarshalProtocols(protocols); err != nil {

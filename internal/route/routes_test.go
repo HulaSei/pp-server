@@ -5,28 +5,32 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	appconfig "github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/pkg/xerr"
 )
 
-var routeHandlerName = regexp.MustCompile(`^(.*)\.[^.]+\.([^.]+)\.func[0-9]+$`)
+var routeHandlerName = regexp.MustCompile(`^(.*)\.func[0-9]+$`)
 
 func TestRegisterHandlers_routeInventory(t *testing.T) {
 	// Given
-	router := server.Default()
-	RegisterHandlers(router, &svc.ServiceContext{})
+	router := server.New()
+	RegisterHandlers(router, Dependencies{})
 	routes := router.Routes()
+	handlerOwners := routeHandlerOwners(t)
 	var actual strings.Builder
 	for _, route := range routes {
-		logicalHandler, err := normalizeRouteHandler(route.Handler)
+		logicalHandler, err := normalizeRouteHandler(route.Handler, handlerOwners)
 		if err != nil {
 			t.Fatalf("normalize route %s %s handler %q: %v", route.Method, route.Path, route.Handler, err)
 		}
@@ -45,32 +49,95 @@ func TestRegisterHandlers_routeInventory(t *testing.T) {
 	}
 
 	// Then
-	if len(routes) != 245 {
-		t.Fatalf("expected 245 routes, got %d", len(routes))
+	if len(routes) != 247 {
+		t.Fatalf("expected 247 routes, got %d", len(routes))
 	}
 	if !bytes.Equal([]byte(actual.String()), expected) {
-		t.Fatal("route inventory differs from golden")
+		t.Fatalf("route inventory differs from golden\nactual:\n%s", actual.String())
 	}
 }
 
-func normalizeRouteHandler(raw string) (string, error) {
+func normalizeRouteHandler(raw string, owners map[string]string) (string, error) {
 	matches := routeHandlerName.FindStringSubmatch(raw)
 	if matches == nil {
 		return "", errors.New("unsupported Hertz closure name")
 	}
+	closureOwner := matches[1]
+	for key, logicalHandler := range owners {
+		if closureOwner == logicalHandler || strings.HasSuffix(closureOwner, "."+key) {
+			return logicalHandler, nil
+		}
+	}
+	return "", errors.New("handler owner not found for " + closureOwner)
+}
 
-	logicalHandler := matches[1] + "." + matches[2]
-	return strings.Replace(logicalHandler,
-		"github.com/perfect-panel/server/internal/route.",
-		"github.com/perfect-panel/server/internal/handler.",
-		1,
-	), nil
+// routeHandlerOwners derives the logical handler owner from route source
+// imports. Runtime closure names point at the route package after inlining, so
+// using those names directly would erase the module transport boundary that
+// this golden inventory is meant to protect.
+func routeHandlerOwners(t *testing.T) map[string]string {
+	t.Helper()
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatalf("read route package: %v", err)
+	}
+	owners := make(map[string]string)
+	fset := token.NewFileSet()
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
+			continue
+		}
+		file, parseErr := parser.ParseFile(fset, entry.Name(), nil, 0)
+		if parseErr != nil {
+			t.Fatalf("parse %s: %v", entry.Name(), parseErr)
+		}
+		imports := make(map[string]string)
+		for _, spec := range file.Imports {
+			path := strings.Trim(spec.Path.Value, `"`)
+			if !strings.Contains(path, "/internal/module/") || !strings.Contains(path, "/transport/http") {
+				continue
+			}
+			name := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
+			if spec.Name != nil {
+				name = spec.Name.Name
+			}
+			imports[name] = path
+		}
+		for _, decl := range file.Decls {
+			fn, ok := decl.(*ast.FuncDecl)
+			if !ok || fn.Body == nil {
+				continue
+			}
+			ast.Inspect(fn.Body, func(node ast.Node) bool {
+				sel, ok := node.(*ast.SelectorExpr)
+				if !ok {
+					return true
+				}
+				ident, ok := sel.X.(*ast.Ident)
+				if !ok {
+					return true
+				}
+				path, ok := imports[ident.Name]
+				if !ok || !strings.HasSuffix(sel.Sel.Name, "Handler") {
+					return true
+				}
+				key := fn.Name.Name + "." + sel.Sel.Name
+				owner := path + "." + sel.Sel.Name
+				if previous, exists := owners[key]; exists && previous != owner {
+					t.Fatalf("ambiguous route handler owner for %s: %s and %s", key, previous, owner)
+				}
+				owners[key] = owner
+				return true
+			})
+		}
+	}
+	return owners
 }
 
 func TestRegisterHandlers_edgeManifestHidesUnauthorizedRequests(t *testing.T) {
 	// Given
 	router := server.Default()
-	RegisterHandlers(router, &svc.ServiceContext{Config: appconfig.Config{
+	RegisterHandlers(router, Dependencies{Config: appconfig.Config{
 		EdgeSubscribe: appconfig.EdgeSubscribeConfig{Enabled: true},
 	}})
 	ctx := router.NewContext()
@@ -96,7 +163,7 @@ func TestRegisterHandlers_configuredRoutes(t *testing.T) {
 	}{
 		{
 			name:           "empty-fallback",
-			wantRouteCount: 245,
+			wantRouteCount: 247,
 			present:        []string{"/v1/subscribe/config"},
 			absent:         []string{"/"},
 		},
@@ -105,7 +172,7 @@ func TestRegisterHandlers_configuredRoutes(t *testing.T) {
 			subscribe: appconfig.SubscribeConfig{
 				SubscribePath: "/custom/subscribe",
 			},
-			wantRouteCount: 245,
+			wantRouteCount: 247,
 			present:        []string{"/custom/subscribe"},
 			absent:         []string{"/v1/subscribe/config", "/"},
 		},
@@ -114,7 +181,7 @@ func TestRegisterHandlers_configuredRoutes(t *testing.T) {
 			subscribe: appconfig.SubscribeConfig{
 				PanDomain: false,
 			},
-			wantRouteCount: 245,
+			wantRouteCount: 247,
 			present:        []string{"/v1/subscribe/config"},
 			absent:         []string{"/"},
 		},
@@ -123,12 +190,12 @@ func TestRegisterHandlers_configuredRoutes(t *testing.T) {
 			subscribe: appconfig.SubscribeConfig{
 				PanDomain: true,
 			},
-			wantRouteCount: 246,
+			wantRouteCount: 248,
 			present:        []string{"/v1/subscribe/config", "/"},
 		},
 		{
 			name:           "edge-manifest-enabled",
-			wantRouteCount: 246,
+			wantRouteCount: 248,
 			present:        []string{"/v1/subscribe/config", "/api/edge/v1/manifest"},
 		},
 	}
@@ -139,9 +206,9 @@ func TestRegisterHandlers_configuredRoutes(t *testing.T) {
 			if tc.name == "edge-manifest-enabled" {
 				config.EdgeSubscribe.Enabled = true
 			}
-			svcCtx := &svc.ServiceContext{Config: config}
+			deps := Dependencies{Config: config}
 			router := server.Default()
-			RegisterHandlers(router, svcCtx)
+			RegisterHandlers(router, deps)
 			routes := router.Routes()
 			paths := make(map[string]struct{}, len(routes))
 			for _, route := range routes {
@@ -205,7 +272,7 @@ func TestRegisterHandlers_configuredRoutes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Given
 			router := server.Default()
-			RegisterHandlers(router, &svc.ServiceContext{Config: appconfig.Config{Subscribe: tc.subscribe}})
+			RegisterHandlers(router, Dependencies{Config: appconfig.Config{Subscribe: tc.subscribe}})
 			ctx := router.NewContext()
 			ctx.Request.SetRequestURI(tc.path)
 			ctx.Request.Header.SetMethod(http.MethodGet)
@@ -256,7 +323,7 @@ func TestRegisterHandlers_middlewareContracts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// Given
 			router := server.Default()
-			RegisterHandlers(router, &svc.ServiceContext{Config: tc.config})
+			RegisterHandlers(router, Dependencies{Config: tc.config})
 
 			for _, path := range tc.paths {
 				method := tc.method

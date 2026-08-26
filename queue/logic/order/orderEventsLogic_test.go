@@ -8,11 +8,18 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/hibiken/asynq"
+	"github.com/perfect-panel/server/internal/module/billing"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
+	"github.com/perfect-panel/server/internal/module/identity"
+	"github.com/perfect-panel/server/internal/module/network"
+	"github.com/perfect-panel/server/internal/module/notification"
+	"github.com/perfect-panel/server/internal/module/platform"
 	"github.com/perfect-panel/server/internal/module/platform/entity/inbox"
 	"github.com/perfect-panel/server/internal/module/platform/entity/outbox"
+	"github.com/perfect-panel/server/internal/module/subscription"
+	"github.com/perfect-panel/server/internal/module/support"
 	"github.com/perfect-panel/server/internal/orderstream"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/repository"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -39,7 +46,7 @@ func TestPublishOrderEventsDeliversDurableOutboxThenMarksPublished(t *testing.T)
 		t.Fatalf("subscribe: %v", err)
 	}
 
-	logic := NewPublishOrderEventsLogic(&svc.ServiceContext{Store: svc.NewStore(db, redisClient), Redis: redisClient})
+	logic := NewPublishOrderEventsLogic(Dependencies{Store: newOrderEventStore(db, redisClient), Redis: redisClient})
 	if err := logic.ProcessTask(context.Background(), asynq.NewTask("test", nil)); err != nil {
 		t.Fatalf("publish outbox: %v", err)
 	}
@@ -81,7 +88,7 @@ func TestCleanupOrderEventsKeepsUnpublishedRecords(t *testing.T) {
 	redisServer := miniredis.RunT(t)
 	redisClient := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
 	t.Cleanup(func() { _ = redisClient.Close() })
-	logic := NewCleanupOrderEventsLogic(&svc.ServiceContext{Store: svc.NewStore(db, redisClient)})
+	logic := NewCleanupOrderEventsLogic(Dependencies{Store: newOrderEventStore(db, redisClient)})
 	if err := logic.ProcessTask(context.Background(), asynq.NewTask("test", nil)); err != nil {
 		t.Fatalf("cleanup events: %v", err)
 	}
@@ -92,4 +99,16 @@ func TestCleanupOrderEventsKeepsUnpublishedRecords(t *testing.T) {
 	if len(events) != 1 || events[0].OrderNo != unpublished.OrderNo {
 		t.Fatalf("remaining events = %#v, want only unpublished event", events)
 	}
+}
+
+func newOrderEventStore(db *gorm.DB, redisClient *redis.Client) *repository.GormStore {
+	return repository.NewGormStoreWithBuilders(db, redisClient, repository.Builders{
+		Platform:     platform.NewRepoBuilder(),
+		Billing:      billing.NewRepoBuilder(),
+		Subscription: subscription.NewRepoBuilder(),
+		Identity:     identity.NewRepoBuilder(),
+		Network:      network.NewRepoBuilder(redisClient),
+		Support:      support.NewRepoBuilder(),
+		Notification: notification.NewRepoBuilder(),
+	})
 }

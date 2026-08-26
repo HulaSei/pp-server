@@ -8,7 +8,7 @@ import (
 	"github.com/hibiken/asynq"
 	taskEntity "github.com/perfect-panel/server/internal/module/platform/entity/task"
 	"github.com/perfect-panel/server/internal/module/subscription"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 
@@ -16,11 +16,12 @@ import (
 // the business logic lives in the subscription module (ADR-001 step 6
 // preparation).
 type QuotaTaskLogic struct {
-	svcCtx *svc.ServiceContext
+	service subscription.Service
+	tasks   repository.TaskRepo
 }
 
-func NewQuotaTaskLogic(svcCtx *svc.ServiceContext) *QuotaTaskLogic {
-	return &QuotaTaskLogic{svcCtx: svcCtx}
+func NewQuotaTaskLogic(service subscription.Service, tasks repository.TaskRepo) *QuotaTaskLogic {
+	return &QuotaTaskLogic{service: service, tasks: tasks}
 }
 
 func (l *QuotaTaskLogic) ProcessTask(ctx context.Context, t *asynq.Task) error {
@@ -28,7 +29,7 @@ func (l *QuotaTaskLogic) ProcessTask(ctx context.Context, t *asynq.Task) error {
 	if err != nil {
 		return err
 	}
-	if err := l.svcCtx.Subscription.ProcessQuotaTask(ctx, taskID); err != nil {
+	if err := l.service.ProcessQuotaTask(ctx, taskID); err != nil {
 		if errors.Is(err, subscription.ErrQuotaTaskUnretryable) {
 			return asynq.SkipRetry
 		}
@@ -43,18 +44,17 @@ func (l *QuotaTaskLogic) ProcessTask(ctx context.Context, t *asynq.Task) error {
 }
 
 func (l *QuotaTaskLogic) markFailed(ctx context.Context, taskID int64, cause error) {
-	if l.svcCtx == nil || l.svcCtx.Store == nil {
+	if l.tasks == nil {
 		return
 	}
-	tasks := l.svcCtx.Store.Task()
-	data, err := tasks.FindOneByType(ctx, taskID, taskEntity.TypeQuota)
+	data, err := l.tasks.FindOneByType(ctx, taskID, taskEntity.TypeQuota)
 	if err != nil {
 		logger.WithContext(ctx).Error("[QuotaTaskLogic] failed to load exhausted task", logger.Field("error", err.Error()), logger.Field("taskID", taskID))
 		return
 	}
 	data.Status = taskEntity.StatusFailed
 	data.Errors = cause.Error()
-	if _, err := tasks.UpdateActive(ctx, data); err != nil {
+	if _, err := l.tasks.UpdateActive(ctx, data); err != nil {
 		logger.WithContext(ctx).Error("[QuotaTaskLogic] failed to mark exhausted task", logger.Field("error", err.Error()), logger.Field("taskID", taskID))
 	}
 }

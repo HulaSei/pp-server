@@ -2,42 +2,41 @@ package route
 
 import (
 	"github.com/cloudwego/hertz/pkg/app/server"
-	adminUser "github.com/perfect-panel/server/internal/handler/admin/user"
-	"github.com/perfect-panel/server/internal/middleware"
-	"github.com/perfect-panel/server/internal/svc"
+	identityAdminUser "github.com/perfect-panel/server/internal/module/identity/transport/http/admin/user"
+	subscriptionAdminUser "github.com/perfect-panel/server/internal/module/subscription/transport/http/admin/user"
 )
 
-func registerAdminUserRoutes(router *server.Hertz, serverCtx *svc.ServiceContext) {
+func registerAdminUserRoutes(router *server.Hertz, deps Dependencies) {
 	adminUserGroupRouter := router.Group("/v1/admin/user")
-	adminUserGroupRouter.Use(middleware.AuthMiddleware(serverCtx))
+	adminUserGroupRouter.Use(deps.authMiddleware())
 	{
-		adminUserGroupRouter.DELETE("/", adminUser.DeleteUserHandler(serverCtx))
-		adminUserGroupRouter.POST("/", adminUser.CreateUserHandler(serverCtx))
-		adminUserGroupRouter.POST("/auth_method", adminUser.CreateUserAuthMethodHandler(serverCtx))
-		adminUserGroupRouter.DELETE("/auth_method", adminUser.DeleteUserAuthMethodHandler(serverCtx))
-		adminUserGroupRouter.PUT("/auth_method", adminUser.UpdateUserAuthMethodHandler(serverCtx))
-		adminUserGroupRouter.GET("/auth_method", adminUser.GetUserAuthMethodHandler(serverCtx))
-		adminUserGroupRouter.PUT("/basic", adminUser.UpdateUserBasicInfoHandler(serverCtx))
-		adminUserGroupRouter.DELETE("/batch", adminUser.BatchDeleteUserHandler(serverCtx))
-		adminUserGroupRouter.GET("/current", adminUser.CurrentUserHandler(serverCtx))
-		adminUserGroupRouter.GET("/detail", adminUser.GetUserDetailHandler(serverCtx))
-		adminUserGroupRouter.PUT("/device", adminUser.UpdateUserDeviceHandler(serverCtx))
-		adminUserGroupRouter.DELETE("/device", adminUser.DeleteUserDeviceHandler(serverCtx))
-		adminUserGroupRouter.PUT("/device/kick_offline", adminUser.KickOfflineByUserDeviceHandler(serverCtx))
-		adminUserGroupRouter.GET("/list", adminUser.GetUserListHandler(serverCtx))
-		adminUserGroupRouter.GET("/login/logs", adminUser.GetUserLoginLogsHandler(serverCtx))
-		adminUserGroupRouter.PUT("/notify", adminUser.UpdateUserNotifySettingHandler(serverCtx))
-		adminUserGroupRouter.GET("/subscribe", adminUser.GetUserSubscribeHandler(serverCtx))
-		adminUserGroupRouter.POST("/subscribe", adminUser.CreateUserSubscribeHandler(serverCtx))
-		adminUserGroupRouter.PUT("/subscribe", adminUser.UpdateUserSubscribeHandler(serverCtx))
-		adminUserGroupRouter.DELETE("/subscribe", adminUser.DeleteUserSubscribeHandler(serverCtx))
-		adminUserGroupRouter.GET("/subscribe/detail", adminUser.GetUserSubscribeByIdHandler(serverCtx))
-		adminUserGroupRouter.GET("/subscribe/device", adminUser.GetUserSubscribeDevicesHandler(serverCtx))
-		adminUserGroupRouter.GET("/subscribe/logs", adminUser.GetUserSubscribeLogsHandler(serverCtx))
-		adminUserGroupRouter.GET("/subscribe/reset/logs", adminUser.GetUserSubscribeResetTrafficLogsHandler(serverCtx))
-		adminUserGroupRouter.POST("/subscribe/reset/token", adminUser.ResetUserSubscribeTokenHandler(serverCtx))
-		adminUserGroupRouter.POST("/subscribe/reset/traffic", adminUser.ResetUserSubscribeTrafficHandler(serverCtx))
-		adminUserGroupRouter.POST("/subscribe/toggle", adminUser.ToggleUserSubscribeStatusHandler(serverCtx))
-		adminUserGroupRouter.GET("/subscribe/traffic_logs", adminUser.GetUserSubscribeTrafficLogsHandler(serverCtx))
+		adminUserGroupRouter.DELETE("/", identityAdminUser.DeleteUserHandler(deps.Identity))
+		adminUserGroupRouter.POST("/", identityAdminUser.CreateUserHandler(deps.Identity))
+		adminUserGroupRouter.POST("/auth_method", identityAdminUser.CreateUserAuthMethodHandler(deps.Identity))
+		adminUserGroupRouter.DELETE("/auth_method", identityAdminUser.DeleteUserAuthMethodHandler(deps.Identity))
+		adminUserGroupRouter.PUT("/auth_method", identityAdminUser.UpdateUserAuthMethodHandler(deps.Identity))
+		adminUserGroupRouter.GET("/auth_method", identityAdminUser.GetUserAuthMethodHandler(deps.Identity))
+		adminUserGroupRouter.PUT("/basic", identityAdminUser.UpdateUserBasicInfoHandler(deps.Identity))
+		adminUserGroupRouter.DELETE("/batch", identityAdminUser.BatchDeleteUserHandler(deps.Identity))
+		adminUserGroupRouter.GET("/current", identityAdminUser.CurrentUserHandler(deps.Identity))
+		adminUserGroupRouter.GET("/detail", identityAdminUser.GetUserDetailHandler(deps.Identity))
+		adminUserGroupRouter.PUT("/device", identityAdminUser.UpdateUserDeviceHandler(deps.Identity))
+		adminUserGroupRouter.DELETE("/device", identityAdminUser.DeleteUserDeviceHandler(deps.Identity))
+		adminUserGroupRouter.PUT("/device/kick_offline", identityAdminUser.KickOfflineByUserDeviceHandler(deps.Identity))
+		adminUserGroupRouter.GET("/list", identityAdminUser.GetUserListHandler(deps.Identity))
+		adminUserGroupRouter.GET("/login/logs", identityAdminUser.GetUserLoginLogsHandler(deps.Identity))
+		adminUserGroupRouter.PUT("/notify", identityAdminUser.UpdateUserNotifySettingHandler(deps.Identity))
+		adminUserGroupRouter.GET("/subscribe", subscriptionAdminUser.GetUserSubscribeHandler(deps.Subscription))
+		adminUserGroupRouter.POST("/subscribe", subscriptionAdminUser.CreateUserSubscribeHandler(deps.Subscription))
+		adminUserGroupRouter.PUT("/subscribe", subscriptionAdminUser.UpdateUserSubscribeHandler(deps.Subscription))
+		adminUserGroupRouter.DELETE("/subscribe", subscriptionAdminUser.DeleteUserSubscribeHandler(deps.Subscription))
+		adminUserGroupRouter.GET("/subscribe/detail", subscriptionAdminUser.GetUserSubscribeByIdHandler(deps.Subscription))
+		adminUserGroupRouter.GET("/subscribe/device", subscriptionAdminUser.GetUserSubscribeDevicesHandler(deps.Subscription))
+		adminUserGroupRouter.GET("/subscribe/logs", subscriptionAdminUser.GetUserSubscribeLogsHandler(deps.Subscription))
+		adminUserGroupRouter.GET("/subscribe/reset/logs", subscriptionAdminUser.GetUserSubscribeResetTrafficLogsHandler(deps.Subscription))
+		adminUserGroupRouter.POST("/subscribe/reset/token", subscriptionAdminUser.ResetUserSubscribeTokenHandler(deps.Subscription))
+		adminUserGroupRouter.POST("/subscribe/reset/traffic", subscriptionAdminUser.ResetUserSubscribeTrafficHandler(deps.Subscription))
+		adminUserGroupRouter.POST("/subscribe/toggle", subscriptionAdminUser.ToggleUserSubscribeStatusHandler(deps.Subscription))
+		adminUserGroupRouter.GET("/subscribe/traffic_logs", subscriptionAdminUser.GetUserSubscribeTrafficLogsHandler(deps.Subscription))
 	}
 }

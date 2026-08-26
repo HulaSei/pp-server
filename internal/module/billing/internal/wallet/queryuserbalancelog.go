@@ -6,7 +6,7 @@ import (
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/pkg/constant"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -46,14 +46,14 @@ func (l *QueryUserBalanceLogLogic) QueryUserBalanceLog() (resp *dto.QueryUserBal
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "Query User Balance Log Error")
 	}
 
-	list := make([]dto.BalanceLog, 0)
+	list := make([]dto.BillingBalanceLogSnapshot, 0)
 	for _, datum := range data {
 		var content log.Balance
 		if err = content.Unmarshal([]byte(datum.Content)); err != nil {
 			l.Errorf("[QueryUserBalanceLog] unmarshal balance log content failed: %v", err.Error())
 			continue
 		}
-		list = append(list, dto.BalanceLog{
+		list = append(list, dto.BillingBalanceLogSnapshot{
 			UserId:    datum.ObjectID,
 			Amount:    content.Amount,
 			Type:      content.Type,

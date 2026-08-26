@@ -7,7 +7,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/svc"
+	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -15,11 +15,18 @@ import (
 	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
+	"github.com/redis/go-redis/v9"
 )
 
-func AuthMiddleware(svc *svc.ServiceContext) app.HandlerFunc {
+type AuthDeps struct {
+	JWT   config.JwtAuth
+	Redis *redis.Client
+	Store repository.Store
+}
+
+func AuthMiddleware(deps AuthDeps) app.HandlerFunc {
 	return func(ctx context.Context, requestCtx *app.RequestContext) {
-		ctx, err := AuthenticateRequest(ctx, svc, string(requestCtx.GetHeader("Authorization")), string(requestCtx.Path()))
+		ctx, err := AuthenticateRequest(ctx, deps, string(requestCtx.GetHeader("Authorization")), string(requestCtx.Path()))
 		if err != nil {
 			result.HttpResult(requestCtx, nil, err)
 			requestCtx.Abort()
@@ -34,7 +41,7 @@ func AuthMiddleware(svc *svc.ServiceContext) app.HandlerFunc {
 // intentionally support guest checkout.  Handlers on those routes must still
 // explicitly require an authenticated user before operating on a user-owned
 // resource.
-func OptionalAuthMiddleware(svc *svc.ServiceContext) app.HandlerFunc {
+func OptionalAuthMiddleware(deps AuthDeps) app.HandlerFunc {
 	return func(ctx context.Context, requestCtx *app.RequestContext) {
 		token := string(requestCtx.GetHeader("Authorization"))
 		if token == "" {
@@ -42,7 +49,7 @@ func OptionalAuthMiddleware(svc *svc.ServiceContext) app.HandlerFunc {
 			return
 		}
 
-		authenticatedCtx, err := AuthenticateRequest(ctx, svc, token, string(requestCtx.Path()))
+		authenticatedCtx, err := AuthenticateRequest(ctx, deps, token, string(requestCtx.Path()))
 		if err != nil {
 			result.HttpResult(requestCtx, nil, err)
 			requestCtx.Abort()
@@ -52,8 +59,8 @@ func OptionalAuthMiddleware(svc *svc.ServiceContext) app.HandlerFunc {
 	}
 }
 
-func AuthenticateRequest(ctx context.Context, svc *svc.ServiceContext, token string, path string) (context.Context, error) {
-	jwtConfig := svc.Config.JwtAuth
+func AuthenticateRequest(ctx context.Context, deps AuthDeps, token string, path string) (context.Context, error) {
+	jwtConfig := deps.JWT
 	if token == "" {
 		logger.WithContext(ctx).Debug("[AuthMiddleware] Token Empty")
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.ErrorTokenEmpty), "Token Empty")
@@ -61,7 +68,7 @@ func AuthenticateRequest(ctx context.Context, svc *svc.ServiceContext, token str
 
 	claims, err := jwt.ParseJwtToken(token, jwtConfig.AccessSecret)
 	if err != nil {
-		logger.WithContext(ctx).Debug("[AuthMiddleware] ParseJwtToken", logger.Field("error", err.Error()), logger.Field("token", token))
+		logger.WithContext(ctx).Debug("[AuthMiddleware] ParseJwtToken", logger.Field("error", err.Error()))
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.ErrorTokenExpire), "Token Invalid")
 	}
 
@@ -73,7 +80,7 @@ func AuthenticateRequest(ctx context.Context, svc *svc.ServiceContext, token str
 	userId := int64(claims["UserId"].(float64))
 	sessionId := claims["SessionId"].(string)
 	sessionIdCacheKey := fmt.Sprintf("%v:%v", config.SessionIdKey, sessionId)
-	value, err := svc.Redis.Get(ctx, sessionIdCacheKey).Result()
+	value, err := deps.Redis.Get(ctx, sessionIdCacheKey).Result()
 	if err != nil {
 		logger.WithContext(ctx).Debug("[AuthMiddleware] Redis Get", logger.Field("error", err.Error()), logger.Field("sessionId", sessionId))
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
@@ -84,7 +91,7 @@ func AuthenticateRequest(ctx context.Context, svc *svc.ServiceContext, token str
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
 	}
 
-	userInfo, err := svc.Store.User().FindOne(ctx, userId)
+	userInfo, err := deps.Store.User().FindOne(ctx, userId)
 	if err != nil {
 		logger.WithContext(ctx).Debug("[AuthMiddleware] UserModel FindOne", logger.Field("error", err.Error()), logger.Field("userId", userId))
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "Database Query Error")
@@ -94,12 +101,12 @@ func AuthenticateRequest(ctx context.Context, svc *svc.ServiceContext, token str
 	}
 
 	// Check if user is enabled
-	if !*userInfo.Enable {
+	if userInfo.Enable == nil || !*userInfo.Enable {
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.UserDisabled), "User Disabled")
 	}
 
 	paths := strings.Split(path, "/")
-	if tool.StringSliceContains(paths, "admin") && !*userInfo.IsAdmin {
+	if tool.StringSliceContains(paths, "admin") && (userInfo.IsAdmin == nil || !*userInfo.IsAdmin) {
 		logger.WithContext(ctx).Debug("[AuthMiddleware] Not Admin User", logger.Field("userId", userId), logger.Field("sessionId", sessionId))
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
 	}

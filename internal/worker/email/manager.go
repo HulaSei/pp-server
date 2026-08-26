@@ -45,7 +45,7 @@ func NewWorkerManager() *WorkerManager {
 // RunWorker keeps queue acknowledgement coupled to the actual campaign run.
 // A duplicate delivery in the same process is harmless: the existing worker
 // remains authoritative for that database task.
-func (m *WorkerManager) RunWorker(ctx context.Context, id int64, tasks TaskStore, sender emailpkg.Sender) error {
+func (m *WorkerManager) RunWorker(ctx context.Context, id int64, tasks TaskStore, sender emailpkg.Sender, options ...WorkerOption) error {
 	m.mutex.Lock()
 	if _, exists := m.workers[id]; exists {
 		m.mutex.Unlock()
@@ -53,7 +53,7 @@ func (m *WorkerManager) RunWorker(ctx context.Context, id int64, tasks TaskStore
 		return nil
 	}
 	workerCtx, cancel := context.WithCancel(ctx)
-	worker := NewWorker(workerCtx, id, tasks, sender)
+	worker := NewWorker(workerCtx, id, tasks, sender, options...)
 	m.workers[id] = worker
 	m.cancels[id] = cancel
 	m.mutex.Unlock()

@@ -6,7 +6,7 @@ package wallet
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
 )
@@ -35,6 +35,7 @@ type AuthMethodReader interface {
 // them from the composition root.
 type Deps struct {
 	Logs        repository.LogRepo
+	Withdrawals repository.UserWithdrawalRepo
 	Cache       repository.UserCacheRepo
 	Affiliates  AffiliateReader
 	AuthMethods AuthMethodReader
@@ -64,6 +65,14 @@ func (s *Service) QueryUserCommissionLog(ctx context.Context, req *dto.QueryUser
 
 func (s *Service) QueryWithdrawalLog(ctx context.Context, req *dto.QueryWithdrawalLogListRequest) (*dto.QueryWithdrawalLogListResponse, error) {
 	return newQueryWithdrawalLogLogic(ctx, s.deps).QueryWithdrawalLog(req)
+}
+
+func (s *Service) GetWithdrawalList(ctx context.Context, req *dto.GetWithdrawalListRequest) (*dto.GetWithdrawalListResponse, error) {
+	return newWithdrawalAdminLogic(ctx, s.deps).GetWithdrawalList(req)
+}
+
+func (s *Service) ReviewWithdrawal(ctx context.Context, req *dto.ReviewWithdrawalRequest) error {
+	return newWithdrawalAdminLogic(ctx, s.deps).ReviewWithdrawal(req)
 }
 
 func (s *Service) QueryUserAffiliate(ctx context.Context) (*dto.QueryUserAffiliateCountResponse, error) {

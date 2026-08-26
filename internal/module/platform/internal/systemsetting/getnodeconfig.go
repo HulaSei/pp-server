@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -44,7 +44,7 @@ func (l *GetNodeConfigLogic) GetNodeConfig() (*dto.NodeConfig, error) {
 	}
 
 	if dbConfig.DNS != "" {
-		var dns []dto.NodeDNS
+		var dns []dto.PlatformNodeDNSSnapshot
 		err = json.Unmarshal([]byte(dbConfig.DNS), &dns)
 		if err != nil {
 			logger.Errorf("[Node] Unmarshal DNS config error: %s", err.Error())
@@ -58,7 +58,7 @@ func (l *GetNodeConfigLogic) GetNodeConfig() (*dto.NodeConfig, error) {
 		c.Block = tool.RemoveDuplicateElements(block...)
 	}
 	if dbConfig.Outbound != "" {
-		var outbound []dto.NodeOutbound
+		var outbound []dto.PlatformNodeOutboundSnapshot
 		err = json.Unmarshal([]byte(dbConfig.Outbound), &outbound)
 		if err != nil {
 			logger.Errorf("[Node] Unmarshal Outbound config error: %s", err.Error())

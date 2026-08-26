@@ -17,7 +17,7 @@ import (
 
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/tool"
@@ -79,7 +79,7 @@ func (l *SubscribeLogic) Handler(req *dto.SubscribeRequest) (resp *dto.Subscribe
 		}
 	}
 	if targetApp == nil {
-		l.Debugf("[SubscribeLogic] No matching client found", logger.Field("userAgent", userAgent))
+		l.Debugw("[SubscribeLogic] No matching client found", logger.Field("userAgent", userAgent))
 		if defaultApp == nil {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "No matching client found for user agent: %s", userAgent)
 		}
@@ -88,7 +88,7 @@ func (l *SubscribeLogic) Handler(req *dto.SubscribeRequest) (resp *dto.Subscribe
 	// Find user subscribe by token
 	userSubscribe, err := l.getUserSubscribe(req.Token)
 	if err != nil {
-		l.Errorw("[SubscribeLogic] Get user subscribe failed", logger.Field("error", err.Error()), logger.Field("token", req.Token))
+		l.Errorw("[SubscribeLogic] Get user subscribe failed", logger.Field("error", err.Error()))
 		return nil, err
 	}
 
@@ -198,7 +198,7 @@ func (l *SubscribeLogic) getSubscribeV2URL() string {
 func (l *SubscribeLogic) getUserSubscribe(token string) (*usersub.Subscribe, error) {
 	userSub, err := l.deps.UserSubs.FindOneSubscribeByToken(l.ctx, token)
 	if err != nil {
-		l.Infow("[Generate Subscribe]find subscribe error: %v", logger.Field("error", err.Error()), logger.Field("token", token))
+		l.Infow("[Generate Subscribe]find subscribe error: %v", logger.Field("error", err.Error()))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find subscribe error: %v", err.Error())
 	}
 
@@ -206,7 +206,7 @@ func (l *SubscribeLogic) getUserSubscribe(token string) (*usersub.Subscribe, err
 	// 修复开始：添加空指针检查 (Fix start)
 	// =========================================================
 	if userSub == nil {
-		l.Infow("[Generate Subscribe] token invalid or user not found", logger.Field("token", token))
+		l.Infow("[Generate Subscribe] token invalid or user not found")
 		return nil, errors.New("subscribe token invalid")
 	}
 	// =========================================================
@@ -216,7 +216,11 @@ func (l *SubscribeLogic) getUserSubscribe(token string) (*usersub.Subscribe, err
 		l.Infow("[Generate Subscribe] failed to get user info", logger.Field("error", err.Error()), logger.Field("userId", userSub.UserId))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "failed to get user info: %v", err.Error())
 	}
-	if !*userInfo.Enable {
+	if userInfo.DeletedAt.Valid {
+		l.Infow("[Generate Subscribe] user account is deleted", logger.Field("userId", userSub.UserId))
+		return nil, errors.Wrapf(xerr.NewErrCode(xerr.UserNotExist), "User account does not exist")
+	}
+	if userInfo.Enable == nil || !*userInfo.Enable {
 		l.Infow("[Generate Subscribe] user account is disabled", logger.Field("userId", userSub.UserId))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.UserDisabled), "User account is disabled")
 	}

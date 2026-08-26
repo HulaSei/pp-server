@@ -6,7 +6,7 @@ package subscription
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/model/dto"
+	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/internal/application"
 	"github.com/perfect-panel/server/internal/module/subscription/internal/delivery"
 	"github.com/perfect-panel/server/internal/module/subscription/internal/fulfillment"

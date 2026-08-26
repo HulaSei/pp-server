@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/module/platform/entity/task"
 )
 
@@ -39,6 +40,16 @@ func (s *workerTaskStore) UpdateActive(_ context.Context, data *task.Task) (bool
 type workerSender struct {
 	sent []string
 	err  error
+}
+
+type workerLogStore struct {
+	logs []*logEntity.SystemLog
+}
+
+func (s *workerLogStore) Insert(_ context.Context, data *logEntity.SystemLog) error {
+	copy := *data
+	s.logs = append(s.logs, &copy)
+	return nil
 }
 
 func (s *workerSender) Send(to []string, _, _ string) error {
@@ -90,6 +101,30 @@ func TestWorkerMarksAllSendFailuresFailed(t *testing.T) {
 	}
 	if store.task.Status != task.StatusFailed || store.task.Errors == "" || store.task.Current != 1 {
 		t.Fatalf("failed send task = %+v", store.task)
+	}
+}
+
+func TestWorkerRecordsRedactedFailedDelivery(t *testing.T) {
+	store := &workerTaskStore{task: newEmailTask(t, task.StatusPending, 0, "alice@example.com")}
+	logs := &workerLogStore{}
+	worker := NewWorker(context.Background(), 7, store, &workerSender{err: errors.New("smtp rejected")},
+		WithMessageLogs(logs, "smtp"))
+
+	if err := worker.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	if len(logs.logs) != 1 {
+		t.Fatalf("email logs = %d, want 1", len(logs.logs))
+	}
+	var message logEntity.Message
+	if err := message.Unmarshal([]byte(logs.logs[0].Content)); err != nil {
+		t.Fatal(err)
+	}
+	if message.Status != 2 || message.To != "a***e@example.com" || message.Platform != "smtp" {
+		t.Fatalf("email log = %+v", message)
+	}
+	if message.Content["redacted"] != true || message.Content["batch_task_id"].(float64) != 7 {
+		t.Fatalf("email log content = %#v", message.Content)
 	}
 }
 
