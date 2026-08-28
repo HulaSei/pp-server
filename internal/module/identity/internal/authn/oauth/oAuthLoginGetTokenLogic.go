@@ -193,7 +193,7 @@ func (l *OAuthLoginGetTokenLogic) google(req *dto.OAuthLoginGetTokenRequest, req
 	if googleUserInfo.VerifiedEmail {
 		email = googleUserInfo.Email
 	}
-	return l.findOrRegisterUser(OAuthGoogle, googleUserInfo.OpenID, email, googleUserInfo.Picture, requestID, ip, userAgent)
+	return l.findOrRegisterUser(OAuthGoogle, googleUserInfo.OpenID, email, googleUserInfo.Picture, req.Invite, requestID, ip, userAgent)
 }
 
 func (l *OAuthLoginGetTokenLogic) apple(req *dto.OAuthLoginGetTokenRequest, requestID, ip, userAgent string) (*user.User, error) {
@@ -293,7 +293,7 @@ func (l *OAuthLoginGetTokenLogic) apple(req *dto.OAuthLoginGetTokenRequest, requ
 		logger.Field("duration_ms", time.Since(startTime).Milliseconds()),
 	)
 
-	return l.findOrRegisterUser(OAuthApple, appleUnique, email, "", requestID, ip, userAgent)
+	return l.findOrRegisterUser(OAuthApple, appleUnique, email, "", req.Invite, requestID, ip, userAgent)
 }
 
 func (l *OAuthLoginGetTokenLogic) telegram(req *dto.OAuthLoginGetTokenRequest, requestID, ip, userAgent string) (*user.User, error) {
@@ -367,7 +367,7 @@ func (l *OAuthLoginGetTokenLogic) telegram(req *dto.OAuthLoginGetTokenRequest, r
 
 	// Telegram Login does not provide an email address. Keep the account bound
 	// only to the verified Telegram identity instead of inventing a fake email.
-	return l.findOrRegisterUser(OAuthTelegram, userID, "", avatar, requestID, ip, userAgent)
+	return l.findOrRegisterUser(OAuthTelegram, userID, "", avatar, req.Invite, requestID, ip, userAgent)
 }
 
 // claimTelegramCallback enforces single use of a Telegram widget result. A
@@ -471,7 +471,7 @@ func (l *OAuthLoginGetTokenLogic) github(req *dto.OAuthLoginGetTokenRequest, req
 		logger.Field("duration_ms", time.Since(startTime).Milliseconds()),
 	)
 
-	return l.findOrRegisterUser(OAuthGithub, fmt.Sprintf("%d", githubUserInfo.OpenID), githubUserInfo.Email, githubUserInfo.Avatar, requestID, ip, userAgent)
+	return l.findOrRegisterUser(OAuthGithub, fmt.Sprintf("%d", githubUserInfo.OpenID), githubUserInfo.Email, githubUserInfo.Avatar, req.Invite, requestID, ip, userAgent)
 }
 
 func (l *OAuthLoginGetTokenLogic) facebook(req *dto.OAuthLoginGetTokenRequest, requestID, ip, userAgent string) (*user.User, error) {
@@ -551,10 +551,10 @@ func (l *OAuthLoginGetTokenLogic) facebook(req *dto.OAuthLoginGetTokenRequest, r
 
 	// The Graph API only returns a confirmed address, so a non-empty email
 	// is safe to bind as a verified email auth method.
-	return l.findOrRegisterUser(OAuthFacebook, facebookUserInfo.OpenID, facebookUserInfo.Email, facebookUserInfo.Picture, requestID, ip, userAgent)
+	return l.findOrRegisterUser(OAuthFacebook, facebookUserInfo.OpenID, facebookUserInfo.Email, facebookUserInfo.Picture, req.Invite, requestID, ip, userAgent)
 }
 
-func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, requestID, ip, userAgent string) (*user.User, error) {
+func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, invite, requestID, ip, userAgent string) (*user.User, error) {
 	startTime := timeutil.Now()
 	l.Infow("user registration started",
 		logger.Field("request_id", requestID),
@@ -563,17 +563,14 @@ func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, reques
 		logger.Field("openid", openid),
 	)
 
-	if l.deps.Config.InviteForced {
-		l.Errorw("registration blocked due to forced invite policy",
-			logger.Field("request_id", requestID),
-			logger.Field("auth_method", method),
-		)
-		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InviteCodeError), "invite code is required")
-	}
 	if err := l.deps.Policy.EnsureRegistrationOpen(l.ctx, method); err != nil {
 		return nil, err
 	}
 	if err := l.deps.Policy.VerifyHuman(l.ctx, l.cfToken, ip); err != nil {
+		return nil, err
+	}
+	referer, err := l.resolveReferer(invite, requestID, method)
+	if err != nil {
 		return nil, err
 	}
 	if email != "" {
@@ -592,7 +589,7 @@ func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, reques
 	}
 
 	var userInfo *user.User
-	err := l.deps.Store.InIdentityTx(l.ctx, func(store repository.IdentityStore) error {
+	err = l.deps.Store.InIdentityTx(l.ctx, func(store repository.IdentityStore) error {
 		if email != "" {
 			l.Debugw("checking if email already exists",
 				logger.Field("request_id", requestID),
@@ -609,6 +606,9 @@ func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, reques
 		)
 
 		userInfo = &user.User{Avatar: avatar, OnlyFirstPurchase: &l.deps.Config.OnlyFirstPurchase}
+		if referer != nil {
+			userInfo.RefererId = referer.Id
+		}
 		if err := store.User().Insert(l.ctx, userInfo); err != nil {
 			l.Errorw("failed to create user record",
 				logger.Field("request_id", requestID),
@@ -691,6 +691,30 @@ func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, reques
 		logger.Field("duration_ms", time.Since(startTime).Milliseconds()),
 	)
 	return userInfo, nil
+}
+
+func (l *OAuthLoginGetTokenLogic) resolveReferer(invite, requestID, method string) (*user.User, error) {
+	if invite == "" {
+		if l.deps.Config.InviteForced {
+			l.Errorw("registration blocked due to forced invite policy",
+				logger.Field("request_id", requestID),
+				logger.Field("auth_method", method),
+			)
+			return nil, errors.Wrap(xerr.NewErrCode(xerr.InviteCodeError), "invite code is required")
+		}
+		return nil, nil
+	}
+
+	referer, err := l.deps.Store.User().FindOneByReferCode(l.ctx, invite)
+	if err != nil {
+		l.Errorw("invalid invite code for OAuth registration",
+			logger.Field("request_id", requestID),
+			logger.Field("auth_method", method),
+			logger.Field("error", err.Error()),
+		)
+		return nil, errors.Wrap(xerr.NewErrCode(xerr.InviteCodeError), "invite code is invalid")
+	}
+	return referer, nil
 }
 
 func (l *OAuthLoginGetTokenLogic) checkEmailExists(store repository.IdentityStore, email, requestID string) error {
@@ -1063,7 +1087,7 @@ func oauthClaimBool(value interface{}) bool {
 	}
 }
 
-func (l *OAuthLoginGetTokenLogic) findOrRegisterUser(authType, openID, email, avatar, requestID, ip, userAgent string) (*user.User, error) {
+func (l *OAuthLoginGetTokenLogic) findOrRegisterUser(authType, openID, email, avatar, invite, requestID, ip, userAgent string) (*user.User, error) {
 	l.Debugw("finding or registering user",
 		logger.Field("request_id", requestID),
 		logger.Field("auth_type", authType),
@@ -1080,7 +1104,7 @@ func (l *OAuthLoginGetTokenLogic) findOrRegisterUser(authType, openID, email, av
 				logger.Field("openid", openID),
 				logger.Field("email", email),
 			)
-			return l.register(email, avatar, authType, openID, requestID, ip, userAgent)
+			return l.register(email, avatar, authType, openID, invite, requestID, ip, userAgent)
 		}
 		l.Errorw("failed to find user auth method by openid",
 			logger.Field("request_id", requestID),
