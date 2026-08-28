@@ -20,22 +20,22 @@ func TestUserCacheKeysCanonicalizeEmail(t *testing.T) {
 
 	mixedCaseKeys := userWithMixedCaseEmail.GetCacheKeys()
 	canonicalKeys := userWithCanonicalEmail.GetCacheKeys()
-	if len(mixedCaseKeys) != 2 || len(canonicalKeys) != 2 {
-		t.Fatalf("email users should have ID and email keys: %#v %#v", mixedCaseKeys, canonicalKeys)
+	if len(mixedCaseKeys) != 3 || len(canonicalKeys) != 3 {
+		t.Fatalf("email users should have ID, state, and email keys: %#v %#v", mixedCaseKeys, canonicalKeys)
 	}
-	if mixedCaseKeys[1] != canonicalKeys[1] {
-		t.Fatalf("email cache keys differ: %q != %q", mixedCaseKeys[1], canonicalKeys[1])
+	if mixedCaseKeys[2] != canonicalKeys[2] {
+		t.Fatalf("email cache keys differ: %q != %q", mixedCaseKeys[2], canonicalKeys[2])
 	}
 }
 
 func TestAuthMethodCacheKeysOnlyCreateEmailKeysForEmail(t *testing.T) {
 	emailKeys := (&AuthMethods{UserId: 7, AuthType: "email", AuthIdentifier: " Alice@Example.COM "}).GetCacheKeys()
-	if len(emailKeys) != 2 || emailKeys[1] != "cache:user:email:v2:alice@example.com" {
+	if len(emailKeys) != 3 || emailKeys[2] != "cache:user:email:v2:alice@example.com" {
 		t.Fatalf("email auth method keys = %#v", emailKeys)
 	}
 
 	nonEmailKeys := (&AuthMethods{UserId: 7, AuthType: "google", AuthIdentifier: " Alice@Example.COM "}).GetCacheKeys()
-	if len(nonEmailKeys) != 1 || nonEmailKeys[0] != "cache:user:id:7" {
+	if len(nonEmailKeys) != 2 || nonEmailKeys[0] != "cache:user:id:7" || nonEmailKeys[1] != "cache:user:state:7" {
 		t.Fatalf("non-email auth method keys = %#v", nonEmailKeys)
 	}
 }

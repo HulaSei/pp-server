@@ -14,22 +14,26 @@ type cleanupTrafficRepo struct {
 	repository.TrafficRepo
 	threshold time.Time
 	err       error
+	calls     int
 }
 
-func (r *cleanupTrafficRepo) DeleteBefore(_ context.Context, threshold time.Time) error {
+func (r *cleanupTrafficRepo) DeleteBeforeBatch(_ context.Context, threshold time.Time, _ int) (int64, error) {
 	r.threshold = threshold
-	return r.err
+	r.calls++
+	return 1, r.err
 }
 
 type cleanupLogRepo struct {
 	repository.LogRepo
 	threshold time.Time
 	err       error
+	calls     int
 }
 
-func (r *cleanupLogRepo) DeleteBefore(_ context.Context, threshold time.Time) error {
+func (r *cleanupLogRepo) DeleteBeforeBatch(_ context.Context, threshold time.Time, _ int) (int64, error) {
 	r.threshold = threshold
-	return r.err
+	r.calls++
+	return 1, r.err
 }
 
 type cleanupNetworkStore struct {
@@ -41,27 +45,17 @@ type cleanupNetworkStore struct {
 func (s cleanupNetworkStore) TrafficLog() repository.TrafficRepo { return s.traffic }
 func (s cleanupNetworkStore) Log() repository.LogRepo            { return s.logs }
 
-type cleanupTransactor struct {
-	store repository.NetworkStore
-	calls int
-}
-
-func (t *cleanupTransactor) InNetworkTx(ctx context.Context, fn func(repository.NetworkStore) error) error {
-	t.calls++
-	return fn(t.store)
-}
-
 func TestLogCleanupRunsIndependentlyAndPropagatesFailures(t *testing.T) {
 	trafficRepo := &cleanupTrafficRepo{}
 	logRepo := &cleanupLogRepo{}
-	tx := &cleanupTransactor{store: cleanupNetworkStore{traffic: trafficRepo, logs: logRepo}}
-	logic := NewLogCleanupLogic(tx, func() config.Log { return config.Log{AutoClear: true, ClearDays: 7} })
+	store := cleanupNetworkStore{traffic: trafficRepo, logs: logRepo}
+	logic := NewLogCleanupLogic(store, func() config.Log { return config.Log{AutoClear: true, ClearDays: 7} })
 
 	if err := logic.ProcessTask(context.Background(), nil); err != nil {
 		t.Fatal(err)
 	}
-	if tx.calls != 1 || trafficRepo.threshold.IsZero() || !trafficRepo.threshold.Equal(logRepo.threshold) {
-		t.Fatalf("cleanup was not applied atomically: calls=%d traffic=%v logs=%v", tx.calls, trafficRepo.threshold, logRepo.threshold)
+	if trafficRepo.calls != 1 || logRepo.calls != 1 || trafficRepo.threshold.IsZero() || !trafficRepo.threshold.Equal(logRepo.threshold) {
+		t.Fatalf("cleanup batches = %d/%d, thresholds=%v/%v", trafficRepo.calls, logRepo.calls, trafficRepo.threshold, logRepo.threshold)
 	}
 
 	trafficRepo.err = errors.New("delete failed")
@@ -71,12 +65,13 @@ func TestLogCleanupRunsIndependentlyAndPropagatesFailures(t *testing.T) {
 }
 
 func TestLogCleanupRejectsUnsafeRetentionWithoutDeleting(t *testing.T) {
-	tx := &cleanupTransactor{store: cleanupNetworkStore{}}
-	logic := NewLogCleanupLogic(tx, func() config.Log { return config.Log{AutoClear: true, ClearDays: -1} })
+	trafficRepo := &cleanupTrafficRepo{}
+	logRepo := &cleanupLogRepo{}
+	logic := NewLogCleanupLogic(cleanupNetworkStore{traffic: trafficRepo, logs: logRepo}, func() config.Log { return config.Log{AutoClear: true, ClearDays: -1} })
 	if err := logic.ProcessTask(context.Background(), nil); err == nil {
 		t.Fatal("unsafe retention was accepted")
 	}
-	if tx.calls != 0 {
-		t.Fatalf("cleanup transaction ran %d times", tx.calls)
+	if trafficRepo.calls != 0 || logRepo.calls != 0 {
+		t.Fatalf("unsafe cleanup deleted batches: %d/%d", trafficRepo.calls, logRepo.calls)
 	}
 }

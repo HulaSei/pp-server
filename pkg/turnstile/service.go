@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	"time"
@@ -15,6 +16,7 @@ type service struct {
 	timeout time.Duration
 	secret  string
 	url     string
+	client  *http.Client
 }
 
 func newService(config Config) Service {
@@ -25,6 +27,7 @@ func newService(config Config) Service {
 		secret:  config.Secret,
 		timeout: config.Timeout,
 		url:     "https://challenges.cloudflare.com/turnstile/v0/siteverify",
+		client:  &http.Client{Timeout: config.Timeout},
 	}
 }
 
@@ -45,7 +48,7 @@ func (s *service) RandomUUID() string {
 }
 
 func (s *service) verify(ctx context.Context, secret string, token string, ip string, key string) (bool, error) {
-	_, cancel := context.WithTimeout(ctx, s.timeout)
+	timeoutCtx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
@@ -56,16 +59,21 @@ func (s *service) verify(ctx context.Context, secret string, token string, ip st
 		_ = writer.WriteField("idempotency_key", key)
 	}
 	_ = writer.Close()
-	client := &http.Client{}
-	req, _ := http.NewRequest("POST", s.url, body)
+	req, err := http.NewRequestWithContext(timeoutCtx, http.MethodPost, s.url, body)
+	if err != nil {
+		return false, err
+	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
-	firstResult, err := client.Do(req)
+	firstResult, err := s.client.Do(req)
 	if err != nil {
 		return false, err
 	}
 	defer firstResult.Body.Close()
+	if firstResult.StatusCode < http.StatusOK || firstResult.StatusCode >= http.StatusMultipleChoices {
+		return false, fmt.Errorf("turnstile returned HTTP %d", firstResult.StatusCode)
+	}
 	firstOutcome := make(map[string]interface{})
-	err = json.NewDecoder(firstResult.Body).Decode(&firstOutcome)
+	err = json.NewDecoder(io.LimitReader(firstResult.Body, 1<<20)).Decode(&firstOutcome)
 	if err != nil {
 		return false, err
 	}

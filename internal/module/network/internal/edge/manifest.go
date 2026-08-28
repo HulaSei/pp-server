@@ -53,7 +53,7 @@ func (l *ManifestLogic) Manifest(token string) (*dto.EdgeManifestResponse, error
 	if userSubscribe == nil {
 		return nil, ErrManifestNotFound
 	}
-	account, err := l.deps.Store.User().FindOne(l.ctx, userSubscribe.UserId)
+	account, err := l.deps.Store.User().FindAccountState(l.ctx, userSubscribe.UserId)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrManifestNotFound
@@ -98,14 +98,7 @@ func (l *ManifestLogic) proxies(userSubscribe *usersub.Subscribe, plan *subscrib
 		return []dto.EdgeManifestProxy{}, nil, nil
 	}
 	enabled := true
-	_, nodes, err := l.deps.Store.Node().FilterNodeList(l.ctx, &node.FilterNodeParams{
-		Page:    1,
-		Size:    1000,
-		NodeId:  nodeIDs,
-		Tag:     tags,
-		Enabled: &enabled,
-		Preload: true,
-	})
+	nodes, err := l.deps.Store.Node().ListNodesByScope(l.ctx, nodeIDs, tags, &enabled, true)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -300,7 +293,7 @@ func uniqueProxyName(name string, nodeID int64, used map[string]int) string {
 	return name + " #" + strconv.FormatInt(nodeID, 10)
 }
 
-func revision(account *user.User, userSubscribe *usersub.Subscribe, plan *subscribe.Subscribe, subscription dto.EdgeManifestSubscription, proxies []dto.EdgeManifestProxy, notices []string) string {
+func revision(account *user.AccountState, userSubscribe *usersub.Subscribe, plan *subscribe.Subscribe, subscription dto.EdgeManifestSubscription, proxies []dto.EdgeManifestProxy, notices []string) string {
 	type proxySource struct {
 		Name      string                     `json:"name"`
 		Protocol  string                     `json:"protocol"`

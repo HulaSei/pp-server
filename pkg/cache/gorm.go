@@ -15,8 +15,9 @@ var (
 	// ErrNotFound is the error when cache not found.
 	ErrNotFound = redis.Nil
 
-	cacheVersionPrefix = "cache:version:"
-	setIfVersionScript = redis.NewScript(`
+	cacheVersionPrefix  = "cache:version:"
+	cacheNotFoundPrefix = "cache:not-found:"
+	setIfVersionScript  = redis.NewScript(`
 local current = redis.call('GET', KEYS[1])
 if not current then current = '0' end
 if current == ARGV[1] then
@@ -95,6 +96,10 @@ func cacheVersionKey(key string) string {
 	return cacheVersionPrefix + key
 }
 
+func cacheNotFoundKey(key string) string {
+	return cacheNotFoundPrefix + key
+}
+
 func (cc CachedConn) cacheVersion(ctx context.Context, key string) (string, error) {
 	version, err := cc.cache.Get(ctx, cacheVersionKey(key)).Result()
 	if errors.Is(err, redis.Nil) {
@@ -108,9 +113,17 @@ func (cc CachedConn) setCacheIfVersion(ctx context.Context, key, version string,
 	if err != nil {
 		return err
 	}
-	_, err = setIfVersionScript.Run(ctx, cc.cache,
-		[]string{cacheVersionKey(key), key}, version, value, cc.expiry.Milliseconds()).Result()
+	return cc.setRawCacheIfVersion(ctx, key, key, version, value, cc.expiry)
+}
+
+func (cc CachedConn) setRawCacheIfVersion(ctx context.Context, versionedKey, targetKey, version string, value []byte, expiry time.Duration) error {
+	_, err := setIfVersionScript.Run(ctx, cc.cache,
+		[]string{cacheVersionKey(versionedKey), targetKey}, version, value, expiry.Milliseconds()).Result()
 	return err
+}
+
+func (cc CachedConn) setNotFoundIfVersion(ctx context.Context, key, version string) error {
+	return cc.setRawCacheIfVersion(ctx, key, cacheNotFoundKey(key), version, []byte("1"), cc.notFoundExpiry)
 }
 
 func (cc CachedConn) invalidateCacheKeys(ctx context.Context, keys ...string) error {
@@ -169,11 +182,19 @@ func (cc CachedConn) QueryCtx(ctx context.Context, v interface{}, key string, qu
 	cacheVersion, versionErr := cc.cacheVersion(ctx, key)
 	if err != nil {
 		if errors.Is(err, ErrNotFound) {
+			if versionErr == nil && cc.notFoundExpiry > 0 {
+				if _, negativeErr := cc.cache.Get(ctx, cacheNotFoundKey(key)).Result(); negativeErr == nil {
+					return gorm.ErrRecordNotFound
+				}
+			}
 			// Cache miss (redis.Nil): query DB and cache result. The version
 			// fence prevents a read that started before a concurrent committed
 			// write from repopulating an invalidated key afterwards.
 			err = query(cc.db.WithContext(ctx), v)
 			if err != nil {
+				if errors.Is(err, gorm.ErrRecordNotFound) && versionErr == nil && cc.notFoundExpiry > 0 {
+					_ = cc.setNotFoundIfVersion(ctx, key, cacheVersion)
+				}
 				return err
 			}
 			if versionErr == nil {
@@ -207,13 +228,6 @@ func (cc CachedConn) QueryCtx(ctx context.Context, v interface{}, key string, qu
 	}
 	return nil
 }
-
-// TODO(notFoundExpiry): notFoundExpiry (negative caching of
-// gorm.ErrRecordNotFound) could be implemented here, but it requires
-// careful handling to preserve gorm.ErrRecordNotFound semantics at all
-// call sites.  Leave unimplemented for now — the generic cache-aside
-// path always queries DB on redis.Nil, so not-found behaviour is
-// unchanged.
 
 // QueryNoCacheCtx runs query with given sql statement, without affecting cache.
 func (cc CachedConn) QueryNoCacheCtx(ctx context.Context, v interface{}, query QueryCtxFn) (err error) {

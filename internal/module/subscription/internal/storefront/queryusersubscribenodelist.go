@@ -7,6 +7,7 @@ import (
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
+	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -45,13 +46,13 @@ func (l *QueryUserSubscribeNodeListLogic) QueryUserSubscribeNodeList() (resp *dt
 	}
 
 	resp = &dto.QueryUserSubscribeNodeListResponse{}
+	nodesByPlan := make(map[int64][]*node.Node)
 	for _, us := range userSubscribes {
-		userSubscribe, err := l.getUserSubscribe(us.Token)
-		if err != nil {
-			l.Errorw("[SubscribeLogic] Get user subscribe failed", logger.Field("error", err.Error()))
-			return nil, err
+		if us == nil {
+			continue
 		}
-		nodes, err := l.getServers(userSubscribe)
+		userSubscribe := subscribeFromDetails(us)
+		nodes, err := l.getServers(userSubscribe, us.Subscribe, nodesByPlan)
 		if err != nil {
 			return nil, err
 		}
@@ -86,16 +87,31 @@ func (l *QueryUserSubscribeNodeListLogic) QueryUserSubscribeNodeList() (resp *dt
 	return
 }
 
-func (l *QueryUserSubscribeNodeListLogic) getServers(userSub *usersub.Subscribe) (userSubscribeNodes []*dto.UserSubscribeNodeInfo, err error) {
+func subscribeFromDetails(item *usersub.SubscribeDetails) *usersub.Subscribe {
+	if item == nil {
+		return nil
+	}
+	return &usersub.Subscribe{
+		Id: item.Id, UserId: item.UserId, OrderId: item.OrderId, SubscribeId: item.SubscribeId,
+		StartTime: item.StartTime, ExpireTime: item.ExpireTime, FinishedAt: item.FinishedAt,
+		Traffic: item.Traffic, Download: item.Download, Upload: item.Upload,
+		Token: item.Token, UUID: item.UUID, Status: item.Status, Note: item.Note,
+		CreatedAt: item.CreatedAt, UpdatedAt: item.UpdatedAt,
+	}
+}
+
+func (l *QueryUserSubscribeNodeListLogic) getServers(userSub *usersub.Subscribe, subDetails *subscribe.Subscribe, nodesByPlan map[int64][]*node.Node) (userSubscribeNodes []*dto.UserSubscribeNodeInfo, err error) {
 	userSubscribeNodes = make([]*dto.UserSubscribeNodeInfo, 0)
 	if l.isSubscriptionExpired(userSub) || l.isTrafficExhausted(userSub) {
 		return l.createExpiredServers(), nil
 	}
 
-	subDetails, err := l.deps.Plans.FindOne(l.ctx, userSub.SubscribeId)
-	if err != nil {
-		l.Errorw("[Generate Subscribe]find subscribe details error: %v", logger.Field("error", err.Error()))
-		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find subscribe details error: %v", err.Error())
+	if subDetails == nil {
+		subDetails, err = l.deps.Plans.FindOne(l.ctx, userSub.SubscribeId)
+		if err != nil {
+			l.Errorw("[Generate Subscribe]find subscribe details error: %v", logger.Field("error", err.Error()))
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find subscribe details error: %v", err.Error())
+		}
 	}
 	nodeIds := tool.StringToInt64Slice(subDetails.Nodes)
 	tags := strings.Split(subDetails.NodeTags, ",")
@@ -112,34 +128,19 @@ func (l *QueryUserSubscribeNodeListLogic) getServers(userSub *usersub.Subscribe)
 
 	enable := true
 
-	nodes, err := l.filterSubscribeNodes(nodeIds, tags, enable)
-	if err != nil {
-		l.Errorw("[Generate Subscribe]find server details error: %v", logger.Field("error", err.Error()))
-		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find server details error: %v", err.Error())
-	}
-
-	if len(nodes) > 0 {
-		var serverMapIds = make(map[int64]*node.Server)
-		for _, n := range nodes {
-			serverMapIds[n.ServerId] = nil
-		}
-		var serverIds []int64
-		for k := range serverMapIds {
-			serverIds = append(serverIds, k)
-		}
-
-		servers, err := l.deps.Nodes.QueryServerList(l.ctx, serverIds)
+	nodes, cached := nodesByPlan[subDetails.Id]
+	if !cached {
+		nodes, err = l.deps.Nodes.ListNodesByScope(l.ctx, nodeIds, tags, &enable, true)
 		if err != nil {
 			l.Errorw("[Generate Subscribe]find server details error: %v", logger.Field("error", err.Error()))
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find server details error: %v", err.Error())
 		}
+		nodesByPlan[subDetails.Id] = nodes
+	}
 
-		for _, s := range servers {
-			serverMapIds[s.Id] = s
-		}
-
+	if len(nodes) > 0 {
 		for _, n := range nodes {
-			server := serverMapIds[n.ServerId]
+			server := n.Server
 			if server == nil {
 				continue
 			}
@@ -164,59 +165,6 @@ func (l *QueryUserSubscribeNodeListLogic) getServers(userSub *usersub.Subscribe)
 	return userSubscribeNodes, nil
 }
 
-func (l *QueryUserSubscribeNodeListLogic) filterSubscribeNodes(nodeIds []int64, tags []string, enable bool) ([]*node.Node, error) {
-	addNodes := func(result []*node.Node, seen map[int64]struct{}, items []*node.Node) []*node.Node {
-		for _, item := range items {
-			if item == nil {
-				continue
-			}
-			if _, ok := seen[item.Id]; ok {
-				continue
-			}
-			seen[item.Id] = struct{}{}
-			result = append(result, item)
-		}
-		return result
-	}
-
-	if len(nodeIds) == 0 && len(tags) == 0 {
-		_, nodes, err := l.deps.Nodes.FilterNodeList(l.ctx, &node.FilterNodeParams{
-			Page:    0,
-			Size:    1000,
-			Enabled: &enable,
-		})
-		return nodes, err
-	}
-
-	seen := make(map[int64]struct{})
-	nodes := make([]*node.Node, 0)
-	if len(nodeIds) > 0 {
-		_, directNodes, err := l.deps.Nodes.FilterNodeList(l.ctx, &node.FilterNodeParams{
-			Page:    0,
-			Size:    1000,
-			NodeId:  nodeIds,
-			Enabled: &enable,
-		})
-		if err != nil {
-			return nil, err
-		}
-		nodes = addNodes(nodes, seen, directNodes)
-	}
-	if len(tags) > 0 {
-		_, tagNodes, err := l.deps.Nodes.FilterNodeList(l.ctx, &node.FilterNodeParams{
-			Page:    0,
-			Size:    1000,
-			Tag:     tags,
-			Enabled: &enable,
-		})
-		if err != nil {
-			return nil, err
-		}
-		nodes = addNodes(nodes, seen, tagNodes)
-	}
-	return nodes, nil
-}
-
 func (l *QueryUserSubscribeNodeListLogic) isSubscriptionExpired(userSub *usersub.Subscribe) bool {
 	return userSub.ExpireTime.Unix() < timeutil.Now().Unix() && userSub.ExpireTime.Unix() != 0
 }
@@ -238,19 +186,4 @@ func (l *QueryUserSubscribeNodeListLogic) getFirstHostLine() string {
 		return lines[0]
 	}
 	return host
-}
-func (l *QueryUserSubscribeNodeListLogic) getUserSubscribe(token string) (*usersub.Subscribe, error) {
-	userSub, err := l.deps.UserSubs.FindOneSubscribeByToken(l.ctx, token)
-	if err != nil {
-		l.Infow("[Generate Subscribe]find subscribe error: %v", logger.Field("error", err.Error()))
-		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find subscribe error: %v", err.Error())
-	}
-
-	//  Ignore expiration check
-	//if userSub.Status > 1 {
-	//	l.Infow("[Generate Subscribe]subscribe is not available", logger.Field("status", int(userSub.Status)), logger.Field("token", token))
-	//	return nil, errors.Wrapf(xerr.NewErrCode(xerr.SubscribeNotAvailable), "subscribe is not available")
-	//}
-
-	return userSub, nil
 }

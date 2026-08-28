@@ -354,3 +354,28 @@ func (m *subscribeRepo) FilterList(ctx context.Context, params *subscribe.Filter
 
 	return total, list, nil
 }
+
+// FindByNodeScope resolves every plan visible to a node without applying the
+// public/admin pagination cap or issuing a separate COUNT query.
+func (m *subscribeRepo) FindByNodeScope(ctx context.Context, nodeIDs []int64, tags []string) ([]*subscribe.Subscribe, error) {
+	conditions := make([]string, 0, 2)
+	args := make([]interface{}, 0, len(nodeIDs)+len(tags))
+	list := make([]*subscribe.Subscribe, 0)
+	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
+		if condition, values := orm.CommaSeparatedContainsCondition(conn, "nodes", tool.Int64SliceToStringSlice(nodeIDs)); condition != "" {
+			conditions = append(conditions, condition)
+			args = append(args, values...)
+		}
+		if condition, values := orm.CommaSeparatedContainsCondition(conn, "node_tags", tool.RemoveDuplicateElements(tags...)); condition != "" {
+			conditions = append(conditions, condition)
+			args = append(args, values...)
+		}
+		if len(conditions) == 0 {
+			return nil
+		}
+		return conn.Model(&subscribe.Subscribe{}).
+			Where("("+strings.Join(conditions, " OR ")+")", args...).
+			Order("sort ASC").Find(v).Error
+	})
+	return list, err
+}

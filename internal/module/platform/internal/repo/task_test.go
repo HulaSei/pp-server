@@ -14,7 +14,7 @@ func TestTaskRepoActiveUpdatesAreTypeAndStateGuarded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AutoMigrate(&task.Task{}); err != nil {
+	if err := db.AutoMigrate(&task.Task{}, &task.TaskError{}); err != nil {
 		t.Fatal(err)
 	}
 	repo := NewTaskRepo(db)
@@ -46,6 +46,20 @@ func TestTaskRepoActiveUpdatesAreTypeAndStateGuarded(t *testing.T) {
 		t.Fatalf("terminal task accepted enqueue-failure overwrite: updated=%v err=%v", updated, err)
 	}
 
+	progress := &task.Task{Id: data.Id, Type: task.TypeEmail, Status: task.StatusInProgress, Current: 1, Total: 2, DailyDate: "2026-08-28", DailySent: 1}
+	// Re-open the task only for verifying the bounded progress update shape.
+	if err := db.Model(&task.Task{}).Where("id = ?", data.Id).Update("status", task.StatusPending).Error; err != nil {
+		t.Fatal(err)
+	}
+	updated, err = repo.UpdateActiveProgress(context.Background(), progress)
+	if err != nil || !updated {
+		t.Fatalf("progress update failed: updated=%v err=%v", updated, err)
+	}
+	stored, err = repo.FindOneByType(context.Background(), data.Id, task.TypeEmail)
+	if err != nil || stored.Scope != `{}` || stored.Content != `{}` || stored.Current != 1 || stored.DailySent != 1 {
+		t.Fatalf("progress update rewrote immutable payload or missed counters: task=%+v err=%v", stored, err)
+	}
+
 	quota := &task.Task{Type: task.TypeQuota, Status: task.StatusPending, Scope: `{}`, Content: `{}`}
 	if err := repo.Insert(context.Background(), quota); err != nil {
 		t.Fatal(err)
@@ -57,5 +71,33 @@ func TestTaskRepoActiveUpdatesAreTypeAndStateGuarded(t *testing.T) {
 	stored, err = repo.FindOneByType(context.Background(), quota.Id, task.TypeQuota)
 	if err != nil || stored.Status != task.StatusEnqueueFailed || stored.Errors != "redis unavailable" {
 		t.Fatalf("enqueue failure was not recorded atomically: task=%+v err=%v", stored, err)
+	}
+
+	taskError := &task.TaskError{TaskId: data.Id, Position: 3, Target: "failed@example.com", Error: "rejected", OccurredAt: 1}
+	if err := repo.InsertError(context.Background(), taskError); err != nil {
+		t.Fatal(err)
+	}
+	// Queue retries can observe the same failed position; the unique key keeps
+	// the incremental failure log idempotent.
+	if err := repo.InsertError(context.Background(), taskError); err != nil {
+		t.Fatal(err)
+	}
+	errors, err := repo.FindErrors(context.Background(), []int64{data.Id})
+	if err != nil || len(errors) != 1 || errors[0].Target != "failed@example.com" {
+		t.Fatalf("task errors = %+v err=%v", errors, err)
+	}
+
+	activeScope, _ := (&task.EmailScope{Type: task.ScopeActive.Int8()}).Marshal()
+	expiredScope, _ := (&task.EmailScope{Type: task.ScopeExpired.Int8()}).Marshal()
+	if err := repo.Insert(context.Background(), &task.Task{Type: task.TypeEmail, Status: task.StatusPending, Scope: string(activeScope), Content: `{}`}); err != nil {
+		t.Fatal(err)
+	}
+	if err := repo.Insert(context.Background(), &task.Task{Type: task.TypeEmail, Status: task.StatusPending, Scope: string(expiredScope), Content: `{}`}); err != nil {
+		t.Fatal(err)
+	}
+	scopeFilter := task.ScopeActive.Int8()
+	total, filtered, err := repo.QueryTaskList(context.Background(), &task.Filter{Type: task.TypeEmail, Page: 1, Size: 10, Scope: &scopeFilter})
+	if err != nil || total != 1 || len(filtered) != 1 {
+		t.Fatalf("database-side scope filter total=%d list=%d err=%v", total, len(filtered), err)
 	}
 }

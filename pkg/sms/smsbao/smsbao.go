@@ -2,6 +2,7 @@ package smsbao
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/perfect-panel/server/pkg/templatex"
@@ -24,6 +25,7 @@ type Client struct {
 func NewClient(config Config) *Client {
 	client := resty.New()
 	client.SetBaseURL(BaseURL)
+	client.SetTimeout(10 * time.Second)
 	return &Client{
 		config: &config,
 		client: client,

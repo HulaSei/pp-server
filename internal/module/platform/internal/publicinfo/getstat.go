@@ -1,13 +1,14 @@
 package publicinfo
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"io"
 	"net"
 	"net/http"
 	"slices"
-	"strings"
+	"sync"
 	"time"
 
 	"github.com/perfect-panel/server/internal/config"
@@ -23,6 +24,23 @@ type GetStatLogic struct {
 	deps Deps
 }
 
+var (
+	statHTTPClient = &http.Client{Timeout: 8 * time.Second}
+	statRefreshMu  sync.Mutex
+)
+
+func (l *GetStatLogic) cachedStat() *dto.GetStatResponse {
+	respJSON, err := l.deps.Redis.Get(l.ctx, config.CommonStatCacheKey).Result()
+	if err != nil {
+		return nil
+	}
+	var cached dto.GetStatResponse
+	if json.Unmarshal([]byte(respJSON), &cached) != nil {
+		return nil
+	}
+	return &cached
+}
+
 // Get Tos
 func newGetStatLogic(ctx context.Context, deps Deps) *GetStatLogic {
 	return &GetStatLogic{
@@ -33,13 +51,15 @@ func newGetStatLogic(ctx context.Context, deps Deps) *GetStatLogic {
 }
 
 func (l *GetStatLogic) GetStat() (resp *dto.GetStatResponse, err error) {
-	respJson, err := l.deps.Redis.Get(l.ctx, config.CommonStatCacheKey).Result()
-	if err == nil {
-		cachedResp := &dto.GetStatResponse{}
-		err = json.Unmarshal([]byte(respJson), cachedResp)
-		if err == nil {
-			return cachedResp, nil
-		}
+	if cached := l.cachedStat(); cached != nil {
+		return cached, nil
+	}
+	// Collapse concurrent hourly cache misses inside one process. The second
+	// read prevents queued requests from repeating DNS and geolocation work.
+	statRefreshMu.Lock()
+	defer statRefreshMu.Unlock()
+	if cached := l.cachedStat(); cached != nil {
+		return cached, nil
 	}
 	userStore := l.deps.Store.User()
 	nodeStore := l.deps.Store.Node()
@@ -77,27 +97,56 @@ func (l *GetStatLogic) GetStat() (resp *dto.GetStatResponse, err error) {
 	var v void
 	country := make(map[string]void)
 	for c := range slices.Chunk(nodeaddr, 100) {
-		var batchreq []apireq
-		for _, addr := range c {
-			isAddr := net.ParseIP(addr)
-			if isAddr == nil {
-				ip, err := net.LookupIP(addr)
-				if err == nil && len(ip) > 0 {
-					batchreq = append(batchreq, apireq{Query: ip[0].String(), Fields: "countryCode"})
+		resolved := make([]string, len(c))
+		resolveCtx, cancelResolve := context.WithTimeout(l.ctx, 5*time.Second)
+		var resolveWG sync.WaitGroup
+		resolveSlots := make(chan struct{}, 8)
+		for index, addr := range c {
+			if parsed := net.ParseIP(addr); parsed != nil {
+				resolved[index] = parsed.String()
+				continue
+			}
+			resolveWG.Add(1)
+			go func(index int, host string) {
+				defer resolveWG.Done()
+				select {
+				case resolveSlots <- struct{}{}:
+					defer func() { <-resolveSlots }()
+				case <-resolveCtx.Done():
+					return
 				}
-			} else {
+				addresses, lookupErr := net.DefaultResolver.LookupIPAddr(resolveCtx, host)
+				if lookupErr == nil && len(addresses) > 0 {
+					resolved[index] = addresses[0].IP.String()
+				}
+			}(index, addr)
+		}
+		resolveWG.Wait()
+		cancelResolve()
+		var batchreq []apireq
+		for _, addr := range resolved {
+			if addr != "" {
 				batchreq = append(batchreq, apireq{Query: addr, Fields: "countryCode"})
 			}
 		}
 		if len(batchreq) == 0 {
 			continue
 		}
-		req, _ := json.Marshal(batchreq)
-		ret, err := http.Post("http://ip-api.com/batch", "application/json", strings.NewReader(string(req)))
+		reqBody, _ := json.Marshal(batchreq)
+		requestCtx, cancel := context.WithTimeout(l.ctx, 8*time.Second)
+		httpReq, requestErr := http.NewRequestWithContext(requestCtx, http.MethodPost, "http://ip-api.com/batch", bytes.NewReader(reqBody))
+		if requestErr == nil {
+			httpReq.Header.Set("Content-Type", "application/json")
+		}
+		var ret *http.Response
+		if requestErr == nil {
+			ret, requestErr = statHTTPClient.Do(httpReq)
+		}
+		err := requestErr
 		if err == nil {
-			retBytes, err := io.ReadAll(ret.Body)
+			retBytes, err := io.ReadAll(io.LimitReader(ret.Body, 1<<20))
 			_ = ret.Body.Close()
-			if err == nil {
+			if err == nil && ret.StatusCode >= http.StatusOK && ret.StatusCode < http.StatusMultipleChoices {
 				var retStruct []apiret
 				err := json.Unmarshal(retBytes, &retStruct)
 				if err == nil {
@@ -109,6 +158,7 @@ func (l *GetStatLogic) GetStat() (resp *dto.GetStatResponse, err error) {
 				}
 			}
 		}
+		cancel()
 	}
 	protocolDict := make(map[string]void)
 	protocol, err := nodeStore.QueryEnabledNodeProtocols(l.ctx)

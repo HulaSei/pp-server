@@ -13,6 +13,10 @@ import (
 type TaskStore interface {
 	FindOneByType(ctx context.Context, id int64, typ task.Type) (*task.Task, error)
 	UpdateActive(ctx context.Context, data *task.Task) (bool, error)
+	UpdateActiveProgress(ctx context.Context, data *task.Task) (bool, error)
+	UpdateActiveProgressWithError(ctx context.Context, data *task.Task, taskError *task.TaskError) (bool, error)
+	InsertError(ctx context.Context, data *task.TaskError) error
+	FindErrors(ctx context.Context, taskIDs []int64) ([]*task.TaskError, error)
 }
 
 var (

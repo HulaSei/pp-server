@@ -15,6 +15,7 @@ type NodeRepo interface {
 	InsertServer(ctx context.Context, data *node.Server, tx ...*gorm.DB) error
 	FindOneServer(ctx context.Context, id int64) (*node.Server, error)
 	UpdateServer(ctx context.Context, data *node.Server, tx ...*gorm.DB) error
+	UpdateServerProtocolsIfCurrent(ctx context.Context, id int64, current, updated string, tx ...*gorm.DB) (bool, error)
 	BatchUpdateServerLastReportedAt(ctx context.Context, reports map[int64]time.Time, tx ...*gorm.DB) error
 	DeleteServer(ctx context.Context, id int64, tx ...*gorm.DB) error
 	FindServerConfigOverride(ctx context.Context, serverId int64) (*node.ServerConfigOverride, error)
@@ -36,6 +37,8 @@ type NodeRepo interface {
 	// query
 	FilterServerList(ctx context.Context, params *node.FilterParams) (int64, []*node.Server, error)
 	FilterNodeList(ctx context.Context, params *node.FilterNodeParams) (int64, []*node.Node, error)
+	ListNodes(ctx context.Context, params *node.FilterNodeParams) ([]*node.Node, error)
+	ListNodesByScope(ctx context.Context, nodeIDs []int64, tags []string, enabled *bool, preload bool) ([]*node.Node, error)
 	QueryNodeSorts(ctx context.Context) ([]node.SortItem, error)
 	QueryServerSorts(ctx context.Context) ([]node.SortItem, error)
 	UpdateNodeSort(ctx context.Context, id int64, sort int64) error
@@ -71,4 +74,5 @@ type TrafficRepo interface {
 	QueryTrafficLogPageList(ctx context.Context, userId, subscribeId int64, page, size int) ([]*traffic.TrafficLog, int64, error)
 	QueryTrafficLogDetails(ctx context.Context, filter *traffic.TrafficLogDetailsFilter) ([]*traffic.TrafficLog, int64, error)
 	DeleteBefore(ctx context.Context, end time.Time) error
+	DeleteBeforeBatch(ctx context.Context, end time.Time, limit int) (int64, error)
 }

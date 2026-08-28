@@ -182,6 +182,7 @@ func invalidateCacheKeys(ctx context.Context, client *redis.Client, keys ...stri
 			pipe.Incr(ctx, cacheVersionKey(key))
 			pipe.Expire(ctx, cacheVersionKey(key), defaultExpiry)
 			pipe.Del(ctx, key)
+			pipe.Del(ctx, cacheNotFoundKey(key))
 		}
 		return nil
 	})

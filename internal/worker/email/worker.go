@@ -89,6 +89,16 @@ func (w *Worker) Start() error {
 		logger.Error("Batch Send Email", logger.Field("message", "No recipients or additional emails provided"), logger.Field("task_id", w.id))
 		return w.failTask(taskInfo, fmt.Errorf("no recipients provided"))
 	}
+	// Migrate legacy in-scope counters on first resume; current tasks keep these
+	// bounded fields in dedicated columns so progress updates never rewrite the
+	// potentially very large recipient list.
+	if taskInfo.DailyDate == "" && taskInfo.DailySent == 0 {
+		taskInfo.DailyDate = scope.DailyDate
+		taskInfo.DailySent = scope.DailySent
+	} else {
+		scope.DailyDate = taskInfo.DailyDate
+		scope.DailySent = taskInfo.DailySent
+	}
 
 	var content task.EmailContent
 	if err := json.Unmarshal([]byte(taskInfo.Content), &content); err != nil {
@@ -110,8 +120,17 @@ func (w *Worker) Start() error {
 		interval = time.Duration(scope.Interval) * time.Second
 	}
 
-	var sendErrors []ErrorInfo
-	if taskInfo.Errors != "" {
+	storedErrors, err := w.tasks.FindErrors(w.ctx, []int64{taskInfo.Id})
+	if err != nil {
+		return fmt.Errorf("load task errors: %w", err)
+	}
+	sendErrors := make([]ErrorInfo, 0, len(storedErrors))
+	for _, item := range storedErrors {
+		sendErrors = append(sendErrors, ErrorInfo{Error: item.Error, Email: item.Target, Time: item.OccurredAt})
+	}
+	// Tasks created before task_error was introduced keep their failure list in
+	// the legacy column. It is read only as a migration fallback.
+	if len(storedErrors) == 0 && taskInfo.Errors != "" {
 		if err := json.Unmarshal([]byte(taskInfo.Errors), &sendErrors); err != nil {
 			return w.failTask(taskInfo, fmt.Errorf("parse task errors: %w", err))
 		}
@@ -143,18 +162,28 @@ func (w *Worker) Start() error {
 		if errors.Is(sendErr, context.Canceled) || errors.Is(sendErr, context.DeadlineExceeded) {
 			return sendErr
 		}
+		var failure *task.TaskError
 		if sendErr != nil {
 			logger.Error("Batch Send Email", logger.Field("message", "Failed to send email"), logger.Field("error", sendErr.Error()), logger.Field("task_id", w.id))
-			sendErrors = append(sendErrors, ErrorInfo{Error: sendErr.Error(), Email: recipient, Time: timeutil.Now().Unix()})
-			text, _ := json.Marshal(sendErrors)
-			taskInfo.Errors = string(text)
+			occurredAt := timeutil.Now().Unix()
+			failure = &task.TaskError{
+				TaskId: taskInfo.Id, Position: uint64(index), Target: recipient,
+				Error: sendErr.Error(), OccurredAt: occurredAt,
+			}
+			sendErrors = append(sendErrors, ErrorInfo{Error: sendErr.Error(), Email: recipient, Time: occurredAt})
 		}
 		w.finishMessage(audit, sendErr == nil)
 		taskInfo.Current = uint64(index + 1)
 		scope.DailySent++
-		if err := w.persist(taskInfo, &scope); err != nil {
-			logger.Error("Batch Send Email", logger.Field("message", "Failed to update task progress"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
-			return err
+		var persistErr error
+		if failure != nil {
+			persistErr = w.persistWithError(taskInfo, &scope, failure)
+		} else {
+			persistErr = w.persist(taskInfo, &scope)
+		}
+		if persistErr != nil {
+			logger.Error("Batch Send Email", logger.Field("message", "Failed to update task progress"), logger.Field("error", persistErr.Error()), logger.Field("task_id", w.id))
+			return persistErr
 		}
 		if index+1 < len(recipients) {
 			if err := waitContext(w.ctx, interval); err != nil {
@@ -171,6 +200,13 @@ func (w *Worker) Start() error {
 	}
 	if len(failedRecipients) >= len(recipients) {
 		taskInfo.Status = task.StatusFailed
+	}
+	if len(sendErrors) > 0 {
+		text, marshalErr := json.Marshal(sendErrors)
+		if marshalErr != nil {
+			return w.failTask(taskInfo, fmt.Errorf("marshal task errors: %w", marshalErr))
+		}
+		taskInfo.Errors = string(text)
 	}
 
 	if err := w.persist(taskInfo, &scope); err != nil {
@@ -239,12 +275,22 @@ func (w *Worker) send(recipient string, content task.EmailContent) error {
 }
 
 func (w *Worker) persist(taskInfo *task.Task, scope *task.EmailScope) error {
-	scopeBytes, err := scope.Marshal()
+	taskInfo.DailyDate = scope.DailyDate
+	taskInfo.DailySent = scope.DailySent
+	updated, err := w.tasks.UpdateActiveProgress(w.ctx, taskInfo)
 	if err != nil {
 		return err
 	}
-	taskInfo.Scope = string(scopeBytes)
-	updated, err := w.tasks.UpdateActive(w.ctx, taskInfo)
+	if !updated {
+		return ErrTaskNotActive
+	}
+	return nil
+}
+
+func (w *Worker) persistWithError(taskInfo *task.Task, scope *task.EmailScope, failure *task.TaskError) error {
+	taskInfo.DailyDate = scope.DailyDate
+	taskInfo.DailySent = scope.DailySent
+	updated, err := w.tasks.UpdateActiveProgressWithError(w.ctx, taskInfo, failure)
 	if err != nil {
 		return err
 	}
@@ -257,7 +303,7 @@ func (w *Worker) persist(taskInfo *task.Task, scope *task.EmailScope) error {
 func (w *Worker) failTask(taskInfo *task.Task, cause error) error {
 	taskInfo.Status = task.StatusFailed
 	taskInfo.Errors = cause.Error()
-	updated, err := w.tasks.UpdateActive(w.ctx, taskInfo)
+	updated, err := w.tasks.UpdateActiveProgress(w.ctx, taskInfo)
 	if err != nil {
 		return fmt.Errorf("record failed email task: %w", err)
 	}

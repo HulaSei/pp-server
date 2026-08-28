@@ -119,6 +119,24 @@ func (m *nodeRepo) UpdateServer(ctx context.Context, data *node.Server, tx ...*g
 	return db.WithContext(ctx).Where("id = ?", data.Id).Save(data).Error
 }
 
+// UpdateServerProtocolsIfCurrent persists node-reported protocol metadata
+// without running the full-row server update hooks. The compare-and-swap guard
+// prevents a heartbeat based on stale data from overwriting a concurrent admin
+// configuration change.
+func (m *nodeRepo) UpdateServerProtocolsIfCurrent(ctx context.Context, id int64, current, updated string, tx ...*gorm.DB) (bool, error) {
+	db := m.DB
+	if len(tx) > 0 {
+		db = tx[0]
+	}
+	result := db.WithContext(ctx).Model(&node.Server{}).
+		Where("id = ? AND protocols = ?", id, current).
+		UpdateColumns(map[string]interface{}{
+			"protocols":  updated,
+			"updated_at": time.Now(),
+		})
+	return result.RowsAffected == 1, result.Error
+}
+
 func (m *nodeRepo) BatchUpdateServerLastReportedAt(ctx context.Context, reports map[int64]time.Time, tx ...*gorm.DB) error {
 	if len(reports) == 0 {
 		return nil
@@ -394,18 +412,11 @@ func (m *nodeRepo) UpdateServerSort(ctx context.Context, id int64, sort int64) e
 	return m.UpdateServer(ctx, server)
 }
 
-// FilterNodeList Filter Node List
-func (m *nodeRepo) FilterNodeList(ctx context.Context, params *node.FilterNodeParams) (int64, []*node.Node, error) {
-	var nodes []*node.Node
-	var total int64
+func (m *nodeRepo) nodeListQuery(ctx context.Context, params *node.FilterNodeParams) *gorm.DB {
 	query := m.WithContext(ctx).Model(&node.Node{})
 	if params == nil {
-		params = &node.FilterNodeParams{
-			Page: 1,
-			Size: 10,
-		}
+		params = &node.FilterNodeParams{}
 	}
-	params.Page, params.Size = repository.NormalizePageFloor(params.Page, params.Size)
 	if params.Search != "" {
 		pattern := orm.LikePrefixPattern(params.Search)
 		condition := "(name LIKE ?" + orm.LikeEscapeClause() + " OR address LIKE ?" + orm.LikeEscapeClause() + " OR tags LIKE ?" + orm.LikeEscapeClause()
@@ -437,9 +448,52 @@ func (m *nodeRepo) FilterNodeList(ctx context.Context, params *node.FilterNodePa
 	if params.Preload {
 		query = query.Preload("Server")
 	}
+	return query
+}
+
+// FilterNodeList Filter Node List
+func (m *nodeRepo) FilterNodeList(ctx context.Context, params *node.FilterNodeParams) (int64, []*node.Node, error) {
+	if params == nil {
+		params = &node.FilterNodeParams{}
+	}
+	params.Page, params.Size = repository.NormalizePageFloor(params.Page, params.Size)
+	var nodes []*node.Node
+	var total int64
+	query := m.nodeListQuery(ctx, params)
 
 	err := query.Count(&total).Order("sort ASC").Limit(params.Size).Offset((params.Page - 1) * params.Size).Find(&nodes).Error
 	return total, nodes, err
+}
+
+// ListNodes is the unpaginated internal hot-path query. Unlike the admin list,
+// callers already provide a bounded server/plan scope and do not need COUNT.
+func (m *nodeRepo) ListNodes(ctx context.Context, params *node.FilterNodeParams) ([]*node.Node, error) {
+	var nodes []*node.Node
+	err := m.nodeListQuery(ctx, params).Order("sort ASC").Find(&nodes).Error
+	return nodes, err
+}
+
+// ListNodesByScope applies the plan's explicit-node and tag selectors with OR
+// semantics in one query. This is the shared read path for all subscription
+// renderers, avoiding two node scans and inconsistent selector behavior.
+func (m *nodeRepo) ListNodesByScope(ctx context.Context, nodeIDs []int64, tags []string, enabled *bool, preload bool) ([]*node.Node, error) {
+	query := m.nodeListQuery(ctx, &node.FilterNodeParams{Enabled: enabled, Preload: preload})
+	conditions := make([]string, 0, 2)
+	args := make([]interface{}, 0, len(tags)+1)
+	if len(nodeIDs) > 0 {
+		conditions = append(conditions, "id IN ?")
+		args = append(args, nodeIDs)
+	}
+	if condition, values := orm.CommaSeparatedContainsCondition(query, "tags", tags); condition != "" {
+		conditions = append(conditions, condition)
+		args = append(args, values...)
+	}
+	if len(conditions) == 0 {
+		return m.ListNodes(ctx, &node.FilterNodeParams{Enabled: enabled, Preload: preload})
+	}
+	var nodes []*node.Node
+	err := query.Where("("+strings.Join(conditions, " OR ")+")", args...).Order("sort ASC").Find(&nodes).Error
+	return nodes, err
 }
 
 func (m *nodeRepo) QueryNodeSorts(ctx context.Context) ([]node.SortItem, error) {
@@ -522,7 +576,7 @@ func (m *nodeRepo) SetServerCache(ctx context.Context, serverId int64, key strin
 
 // ClearNodeCache Clear Node Cache
 func (m *nodeRepo) ClearNodeCache(ctx context.Context, params *node.FilterNodeParams) error {
-	_, nodes, err := m.FilterNodeList(ctx, params)
+	nodes, err := m.ListNodes(ctx, params)
 	if err != nil {
 		return err
 	}

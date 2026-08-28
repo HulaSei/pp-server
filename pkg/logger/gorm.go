@@ -11,6 +11,7 @@ import (
 )
 
 type GormLogger struct {
+	SlowThreshold time.Duration
 }
 
 const TAG = "[GORM]"
@@ -46,6 +47,25 @@ func (l *GormLogger) Error(ctx context.Context, str string, args ...interface{})
 }
 
 func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql string, rowsAffected int64), err error) {
+	duration := time.Since(begin)
+	threshold := l.SlowThreshold
+	if threshold <= 0 {
+		threshold = time.Second
+	}
+
+	// The expanded SQL callback is comparatively expensive and may contain
+	// sensitive values. Do not invoke it for the overwhelmingly common fast,
+	// successful query path.
+	if err == nil && duration < threshold {
+		return
+	}
+	// Record-not-found is normal control flow for cache probes and optional
+	// records. It is only operationally interesting when the lookup itself was
+	// slow.
+	if errors.Is(err, gorm.ErrRecordNotFound) && duration < threshold {
+		return
+	}
+
 	sql, rowsAffected := fc()
 	fields := []LogField{
 		{
@@ -66,12 +86,12 @@ func (l *GormLogger) Trace(ctx context.Context, begin time.Time, fc func() (sql 
 		// dedup probes, lazily-created rows, existence checks) — logging it
 		// as an error drowns out real failures.
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			WithContext(ctx).WithCallerSkip(6).WithDuration(time.Since(begin)).Infow(TAG, fields...)
+			WithContext(ctx).WithCallerSkip(6).WithDuration(duration).Sloww(TAG+" Slow Query", fields...)
 		} else {
-			WithContext(ctx).WithCallerSkip(6).WithDuration(time.Since(begin)).Errorw(TAG, fields...)
+			WithContext(ctx).WithCallerSkip(6).WithDuration(duration).Errorw(TAG, fields...)
 		}
 	} else {
-		WithContext(ctx).WithCallerSkip(6).WithDuration(time.Since(begin)).Infow(TAG+" SQL Executed", fields...)
+		WithContext(ctx).WithCallerSkip(6).WithDuration(duration).Sloww(TAG+" Slow Query", fields...)
 	}
 }
 

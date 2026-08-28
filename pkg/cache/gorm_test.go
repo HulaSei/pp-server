@@ -2,6 +2,7 @@ package cache
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -121,6 +122,38 @@ func TestVersionFenceRejectsStaleCacheFill(t *testing.T) {
 	}
 	if server.Exists("user:42") {
 		t.Fatal("stale read repopulated cache after invalidation")
+	}
+}
+
+func TestQueryCtxCachesRecordNotFoundAndInvalidationClearsIt(t *testing.T) {
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { _ = client.Close() })
+	ctx := context.Background()
+	conn := NewConn(newDryRunDB(t), client, WithNotFoundExpiry(time.Minute))
+	queries := 0
+	query := func(_ *gorm.DB, _ interface{}) error {
+		queries++
+		return gorm.ErrRecordNotFound
+	}
+	var value User
+	if err := conn.QueryCtx(ctx, &value, "user:missing", query); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("first query error = %v", err)
+	}
+	if err := conn.QueryCtx(ctx, &value, "user:missing", query); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("negative-cache query error = %v", err)
+	}
+	if queries != 1 {
+		t.Fatalf("database queries = %d, want 1", queries)
+	}
+	if err := conn.invalidateCacheKeys(ctx, "user:missing"); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.QueryCtx(ctx, &value, "user:missing", query); !errors.Is(err, gorm.ErrRecordNotFound) {
+		t.Fatalf("post-invalidation query error = %v", err)
+	}
+	if queries != 2 {
+		t.Fatalf("database queries after invalidation = %d, want 2", queries)
 	}
 }
 

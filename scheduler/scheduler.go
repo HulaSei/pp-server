@@ -94,7 +94,7 @@ func (m *Service) Start() {
 	// Retention runs independently after daily statistics. It retries failures
 	// instead of waiting silently for the next day's statistics task.
 	logCleanupTask := asynq.NewTask(types.SchedulerLogCleanup, nil)
-	if _, err := m.server.Register("30 0 * * *", logCleanupTask, asynq.MaxRetry(3)); err != nil {
+	if _, err := m.server.Register("30 2 * * *", logCleanupTask, asynq.MaxRetry(3)); err != nil {
 		logger.Errorf("register log cleanup task failed: %s", err.Error())
 	}
 

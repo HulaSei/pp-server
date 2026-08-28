@@ -31,12 +31,30 @@ type Task struct {
 	Errors    string    `gorm:"type:text;comment:Task Errors"`
 	Total     uint64    `gorm:"column:total;not null;default:0;comment:Total Number"`
 	Current   uint64    `gorm:"column:current;not null;default:0;comment:Current Number"`
+	DailyDate string    `gorm:"type:varchar(10);not null;default:'';comment:Email daily quota date"`
+	DailySent uint64    `gorm:"not null;default:0;comment:Email daily quota sent count"`
 	CreatedAt time.Time `gorm:"<-:create;comment:Creation Time"`
 	UpdatedAt time.Time `gorm:"comment:Update Time"`
 }
 
 func (Task) TableName() string {
 	return "task"
+}
+
+// TaskError stores one durable execution failure without repeatedly rewriting
+// the task.Errors JSON document as a campaign grows.
+type TaskError struct {
+	Id         int64     `gorm:"primaryKey;autoIncrement;comment:ID"`
+	TaskId     int64     `gorm:"not null;uniqueIndex:uk_task_error_position;index:idx_task_error_task_id;comment:Task ID"`
+	Position   uint64    `gorm:"not null;uniqueIndex:uk_task_error_position;comment:Target position"`
+	Target     string    `gorm:"type:varchar(320);not null;default:'';comment:Failed target"`
+	Error      string    `gorm:"type:text;comment:Failure reason"`
+	OccurredAt int64     `gorm:"not null;default:0;comment:Failure unix timestamp"`
+	CreatedAt  time.Time `gorm:"<-:create;comment:Creation Time"`
+}
+
+func (TaskError) TableName() string {
+	return "task_error"
 }
 
 // Filter task 列表查询过滤条件

@@ -439,12 +439,16 @@ func (l *QuotaTaskLogic) finishTask(ctx context.Context, taskInfo *task.Task, to
 
 func (l *QuotaTaskLogic) updateTask(ctx context.Context, taskInfo *task.Task) error {
 	return l.deps.Store.InPlatformTx(ctx, func(store repository.PlatformStore) error {
-		if err := store.Task().Update(ctx, taskInfo); err != nil {
+		updated, err := store.Task().UpdateActiveProgress(ctx, taskInfo)
+		if err != nil {
 			logger.WithContext(ctx).Error("[QuotaTaskLogic.processSubscribes] update task status error",
 				logger.Field("error", err.Error()),
 				logger.Field("taskID", taskInfo.Id),
 			)
 			return err
+		}
+		if !updated {
+			return fmt.Errorf("quota task %d is no longer active", taskInfo.Id)
 		}
 		return nil
 	})

@@ -36,7 +36,7 @@ func TestGormTraceDoesNotLogExpandedSQL(t *testing.T) {
 		writer.Store(oldWriter)
 	})
 
-	(&GormLogger{}).Trace(context.Background(), time.Now(), func() (string, int64) {
+	(&GormLogger{SlowThreshold: time.Nanosecond}).Trace(context.Background(), time.Now().Add(-time.Millisecond), func() (string, int64) {
 		return `SELECT * FROM users WHERE email = '` + secret + `'`, 1
 	}, nil)
 
@@ -46,6 +46,28 @@ func TestGormTraceDoesNotLogExpandedSQL(t *testing.T) {
 	}
 	if !strings.Contains(got, `"operation":"SELECT"`) || !strings.Contains(got, `"rows":1`) {
 		t.Fatalf("gorm trace is missing safe diagnostics: %s", got)
+	}
+}
+
+func TestGormTraceSkipsFastSuccessfulQueries(t *testing.T) {
+	setTestLogState(t, jsonEncodingType)
+	w := new(mockWriter)
+	oldWriter := writer.Swap(w)
+	t.Cleanup(func() {
+		writer.Store(oldWriter)
+	})
+
+	called := false
+	(&GormLogger{SlowThreshold: time.Second}).Trace(context.Background(), time.Now(), func() (string, int64) {
+		called = true
+		return "SELECT 1", 1
+	}, nil)
+
+	if called {
+		t.Fatal("fast query expanded SQL callback was invoked")
+	}
+	if got := w.String(); got != "" {
+		t.Fatalf("fast query produced a log entry: %s", got)
 	}
 }
 

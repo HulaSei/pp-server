@@ -3,6 +3,7 @@ package abosend
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/perfect-panel/server/pkg/random"
@@ -47,6 +48,7 @@ func (l *response) Unmarshal(data []byte) error {
 
 func NewClient(config Config) *Client {
 	client := resty.New()
+	client.SetTimeout(10 * time.Second)
 	if config.ApiDomain != "" {
 		client.SetBaseURL(config.ApiDomain)
 	} else {

@@ -70,6 +70,16 @@ func (m *UserRepo) FindOne(ctx context.Context, id int64) (*user.User, error) {
 	return &resp, err
 }
 
+func (m *UserRepo) FindAccountState(ctx context.Context, id int64) (*user.AccountState, error) {
+	key := fmt.Sprintf("%s%d", cacheUserStatePrefix, id)
+	var state user.AccountState
+	err := m.QueryCtx(ctx, &state, key, func(conn *gorm.DB, v interface{}) error {
+		return conn.Model(&user.User{}).Unscoped().
+			Select("id", "enable", "updated_at", "deleted_at").Where("id = ?", id).First(v).Error
+	})
+	return &state, err
+}
+
 // FindEnabledUserIDs is the batch account-state gate used by node hot paths.
 // GORM's default scope excludes soft-deleted users; the explicit enable
 // predicate keeps disabled accounts from retaining service credentials.
@@ -551,6 +561,19 @@ func (m *UserRepo) FindUserAuthMethods(ctx context.Context, userId int64) ([]*us
 	var data []*user.AuthMethods
 	err := m.QueryNoCacheCtx(ctx, &data, func(conn *gorm.DB, v interface{}) error {
 		return conn.Model(&user.AuthMethods{}).Where("user_id = ?", userId).Find(&data).Error
+	})
+	return data, err
+}
+
+func (m *UserRepo) FindUserAuthMethodsByUserIds(ctx context.Context, method string, userIds []int64) ([]*user.AuthMethods, error) {
+	if len(userIds) == 0 {
+		return []*user.AuthMethods{}, nil
+	}
+	var data []*user.AuthMethods
+	err := m.QueryNoCacheCtx(ctx, &data, func(conn *gorm.DB, v interface{}) error {
+		return conn.Model(&user.AuthMethods{}).
+			Where("auth_type = ? AND user_id IN ?", method, userIds).
+			Find(v).Error
 	})
 	return data, err
 }

@@ -13,9 +13,36 @@ import (
 
 type workerTaskStore struct {
 	task         *task.Task
+	errors       []*task.TaskError
 	updateErr    error
 	updates      int
 	rejectActive bool
+}
+
+func (s *workerTaskStore) InsertError(_ context.Context, data *task.TaskError) error {
+	for _, item := range s.errors {
+		if item.TaskId == data.TaskId && item.Position == data.Position {
+			return nil
+		}
+	}
+	copy := *data
+	s.errors = append(s.errors, &copy)
+	return nil
+}
+
+func (s *workerTaskStore) FindErrors(_ context.Context, taskIDs []int64) ([]*task.TaskError, error) {
+	selected := make(map[int64]struct{}, len(taskIDs))
+	for _, id := range taskIDs {
+		selected[id] = struct{}{}
+	}
+	result := make([]*task.TaskError, 0, len(s.errors))
+	for _, item := range s.errors {
+		if _, ok := selected[item.TaskId]; ok {
+			copy := *item
+			result = append(result, &copy)
+		}
+	}
+	return result, nil
 }
 
 func (s *workerTaskStore) FindOneByType(_ context.Context, _ int64, typ task.Type) (*task.Task, error) {
@@ -35,6 +62,21 @@ func (s *workerTaskStore) UpdateActive(_ context.Context, data *task.Task) (bool
 	}
 	s.updates++
 	s.task = data
+	return true, nil
+}
+
+func (s *workerTaskStore) UpdateActiveProgress(ctx context.Context, data *task.Task) (bool, error) {
+	return s.UpdateActive(ctx, data)
+}
+
+func (s *workerTaskStore) UpdateActiveProgressWithError(ctx context.Context, data *task.Task, taskError *task.TaskError) (bool, error) {
+	updated, err := s.UpdateActive(ctx, data)
+	if err != nil || !updated {
+		return updated, err
+	}
+	if err := s.InsertError(ctx, taskError); err != nil {
+		return false, err
+	}
 	return true, nil
 }
 
@@ -100,12 +142,8 @@ func TestWorkerResumesFromPersistedProgress(t *testing.T) {
 	if store.task.Status != task.StatusCompleted || store.task.Current != 2 {
 		t.Fatalf("final task = %+v", store.task)
 	}
-	var scope task.EmailScope
-	if err := scope.Unmarshal([]byte(store.task.Scope)); err != nil {
-		t.Fatal(err)
-	}
-	if scope.DailyDate == "" || scope.DailySent != 1 {
-		t.Fatalf("daily limit state was not persisted: %+v", scope)
+	if store.task.DailyDate == "" || store.task.DailySent != 1 {
+		t.Fatalf("daily limit state was not persisted: %+v", store.task)
 	}
 }
 
@@ -118,6 +156,9 @@ func TestWorkerMarksAllSendFailuresFailed(t *testing.T) {
 	}
 	if store.task.Status != task.StatusFailed || store.task.Errors == "" || store.task.Current != 1 {
 		t.Fatalf("failed send task = %+v", store.task)
+	}
+	if len(store.errors) != 1 || store.errors[0].Position != 0 {
+		t.Fatalf("incremental task errors = %+v", store.errors)
 	}
 }
 

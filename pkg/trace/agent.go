@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 
 	"go.opentelemetry.io/otel"
@@ -131,10 +132,20 @@ func createExporter(c Config) (sdktrace.SpanExporter, error) {
 
 func startAgent(c Config) error {
 	AddResources(semconv.ServiceNameKey.String(c.Name))
+	sampler := c.Sampler
+	// Without an exporter there is no trace destination. Keep propagation and
+	// request IDs, but avoid recording every span in memory.
+	if strings.TrimSpace(c.Endpoint) == "" {
+		sampler = 0
+	}
+	if sampler < 0 {
+		sampler = 0
+	} else if sampler > 1 {
+		sampler = 1
+	}
 
 	opts := []sdktrace.TracerProviderOption{
-		// Set the sampling rate based on the parent span to 100%
-		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(c.Sampler))),
+		sdktrace.WithSampler(sdktrace.ParentBased(sdktrace.TraceIDRatioBased(sampler))),
 		// Record information about this application in a Resource.
 		sdktrace.WithResource(resource.NewSchemaless(attrResources...)),
 	}

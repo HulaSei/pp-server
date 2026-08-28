@@ -16,6 +16,7 @@ type SubscribeRepo interface {
 	RestoreInventory(ctx context.Context, id int64, tx ...*gorm.DB) error
 	Delete(ctx context.Context, id int64, tx ...*gorm.DB) error
 	FilterList(ctx context.Context, params *subscribe.FilterParams) (int64, []*subscribe.Subscribe, error)
+	FindByNodeScope(ctx context.Context, nodeIDs []int64, tags []string) ([]*subscribe.Subscribe, error)
 	ClearCache(ctx context.Context, id ...int64) error
 	QuerySubscribeMinSortByIds(ctx context.Context, ids []int64) (int64, error)
 	QueryResetCycleSubscribeIds(ctx context.Context, resetCycle int) ([]int64, error)

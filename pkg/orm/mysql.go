@@ -122,7 +122,7 @@ func ConnectDatabase(m Mysql) (*gorm.DB, error) {
 		return nil, fmt.Errorf("unsupported database driver: %s", m.Config.Driver)
 	}
 	db, err := gorm.Open(dialector, &gorm.Config{
-		Logger: new(logger.GormLogger),
+		Logger: &logger.GormLogger{SlowThreshold: m.GetSlowThreshold()},
 		NamingStrategy: schema.NamingStrategy{
 			SingularTable: true,
 		},

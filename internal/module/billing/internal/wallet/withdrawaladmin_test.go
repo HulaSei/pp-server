@@ -59,6 +59,10 @@ func (r *withdrawalTestLogs) Insert(_ context.Context, data *logEntity.SystemLog
 	r.entries = append(r.entries, data)
 	return nil
 }
+func (r *withdrawalTestLogs) InsertBatch(_ context.Context, data []*logEntity.SystemLog, _ int) error {
+	r.entries = append(r.entries, data...)
+	return nil
+}
 func (*withdrawalTestLogs) FindOne(context.Context, int64) (*logEntity.SystemLog, error) {
 	return nil, nil
 }
@@ -74,6 +78,9 @@ func (*withdrawalTestLogs) FindByDatesType(context.Context, []string, uint8) ([]
 	return nil, nil
 }
 func (*withdrawalTestLogs) DeleteBefore(context.Context, time.Time) error { return nil }
+func (*withdrawalTestLogs) DeleteBeforeBatch(context.Context, time.Time, int) (int64, error) {
+	return 0, nil
+}
 func (*withdrawalTestLogs) SumAmountByTypeAndObjectID(context.Context, uint8, int64) (int64, error) {
 	return 0, nil
 }

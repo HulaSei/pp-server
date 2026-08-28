@@ -40,6 +40,7 @@ type SystemRepo interface {
 // LogRepo log 数据访问接口
 type LogRepo interface {
 	Insert(ctx context.Context, data *log.SystemLog) error
+	InsertBatch(ctx context.Context, data []*log.SystemLog, batchSize int) error
 	FindOne(ctx context.Context, id int64) (*log.SystemLog, error)
 	Update(ctx context.Context, data *log.SystemLog) error
 	Delete(ctx context.Context, id int64) error
@@ -47,6 +48,7 @@ type LogRepo interface {
 	FindFirstByDateType(ctx context.Context, date string, typ uint8) (*log.SystemLog, error)
 	FindByDatesType(ctx context.Context, dates []string, typ uint8) ([]*log.SystemLog, error)
 	DeleteBefore(ctx context.Context, end time.Time) error
+	DeleteBeforeBatch(ctx context.Context, end time.Time, limit int) (int64, error)
 	SumAmountByTypeAndObjectID(ctx context.Context, typ uint8, objectID int64) (int64, error)
 }
 
@@ -58,9 +60,13 @@ type TaskRepo interface {
 	QueryTaskList(ctx context.Context, filter *task.Filter) (int64, []*task.Task, error)
 	Update(ctx context.Context, data *task.Task) error
 	UpdateActive(ctx context.Context, data *task.Task) (bool, error)
+	UpdateActiveProgress(ctx context.Context, data *task.Task) (bool, error)
+	UpdateActiveProgressWithError(ctx context.Context, data *task.Task, taskError *task.TaskError) (bool, error)
 	UpdateStatus(ctx context.Context, id int64, status int8) error
 	UpdateStatusFrom(ctx context.Context, id int64, typ task.Type, from []int8, status int8) (bool, error)
 	UpdateStatusAndErrorFrom(ctx context.Context, id int64, typ task.Type, from []int8, status int8, taskError string) (bool, error)
+	InsertError(ctx context.Context, data *task.TaskError) error
+	FindErrors(ctx context.Context, taskIDs []int64) ([]*task.TaskError, error)
 }
 
 // ClientRepo subscribe application 数据访问接口

@@ -10,6 +10,7 @@ import (
 // Cache key prefixes used across the user domain cache.
 const (
 	cacheUserIdPrefix           = "cache:user:id:"
+	cacheUserStatePrefix        = "cache:user:state:"
 	cacheUserEmailPrefix        = "cache:user:email:v2:"
 	cacheUserDeviceNumberPrefix = "cache:user:device:number:"
 	cacheUserDeviceIdPrefix     = "cache:user:device:id:"
@@ -32,6 +33,7 @@ func (u *User) GetCacheKeys() []string {
 	}
 	keys := []string{
 		fmt.Sprintf("%s%d", cacheUserIdPrefix, u.Id),
+		fmt.Sprintf("%s%d", cacheUserStatePrefix, u.Id),
 	}
 
 	for _, auth := range u.AuthMethods {
@@ -66,6 +68,7 @@ func (a *AuthMethods) GetCacheKeys() []string {
 
 	if a.UserId != 0 {
 		keys = append(keys, fmt.Sprintf("%s%d", cacheUserIdPrefix, a.UserId))
+		keys = append(keys, fmt.Sprintf("%s%d", cacheUserStatePrefix, a.UserId))
 	}
 	if a.AuthType == authmethod.Email && a.AuthIdentifier != "" {
 		keys = append(keys, fmt.Sprintf("%s%s", cacheUserEmailPrefix, authmethod.CanonicalEmail(a.AuthIdentifier)))

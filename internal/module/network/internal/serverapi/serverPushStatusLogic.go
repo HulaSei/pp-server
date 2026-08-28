@@ -6,6 +6,7 @@ import (
 
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
+	"github.com/perfect-panel/server/internal/trafficagg"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
 )
@@ -43,11 +44,15 @@ func (l *ServerPushStatusLogic) ServerPushStatus(req *dto.ServerPushStatusReques
 		return errors.New("update node status failed")
 	}
 	now := timeutil.Now()
-	serverInfo.LastReportedAt = &now
+	if err := trafficagg.New(trafficagg.Deps{Store: l.deps.Store, Redis: l.deps.Redis}).RecordServerReport(l.ctx, req.ServerId, now); err != nil {
+		l.Errorw("[ServerPushStatus] RecordServerReport error", logger.Field("error", err))
+		return errors.New("update node report time failed")
+	}
 
-	// The heartbeat saves the whole server row anyway, so a reported
-	// certificate fingerprint piggybacks on the same write.
+	// Certificate metadata is exceptional: most heartbeats have nothing to
+	// persist after their status and last-seen values reach Redis.
 	certPinChanged := false
+	currentProtocols := serverInfo.Protocols
 	if req.CertPinSHA256 != "" {
 		certPinChanged, err = serverInfo.ApplyReportedCertPin(req.Protocol, req.CertPinSHA256)
 		if err != nil {
@@ -56,12 +61,18 @@ func (l *ServerPushStatusLogic) ServerPushStatus(req *dto.ServerPushStatusReques
 		}
 	}
 
-	err = l.deps.Store.Node().UpdateServer(l.ctx, serverInfo)
-	if err != nil {
-		l.Errorw("[ServerPushStatus] UpdateServer error", logger.Field("error", err))
-		return nil
-	}
 	if certPinChanged {
+		updated, updateErr := l.deps.Store.Node().UpdateServerProtocolsIfCurrent(l.ctx, serverInfo.Id, currentProtocols, serverInfo.Protocols)
+		if updateErr != nil {
+			l.Errorw("[ServerPushStatus] UpdateServerProtocols error", logger.Field("error", updateErr))
+			return errors.New("update node certificate metadata failed")
+		}
+		if !updated {
+			// An administrator changed the protocol configuration after this
+			// heartbeat read it. The next heartbeat will apply the fingerprint to
+			// the fresh value instead of overwriting that change.
+			return nil
+		}
 		if err := l.deps.Store.Node().ClearServerCache(l.ctx, req.ServerId); err != nil {
 			l.Errorw("[ServerPushStatus] ClearServerCache error", logger.Field("error", err))
 		}

@@ -224,6 +224,23 @@ func (m *trafficRepo) DeleteBefore(ctx context.Context, end time.Time) error {
 	return m.Conn.WithContext(ctx).Model(&traffic.TrafficLog{}).Where(trafficColumn(m.Conn, "timestamp")+" <= ?", end).Delete(&traffic.TrafficLog{}).Error
 }
 
+func (m *trafficRepo) DeleteBeforeBatch(ctx context.Context, end time.Time, limit int) (int64, error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	var ids []int64
+	if err := m.Conn.WithContext(ctx).Model(&traffic.TrafficLog{}).
+		Select("id").Where(trafficColumn(m.Conn, "timestamp")+" <= ?", end).
+		Order("id ASC").Limit(limit).Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	result := m.Conn.WithContext(ctx).Where("id IN ?", ids).Delete(&traffic.TrafficLog{})
+	return result.RowsAffected, result.Error
+}
+
 func trafficDayRange(date time.Time) (time.Time, time.Time) {
 	start := time.Date(date.Year(), date.Month(), date.Day(), 0, 0, 0, 0, date.Location())
 	return start, start.Add(24 * time.Hour)

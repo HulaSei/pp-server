@@ -179,22 +179,25 @@ func (l *ResetTrafficLogic) ProcessTask(ctx context.Context, _ *asynq.Task) erro
 // reset_cycle = 2: Reset monthly based on subscription start date
 func (l *ResetTrafficLogic) resetMonth(ctx context.Context) error {
 	now := timeutil.Now()
+	var resetPlanIDs []int64
+	var resetSubs []*usersub.Subscribe
 
 	err := l.deps.Store.InSubscriptionTx(ctx, func(store repository.SubscriptionStore) error {
 		// Get all subscriptions that reset monthly based on start date
-		resetMonthSubIds, err := store.Subscribe().QueryResetCycleSubscribeIds(ctx, 2)
+		var err error
+		resetPlanIDs, err = store.Subscribe().QueryResetCycleSubscribeIds(ctx, 2)
 		if err != nil {
 			logger.Errorw("[ResetTraffic] Failed to query monthly subscriptions", logger.Field("error", err.Error()))
 			return err
 		}
 
-		if len(resetMonthSubIds) == 0 {
+		if len(resetPlanIDs) == 0 {
 			logger.Infow("[ResetTraffic] No monthly cycle subscriptions found")
 			return nil
 		}
 
 		// Query users for monthly reset based on subscription start date cycle
-		monthlyResetUsers, err := store.SubscriptionTraffic().QueryMonthlyResetSubscribeIds(ctx, resetMonthSubIds, now)
+		monthlyResetUsers, err := store.SubscriptionTraffic().QueryMonthlyResetSubscribeIds(ctx, resetPlanIDs, now)
 		if err != nil {
 			logger.Errorw("[ResetTraffic] Failed to query monthly reset users", logger.Field("error", err.Error()))
 			return err
@@ -202,31 +205,29 @@ func (l *ResetTrafficLogic) resetMonth(ctx context.Context) error {
 
 		if len(monthlyResetUsers) > 0 {
 			logger.Infow("[ResetTraffic] Found users for monthly reset",
-				logger.Field("count", len(monthlyResetUsers)),
-				logger.Field("userIds", monthlyResetUsers))
+				logger.Field("count", len(monthlyResetUsers)))
 
 			if err = store.SubscriptionTraffic().ResetSubscribeTrafficByIds(ctx, monthlyResetUsers); err != nil {
 				logger.Errorw("[ResetTraffic] Failed to update monthly reset users", logger.Field("error", err.Error()))
 				return err
 			}
 			// Find user subscriptions for these users
-			userSubs, err := store.UserSubscription().FindSubscribesByIds(ctx, monthlyResetUsers)
+			resetSubs, err = store.UserSubscription().FindSubscribesByIds(ctx, monthlyResetUsers)
 			if err != nil {
 				logger.Errorw("[ResetTraffic] Failed to find user subscriptions for 1st reset", logger.Field("error", err.Error()))
 				return err
 			}
-			// Clear cache for these subscriptions
-			l.clearCache(ctx, userSubs)
 			logger.Infow("[ResetTraffic] Monthly reset completed", logger.Field("count", len(monthlyResetUsers)))
 		} else {
 			logger.Infow("[ResetTraffic] No users found for monthly reset")
 		}
-		return store.Subscribe().ClearCache(ctx, resetMonthSubIds...)
+		return nil
 	})
 	if err != nil {
 		logger.Errorw("[ResetTraffic] Monthly reset transaction failed", logger.Field("error", err.Error()))
 		return err
 	}
+	l.finalizeReset(ctx, resetSubs, resetPlanIDs)
 
 	logger.Infow("[ResetTraffic] Monthly reset process completed")
 	return nil
@@ -251,21 +252,24 @@ func (l *ResetTrafficLogic) reset1st(ctx context.Context, cache resetTrafficCach
 		return nil
 	}
 
+	var resetPlanIDs []int64
+	var resetSubs []*usersub.Subscribe
 	err := l.deps.Store.InSubscriptionTx(ctx, func(store repository.SubscriptionStore) error {
 		// Get all subscriptions that reset on 1st of month
-		reset1stSubIds, err := store.Subscribe().QueryResetCycleSubscribeIds(ctx, 1)
+		var err error
+		resetPlanIDs, err = store.Subscribe().QueryResetCycleSubscribeIds(ctx, 1)
 		if err != nil {
 			logger.Errorw("[ResetTraffic] Failed to query 1st reset subscriptions", logger.Field("error", err.Error()))
 			return err
 		}
 
-		if len(reset1stSubIds) == 0 {
+		if len(resetPlanIDs) == 0 {
 			logger.Infow("[ResetTraffic] No 1st reset subscriptions found")
 			return nil
 		}
 
 		// Get all active users with these subscriptions
-		users1stReset, err := store.SubscriptionTraffic().QueryFirstResetSubscribeIds(ctx, reset1stSubIds, now)
+		users1stReset, err := store.SubscriptionTraffic().QueryFirstResetSubscribeIds(ctx, resetPlanIDs, now)
 		if err != nil {
 			logger.Errorw("[ResetTraffic] Failed to query 1st reset users", logger.Field("error", err.Error()))
 			return err
@@ -273,34 +277,32 @@ func (l *ResetTrafficLogic) reset1st(ctx context.Context, cache resetTrafficCach
 
 		if len(users1stReset) > 0 {
 			logger.Infow("[ResetTraffic] Found users for 1st reset",
-				logger.Field("count", len(users1stReset)),
-				logger.Field("userIds", users1stReset))
+				logger.Field("count", len(users1stReset)))
 
 			// Reset upload and download traffic to zero
 			if err = store.SubscriptionTraffic().ResetSubscribeTrafficByIds(ctx, users1stReset); err != nil {
 				logger.Errorw("[ResetTraffic] Failed to update 1st reset users", logger.Field("error", err.Error()))
 				return err
 			}
-			userSubs, err := store.UserSubscription().FindSubscribesByIds(ctx, users1stReset)
+			resetSubs, err = store.UserSubscription().FindSubscribesByIds(ctx, users1stReset)
 			if err != nil {
 				logger.Errorw("[ResetTraffic] Failed to find user subscriptions for 1st reset", logger.Field("error", err.Error()))
 				return err
 			}
 
-			// Clear cache for these subscriptions
-			l.clearCache(ctx, userSubs)
 			logger.Infow("[ResetTraffic] 1st reset completed", logger.Field("count", len(users1stReset)))
 		} else {
 			logger.Infow("[ResetTraffic] No users found for 1st reset")
 		}
 
-		return store.Subscribe().ClearCache(ctx, reset1stSubIds...)
+		return nil
 	})
 
 	if err != nil {
 		logger.Errorw("[ResetTraffic] 1st reset transaction failed", logger.Field("error", err.Error()))
 		return err
 	}
+	l.finalizeReset(ctx, resetSubs, resetPlanIDs)
 	logger.Infow("[ResetTraffic] 1st reset process completed")
 	return nil
 }
@@ -315,22 +317,25 @@ func firstDayResetAlreadyProcessed(now time.Time, cache resetTrafficCache) bool 
 // reset_cycle = 3: Reset yearly based on subscription start date
 func (l *ResetTrafficLogic) resetYear(ctx context.Context) error {
 	now := timeutil.Now()
+	var resetPlanIDs []int64
+	var resetSubs []*usersub.Subscribe
 
 	err := l.deps.Store.InSubscriptionTx(ctx, func(store repository.SubscriptionStore) error {
 		// Get all subscriptions that reset yearly
-		resetYearSubIds, err := store.Subscribe().QueryResetCycleSubscribeIds(ctx, 3)
+		var err error
+		resetPlanIDs, err = store.Subscribe().QueryResetCycleSubscribeIds(ctx, 3)
 		if err != nil {
 			logger.Errorw("[ResetTraffic] Failed to query yearly subscriptions", logger.Field("error", err.Error()))
 			return err
 		}
 
-		if len(resetYearSubIds) == 0 {
+		if len(resetPlanIDs) == 0 {
 			logger.Infow("[ResetTraffic] No yearly reset subscriptions found")
 			return nil
 		}
 
 		// Query users for yearly reset based on subscription start date anniversary
-		usersYearReset, err := store.SubscriptionTraffic().QueryYearlyResetSubscribeIds(ctx, resetYearSubIds, now)
+		usersYearReset, err := store.SubscriptionTraffic().QueryYearlyResetSubscribeIds(ctx, resetPlanIDs, now)
 		if err != nil {
 			logger.Errorw("[ResetTraffic] Query yearly reset users failed", logger.Field("error", err.Error()))
 			return err
@@ -338,8 +343,7 @@ func (l *ResetTrafficLogic) resetYear(ctx context.Context) error {
 
 		if len(usersYearReset) > 0 {
 			logger.Infow("[ResetTraffic] Found users for yearly reset",
-				logger.Field("count", len(usersYearReset)),
-				logger.Field("userIds", usersYearReset))
+				logger.Field("count", len(usersYearReset)))
 
 			// Reset upload and download traffic to zero
 			if err = store.SubscriptionTraffic().ResetSubscribeTrafficByIds(ctx, usersYearReset); err != nil {
@@ -347,20 +351,14 @@ func (l *ResetTrafficLogic) resetYear(ctx context.Context) error {
 				return err
 			}
 			// Find user subscriptions for these users
-			userSubs, err := store.UserSubscription().FindSubscribesByIds(ctx, usersYearReset)
+			resetSubs, err = store.UserSubscription().FindSubscribesByIds(ctx, usersYearReset)
 			if err != nil {
 				logger.Errorw("[ResetTraffic] Failed to find user subscriptions for 1st reset", logger.Field("error", err.Error()))
 				return err
 			}
-			// Clear cache for these subscriptions
-			l.clearCache(ctx, userSubs)
 			logger.Infow("[ResetTraffic] Yearly reset completed", logger.Field("count", len(usersYearReset)))
 		} else {
 			logger.Infow("[ResetTraffic] No users found for yearly reset")
-		}
-		err = store.Subscribe().ClearCache(ctx, resetYearSubIds...)
-		if err != nil {
-			logger.Errorw("[ResetTraffic] Failed to clear yearly reset subscription cache", logger.Field("error", err.Error()))
 		}
 		return nil
 	})
@@ -369,6 +367,7 @@ func (l *ResetTrafficLogic) resetYear(ctx context.Context) error {
 		logger.Errorw("[ResetTraffic] Yearly reset transaction failed", logger.Field("error", err.Error()))
 		return err
 	}
+	l.finalizeReset(ctx, resetSubs, resetPlanIDs)
 
 	logger.Infow("[ResetTraffic] Yearly reset process completed")
 	return nil
@@ -508,62 +507,39 @@ func (l *ResetTrafficLogic) isRetryableError(err error) bool {
 	return true
 }
 
-// clearCache clears the reset traffic cache
-// Uses an independent background context with a per-item timeout so that a
-// long-running parent context deadline (e.g. asynq task timeout) does not
-// cause cache/log operations to fail mid-way through large batches.
-func (l *ResetTrafficLogic) clearCache(_ context.Context, list []*usersub.Subscribe) {
-	if len(list) != 0 {
-		subs := make(map[int64]bool)
-
-		for _, sub := range list {
-			if sub.SubscribeId > 0 {
-				cacheCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-				err := l.deps.Store.UserCache().ClearSubscribeCache(cacheCtx, sub)
-				cancel()
-				if err != nil {
-					logger.Errorw("[ResetTraffic] Failed to clear cache for subscription",
-						logger.Field("subscribeId", sub.SubscribeId),
-						logger.Field("error", err.Error()))
-				}
-				if _, ok := subs[sub.SubscribeId]; !ok {
-					subs[sub.SubscribeId] = true
-				}
-			}
-			// Insert traffic reset log
-			l.insertLog(sub.Id, sub.UserId)
-		}
-
-		for sub := range subs {
-			subCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-			if err := l.deps.Store.Subscribe().ClearCache(subCtx, sub); err != nil {
-				logger.Errorw("[ResetTraffic] Failed to clear subscription cache",
-					logger.Field("subscribeId", sub),
-					logger.Field("error", err.Error()),
-				)
-			}
-			cancel()
+// finalizeReset performs all remote cache invalidation and audit persistence
+// after the database transaction has committed. Both operations are batched so
+// a large monthly reset does not hold a connection while waiting on Redis or
+// turn one logical reset into thousands of INSERT statements.
+func (l *ResetTrafficLogic) finalizeReset(ctx context.Context, list []*usersub.Subscribe, planIDs []int64) {
+	if len(list) > 0 {
+		if err := l.deps.Store.UserCache().ClearSubscribeCache(ctx, list...); err != nil {
+			logger.Errorw("[ResetTraffic] Failed to clear user subscription caches", logger.Field("error", err.Error()), logger.Field("count", len(list)))
 		}
 	}
-}
-
-// insertLog inserts a reset traffic log entry using an independent background
-// context so that asynq task deadline does not cancel log writes mid-batch.
-func (l *ResetTrafficLogic) insertLog(subId, userId int64) {
-	trafficLog := log.ResetSubscribe{
-		Type:      log.ResetSubscribeTypeAuto,
-		UserId:    userId,
-		Timestamp: timeutil.Now().UnixMilli(),
+	if len(planIDs) > 0 {
+		if err := l.deps.Store.Subscribe().ClearCache(ctx, planIDs...); err != nil {
+			logger.Errorw("[ResetTraffic] Failed to clear plan caches", logger.Field("error", err.Error()), logger.Field("count", len(planIDs)))
+		}
 	}
-	content, _ := trafficLog.Marshal()
-	logCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if err := l.deps.Store.Log().Insert(logCtx, &log.SystemLog{
-		Type:     log.TypeResetSubscribe.Uint8(),
-		ObjectID: subId,
-		Date:     timeutil.Now().Format(time.DateOnly),
-		Content:  string(content),
-	}); err != nil {
-		logger.Errorw("[ResetTraffic] Failed to create system log for subscription", logger.Field("error", err.Error()))
+	if len(list) == 0 {
+		return
+	}
+	now := timeutil.Now()
+	logs := make([]*log.SystemLog, 0, len(list))
+	for _, sub := range list {
+		if sub == nil {
+			continue
+		}
+		trafficLog := log.ResetSubscribe{Type: log.ResetSubscribeTypeAuto, UserId: sub.UserId, Timestamp: now.UnixMilli()}
+		content, err := trafficLog.Marshal()
+		if err != nil {
+			logger.Errorw("[ResetTraffic] Failed to marshal reset log", logger.Field("error", err.Error()), logger.Field("subscribe_id", sub.Id))
+			continue
+		}
+		logs = append(logs, &log.SystemLog{Type: log.TypeResetSubscribe.Uint8(), ObjectID: sub.Id, Date: now.Format(time.DateOnly), Content: string(content)})
+	}
+	if err := l.deps.Store.Log().InsertBatch(ctx, logs, 1000); err != nil {
+		logger.Errorw("[ResetTraffic] Failed to create reset logs", logger.Field("error", err.Error()), logger.Field("count", len(logs)))
 	}
 }

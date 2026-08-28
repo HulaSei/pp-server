@@ -18,6 +18,27 @@ type fakeTaskRepo struct {
 	statusUpdates []statusUpdate
 	findOne       *taskEntity.Task
 	statusCtxErr  error
+	errors        []*taskEntity.TaskError
+}
+
+func (f *fakeTaskRepo) InsertError(_ context.Context, data *taskEntity.TaskError) error {
+	copy := *data
+	f.errors = append(f.errors, &copy)
+	return nil
+}
+
+func (f *fakeTaskRepo) FindErrors(_ context.Context, taskIDs []int64) ([]*taskEntity.TaskError, error) {
+	selected := make(map[int64]struct{}, len(taskIDs))
+	for _, id := range taskIDs {
+		selected[id] = struct{}{}
+	}
+	result := make([]*taskEntity.TaskError, 0, len(f.errors))
+	for _, item := range f.errors {
+		if _, ok := selected[item.TaskId]; ok {
+			result = append(result, item)
+		}
+	}
+	return result, nil
 }
 
 func (f *fakeTaskRepo) Insert(_ context.Context, data *taskEntity.Task) error {
@@ -46,6 +67,18 @@ func (f *fakeTaskRepo) Update(_ context.Context, _ *taskEntity.Task) error { ret
 func (f *fakeTaskRepo) UpdateActive(_ context.Context, data *taskEntity.Task) (bool, error) {
 	f.findOne = data
 	return true, nil
+}
+
+func (f *fakeTaskRepo) UpdateActiveProgress(ctx context.Context, data *taskEntity.Task) (bool, error) {
+	return f.UpdateActive(ctx, data)
+}
+
+func (f *fakeTaskRepo) UpdateActiveProgressWithError(ctx context.Context, data *taskEntity.Task, taskError *taskEntity.TaskError) (bool, error) {
+	updated, err := f.UpdateActive(ctx, data)
+	if err != nil || !updated {
+		return updated, err
+	}
+	return true, f.InsertError(ctx, taskError)
 }
 
 func (f *fakeTaskRepo) UpdateStatus(_ context.Context, id int64, status int8) error {

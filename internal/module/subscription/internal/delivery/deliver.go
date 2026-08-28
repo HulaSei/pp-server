@@ -14,6 +14,7 @@ import (
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	"github.com/perfect-panel/server/internal/module/platform/entity/client"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
+	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 
@@ -100,7 +101,7 @@ func (l *SubscribeLogic) Handler(req *dto.SubscribeRequest) (resp *dto.Subscribe
 	}
 
 	// Find server list by user subscribe
-	servers, err := l.getServers(userSubscribe)
+	servers, err := l.getServers(userSubscribe, subscribeInfo)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +213,7 @@ func (l *SubscribeLogic) getUserSubscribe(token string) (*usersub.Subscribe, err
 	}
 	// =========================================================
 	// Check if user is enabled
-	userInfo, err := l.deps.Users.FindOne(l.ctx, userSub.UserId)
+	userInfo, err := l.deps.Users.FindAccountState(l.ctx, userSub.UserId)
 	if err != nil {
 		l.Infow("[Generate Subscribe] failed to get user info", logger.Field("error", err.Error()), logger.Field("userId", userSub.UserId))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "failed to get user info: %v", err.Error())
@@ -263,19 +264,13 @@ func (l *SubscribeLogic) logSubscribeActivity(userSub *usersub.Subscribe) error 
 	return nil
 }
 
-func (l *SubscribeLogic) getServers(userSub *usersub.Subscribe) ([]*node.Node, error) {
+func (l *SubscribeLogic) getServers(userSub *usersub.Subscribe, subDetails *subscribe.Subscribe) ([]*node.Node, error) {
 	if l.isSubscriptionExpired(userSub) {
 		return l.createNoticeServers("订阅已过期 / Subscribe Expired"), nil
 	}
 
 	if l.isTrafficExhausted(userSub) {
 		return l.createNoticeServers("流量已用尽 / Traffic Exhausted"), nil
-	}
-
-	subDetails, err := l.deps.Plans.FindOne(l.ctx, userSub.SubscribeId)
-	if err != nil {
-		l.Errorw("[Generate Subscribe]find subscribe details error: %v", logger.Field("error", err.Error()))
-		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find subscribe details error: %v", err.Error())
 	}
 
 	nodeIds := tool.StringToInt64Slice(subDetails.Nodes)
@@ -287,15 +282,7 @@ func (l *SubscribeLogic) getServers(userSub *usersub.Subscribe) ([]*node.Node, e
 		return []*node.Node{}, nil
 	}
 	enable := true
-	var nodes []*node.Node
-	_, nodes, err = l.deps.Nodes.FilterNodeList(l.ctx, &node.FilterNodeParams{
-		Page:    1,
-		Size:    1000,
-		NodeId:  nodeIds,
-		Tag:     tool.RemoveDuplicateElements(tags...),
-		Preload: true,
-		Enabled: &enable, // Only get enabled nodes
-	})
+	nodes, err := l.deps.Nodes.ListNodesByScope(l.ctx, nodeIds, tool.RemoveDuplicateElements(tags...), &enable, true)
 
 	l.Debugf("[Query Subscribe]found servers: %v", len(nodes))
 
