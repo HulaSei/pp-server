@@ -11,5 +11,6 @@ const (
 	SchedulerTotalServerData      = "scheduler:total:server"
 	SchedulerResetTraffic         = "scheduler:reset:traffic"
 	SchedulerTrafficStat          = "scheduler:traffic:stat"
+	SchedulerLogCleanup           = "scheduler:log:cleanup"
 	SchedulerFlushTraffic         = "scheduler:flush:traffic"
 )

@@ -12,7 +12,6 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/pkg/email"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/queue/types"
 )
 
@@ -122,12 +121,30 @@ func (l *SendEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) erro
 	subject := resolveSubject(ctx, subjectTemplate, payload.Subject, payload.Content)
 	messageLog := log.Message{
 		Platform: l.deps.Email().Platform,
-		To:       tool.MaskEmail(payload.Email),
+		To:       logger.RedactedValue,
 		// Subjects are operator-controlled templates and may interpolate names,
 		// addresses or one-time credentials. Keep only the notification type in
 		// the audit record; the actual subject is used solely for delivery.
 		Subject: payload.Type,
 		Content: emailLogContent(payload.Type, payload.Content),
+		Status:  0, // attempted; finalized after the provider call
+	}
+	emailLog, err := messageLog.Marshal()
+	if err != nil {
+		logger.WithContext(ctx).Error("[SendEmailLogic] Marshal message log failed", logger.Field("error", err.Error()))
+		return err
+	}
+	audit := &log.SystemLog{
+		Type:     log.TypeEmailMessage.Uint8(),
+		Date:     timeutil.Now().Format("2006-01-02"),
+		ObjectID: 0,
+		Content:  string(emailLog),
+	}
+	// Persist the attempt before contacting the provider. A database failure is
+	// safe to retry here because no email has been sent yet.
+	if err = l.deps.Store.Log().Insert(ctx, audit); err != nil {
+		logger.WithContext(ctx).Error("[SendEmailLogic] Insert email log failed", logger.Field("error", err.Error()))
+		return err
 	}
 
 	err = sender.Send([]string{payload.Email}, subject, content)
@@ -137,24 +154,17 @@ func (l *SendEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) erro
 	} else {
 		messageLog.Status = 1
 	}
-	emailLog, err := messageLog.Marshal()
-	if err != nil {
-		logger.WithContext(ctx).Error("[SendEmailLogic] Marshal message log failed",
-			logger.Field("error", err.Error()),
-		)
+	emailLog, marshalErr := messageLog.Marshal()
+	if marshalErr != nil {
+		logger.WithContext(ctx).Error("[SendEmailLogic] Marshal finalized message log failed", logger.Field("error", marshalErr.Error()))
 		return nil
 	}
-
-	if err = l.deps.Store.Log().Insert(ctx, &log.SystemLog{
-		Type:     log.TypeEmailMessage.Uint8(),
-		Date:     timeutil.Now().Format("2006-01-02"),
-		ObjectID: 0,
-		Content:  string(emailLog),
-	}); err != nil {
-		logger.WithContext(ctx).Error("[SendEmailLogic] Insert email log failed",
-			logger.Field("error", err.Error()),
-		)
-		return nil
+	audit.Content = string(emailLog)
+	if updateErr := l.deps.Store.Log().Update(ctx, audit); updateErr != nil {
+		// The pre-created attempt row remains, so the delivery is never missing
+		// from the audit trail. Retrying after a provider call could duplicate the
+		// email, therefore record the update failure without failing the task.
+		logger.WithContext(ctx).Error("[SendEmailLogic] Finalize email log failed", logger.Field("error", updateErr.Error()), logger.Field("log_id", audit.Id))
 	}
 	return nil
 }

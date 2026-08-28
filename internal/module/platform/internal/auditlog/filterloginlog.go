@@ -45,7 +45,7 @@ func (l *FilterLoginLogLogic) FilterLoginLog(req *dto.FilterLoginLogRequest) (re
 		err = item.Unmarshal([]byte(datum.Content))
 		if err != nil {
 			l.Errorf("[FilterLoginLog] failed to unmarshal content: %v", err.Error())
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt login log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.LoginLog{
 			UserId:    datum.ObjectID,

@@ -46,7 +46,7 @@ func (l *FilterGiftLogLogic) FilterGiftLog(req *dto.FilterGiftLogRequest) (resp 
 		err = content.Unmarshal([]byte(datum.Content))
 		if err != nil {
 			l.Errorf("[FilterGiftLog] failed to unmarshal content: %v", err.Error())
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt gift log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.GiftLog{
 			Type:        content.Type,

@@ -8,6 +8,7 @@ import (
 
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/module/platform/entity/task"
+	"github.com/perfect-panel/server/pkg/logger"
 )
 
 type workerTaskStore struct {
@@ -43,13 +44,29 @@ type workerSender struct {
 }
 
 type workerLogStore struct {
-	logs []*logEntity.SystemLog
+	logs      []*logEntity.SystemLog
+	insertErr error
 }
 
 func (s *workerLogStore) Insert(_ context.Context, data *logEntity.SystemLog) error {
+	if s.insertErr != nil {
+		return s.insertErr
+	}
+	data.Id = int64(len(s.logs) + 1)
 	copy := *data
 	s.logs = append(s.logs, &copy)
 	return nil
+}
+
+func (s *workerLogStore) Update(_ context.Context, data *logEntity.SystemLog) error {
+	for i := range s.logs {
+		if s.logs[i].Id == data.Id {
+			copy := *data
+			s.logs[i] = &copy
+			return nil
+		}
+	}
+	return errors.New("log not found")
 }
 
 func (s *workerSender) Send(to []string, _, _ string) error {
@@ -120,11 +137,25 @@ func TestWorkerRecordsRedactedFailedDelivery(t *testing.T) {
 	if err := message.Unmarshal([]byte(logs.logs[0].Content)); err != nil {
 		t.Fatal(err)
 	}
-	if message.Status != 2 || message.To != "a***e@example.com" || message.Platform != "smtp" {
+	if message.Status != 2 || message.To != logger.RedactedValue || message.Platform != "smtp" {
 		t.Fatalf("email log = %+v", message)
 	}
 	if message.Content["redacted"] != true || message.Content["batch_task_id"].(float64) != 7 {
 		t.Fatalf("email log content = %#v", message.Content)
+	}
+}
+
+func TestWorkerDoesNotSendWithoutAnAuditAttempt(t *testing.T) {
+	store := &workerTaskStore{task: newEmailTask(t, task.StatusPending, 0, "alice@example.com")}
+	sender := &workerSender{}
+	logs := &workerLogStore{insertErr: errors.New("audit unavailable")}
+	worker := NewWorker(context.Background(), 7, store, sender, WithMessageLogs(logs, "smtp"))
+
+	if err := worker.Start(); !errors.Is(err, logs.insertErr) {
+		t.Fatalf("Start error = %v, want %v", err, logs.insertErr)
+	}
+	if len(sender.sent) != 0 {
+		t.Fatalf("email was sent without an audit attempt: %v", sender.sent)
 	}
 }
 

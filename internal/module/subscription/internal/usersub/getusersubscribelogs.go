@@ -49,7 +49,7 @@ func (l *GetUserSubscribeLogsLogic) GetUserSubscribeLogs(req *dto.GetUserSubscri
 		var content log.Subscribe
 		if err = content.Unmarshal([]byte(datum.Content)); err != nil {
 			l.Errorf("[GetUserSubscribeLogs] unmarshal subscribe log content failed: %v", err.Error())
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt subscription log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.UserSubscribeLog{
 			Id:              datum.Id,

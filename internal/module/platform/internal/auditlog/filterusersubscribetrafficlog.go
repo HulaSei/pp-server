@@ -94,7 +94,7 @@ func (l *FilterUserSubscribeTrafficLogLogic) FilterUserSubscribeTrafficLog(req *
 			err = item.Unmarshal([]byte(datum.Content))
 			if err != nil {
 				l.Errorw("[FilterUserSubscribeTrafficLog] Unmarshal Content Error", logger.Field("error", err.Error()))
-				continue
+				return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt subscription traffic log %d: %v", datum.Id, err)
 			}
 			list = append(list, dto.UserSubscribeTrafficLog{
 				UserId:      item.UserId,
@@ -133,7 +133,7 @@ func (l *FilterUserSubscribeTrafficLogLogic) FilterUserSubscribeTrafficLog(req *
 		err = item.Unmarshal([]byte(datum.Content))
 		if err != nil {
 			l.Errorw("[FilterUserSubscribeTrafficLog] Unmarshal Content Error", logger.Field("error", err.Error()))
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt subscription traffic log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.UserSubscribeTrafficLog{
 			UserId:      item.UserId,

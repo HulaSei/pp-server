@@ -46,7 +46,7 @@ func (l *FilterMobileLogLogic) FilterMobileLog(req *dto.FilterLogParams) (resp *
 		err = content.Unmarshal([]byte(datum.Content))
 		if err != nil {
 			l.Errorf("[FilterMobileLog] failed to unmarshal content: %v", err.Error())
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt mobile log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.MessageLog{
 			Id:        datum.Id,

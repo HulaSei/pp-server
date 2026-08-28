@@ -26,7 +26,9 @@ func newGetMessageLogListLogic(ctx context.Context, deps Deps) *GetMessageLogLis
 }
 
 func (l *GetMessageLogListLogic) GetMessageLogList(req *dto.GetMessageLogListRequest) (resp *dto.GetMessageLogListResponse, err error) {
-
+	if req == nil || (req.Type != log.TypeEmailMessage.Uint8() && req.Type != log.TypeMobileMessage.Uint8()) {
+		return nil, errors.Wrap(xerr.NewErrCode(xerr.InvalidParams), "message log type must be email or mobile")
+	}
 	data, total, err := l.deps.Logs.FilterSystemLog(l.ctx, &log.FilterParams{
 		Page:   req.Page,
 		Size:   req.Size,
@@ -46,7 +48,7 @@ func (l *GetMessageLogListLogic) GetMessageLogList(req *dto.GetMessageLogListReq
 		err = content.Unmarshal([]byte(datum.Content))
 		if err != nil {
 			l.Errorf("[GetMessageLogList] failed to unmarshal content: %v", err.Error())
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt message log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.MessageLog{
 			Id:        datum.Id,

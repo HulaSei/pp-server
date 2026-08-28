@@ -50,7 +50,7 @@ func (l *GetLoginLogLogic) GetLoginLog(req *dto.GetLoginLogRequest) (resp *dto.G
 		var content log.Login
 		if err = content.Unmarshal([]byte(datum.Content)); err != nil {
 			l.Errorf("[GetUserLoginLogs] unmarshal login log content failed: %v", err.Error())
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt login log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.UserLoginLog{
 			Id:        datum.Id,

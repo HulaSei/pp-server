@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -80,6 +81,31 @@ func TestRedactTextRemovesCommonCredentialsAndEmail(t *testing.T) {
 	}
 }
 
+func TestRedactValueRecursesThroughStructuredPayloads(t *testing.T) {
+	value := map[string]any{
+		"safe": "ok",
+		"nested": map[string]any{
+			"token": "subscription-secret",
+			"note":  "contact person@example.com",
+		},
+		"items": []any{map[string]string{"password": "secret", "status": "ready"}},
+	}
+
+	redacted, ok := redactValue(value).(map[string]any)
+	if !ok {
+		t.Fatalf("redacted value has type %T", redactValue(value))
+	}
+	nested := redacted["nested"].(map[string]any)
+	if nested["token"] != RedactedValue || nested["note"] != "contact "+RedactedValue {
+		t.Fatalf("nested payload was not redacted: %#v", nested)
+	}
+	items := redacted["items"].([]any)
+	item := items[0].(map[string]string)
+	if item["password"] != RedactedValue || item["status"] != "ready" {
+		t.Fatalf("slice payload was not redacted: %#v", items)
+	}
+}
+
 func TestSplitLogArgsRedactsLegacyStructuredFields(t *testing.T) {
 	msg, fields := splitLogArgs([]any{
 		"lookup failed",
@@ -120,5 +146,19 @@ func TestWriterRedactsDirectFieldsAndMessagePatterns(t *testing.T) {
 	}
 	if !strings.Contains(got, `"token":"[REDACTED]"`) || !strings.Contains(got, `"status":401`) {
 		t.Fatalf("writer output is missing expected redaction or safe field: %s", got)
+	}
+}
+
+func TestWriterLimitsStructuredAndFieldValues(t *testing.T) {
+	old := atomic.SwapUint32(&maxContentLength, 4)
+	t.Cleanup(func() { atomic.StoreUint32(&maxContentLength, old) })
+
+	var output bytes.Buffer
+	w := NewWriter(&output)
+	w.Info(map[string]any{"status": "abcdefgh"}, LogField{Key: "detail", Value: "abcdefgh"})
+
+	got := output.String()
+	if strings.Contains(got, "abcdefgh") || !strings.Contains(got, `"status":"abcd"`) || !strings.Contains(got, `"detail":"abcd"`) || !strings.Contains(got, `"truncated":true`) {
+		t.Fatalf("structured values were not limited: %s", got)
 	}
 }

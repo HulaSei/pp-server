@@ -154,18 +154,6 @@ func (l *StatLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
 			return err
 		}
 
-		// Delete old traffic logs
-		if l.deps.Log().AutoClear {
-			threshold := end.AddDate(0, 0, int(-l.deps.Log().ClearDays))
-			err = store.TrafficLog().DeleteBefore(ctx, threshold)
-			if err != nil {
-				logger.Errorf("[Traffic Stat Queue] Delete server traffic log failed: %v", err.Error())
-			}
-			// Delete old system logs
-			if err = store.Log().DeleteBefore(ctx, threshold); err != nil {
-				logger.Errorf("[Traffic Stat Queue] Delete old system logs failed: %v", err.Error())
-			}
-		}
 		return nil
 	})
 	if err != nil {

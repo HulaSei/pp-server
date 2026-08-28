@@ -108,7 +108,7 @@ type FilterSubscribeLogResponse struct {
 type GetMessageLogListRequest struct {
 	Page   int    `form:"page" validate:"required,gt=0"`
 	Size   int    `form:"size" validate:"required,gt=0,lte=100"`
-	Type   uint8  `form:"type"`
+	Type   uint8  `form:"type" validate:"required,oneof=10 11"`
 	Search string `form:"search,optional"`
 }
 
@@ -133,8 +133,8 @@ type LogResponse struct {
 }
 
 type LogSetting struct {
-	AutoClear *bool `json:"auto_clear"`
-	ClearDays int64 `json:"clear_days"`
+	AutoClear *bool `json:"auto_clear" validate:"required"`
+	ClearDays int64 `json:"clear_days" validate:"required,gte=1,lte=3650"`
 }
 
 type LoginLog struct {

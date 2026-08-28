@@ -46,7 +46,7 @@ func (l *FilterRegisterLogLogic) FilterRegisterLog(req *dto.FilterRegisterLogReq
 		err = item.Unmarshal([]byte(datum.Content))
 		if err != nil {
 			l.Errorf("[FilterLoginLog] failed to unmarshal content: %v", err.Error())
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt registration log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.RegisterLog{
 			UserId:     datum.ObjectID,
@@ -54,7 +54,7 @@ func (l *FilterRegisterLogLogic) FilterRegisterLog(req *dto.FilterRegisterLogReq
 			Identifier: item.Identifier,
 			RegisterIP: item.RegisterIP,
 			UserAgent:  item.UserAgent,
-			Timestamp:  item.Timestamp,
+			Timestamp:  datum.CreatedAt.UnixMilli(),
 		})
 	}
 

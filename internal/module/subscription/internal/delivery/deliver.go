@@ -92,10 +92,6 @@ func (l *SubscribeLogic) Handler(req *dto.SubscribeRequest) (resp *dto.Subscribe
 		return nil, err
 	}
 
-	var subscribeStatus = false
-	defer func() {
-		l.logSubscribeActivity(subscribeStatus, userSubscribe, req)
-	}()
 	// find subscribe info
 	subscribeInfo, err := l.deps.Plans.FindOne(l.ctx, userSubscribe.SubscribeId)
 	if err != nil {
@@ -136,7 +132,10 @@ func (l *SubscribeLogic) Handler(req *dto.SubscribeRequest) (resp *dto.Subscribe
 		adapter.WithParams(mergeParams(defaultParams, req.Params)),
 	)
 
-	logger.Debugf("[SubscribeLogic] Building client config for user %d with URI %s", userSubscribe.UserId, l.getSubscribeV2URL())
+	l.Debugw("[SubscribeLogic] Building client config",
+		logger.Field("user_id", userSubscribe.UserId),
+		logger.Field("application", targetApp.Name),
+	)
 
 	// Get client config
 	adapterClient, err := a.Client()
@@ -174,7 +173,9 @@ func (l *SubscribeLogic) Handler(req *dto.SubscribeRequest) (resp *dto.Subscribe
 		),
 		Headers: headers,
 	}
-	subscribeStatus = true
+	if err = l.logSubscribeActivity(userSubscribe); err != nil {
+		return nil, err
+	}
 	return
 }
 
@@ -236,21 +237,20 @@ func (l *SubscribeLogic) getUserSubscribe(token string) (*usersub.Subscribe, err
 	return userSub, nil
 }
 
-func (l *SubscribeLogic) logSubscribeActivity(subscribeStatus bool, userSub *usersub.Subscribe, req *dto.SubscribeRequest) {
-	if !subscribeStatus {
-		return
-	}
-
+func (l *SubscribeLogic) logSubscribeActivity(userSub *usersub.Subscribe) error {
 	subscribeLog := log.Subscribe{
-		Token:           req.Token,
-		UserAgent:       req.UA,
-		ClientIP:        l.request.ClientIP,
+		Token:           logger.RedactedValue,
+		UserAgent:       logger.RedactedValue,
+		ClientIP:        logger.RedactedValue,
 		UserSubscribeId: userSub.Id,
 	}
 
-	content, _ := subscribeLog.Marshal()
+	content, err := subscribeLog.Marshal()
+	if err != nil {
+		return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "marshal subscription audit log: %v", err)
+	}
 
-	err := l.deps.Logs.Insert(l.ctx, &log.SystemLog{
+	err = l.deps.Logs.Insert(l.ctx, &log.SystemLog{
 		Type:     log.TypeSubscribe.Uint8(),
 		ObjectID: userSub.UserId, // log user id
 		Date:     timeutil.Now().Format(time.DateOnly),
@@ -258,7 +258,9 @@ func (l *SubscribeLogic) logSubscribeActivity(subscribeStatus bool, userSub *use
 	})
 	if err != nil {
 		l.Errorw("[Generate Subscribe]insert subscribe log error: %v", logger.Field("error", err.Error()))
+		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseInsertError), "insert subscription audit log: %v", err)
 	}
+	return nil
 }
 
 func (l *SubscribeLogic) getServers(userSub *usersub.Subscribe) ([]*node.Node, error) {

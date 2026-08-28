@@ -46,6 +46,7 @@ type WorkerOption func(*Worker)
 
 type MessageLogStore interface {
 	Insert(ctx context.Context, data *logEntity.SystemLog) error
+	Update(ctx context.Context, data *logEntity.SystemLog) error
 }
 
 func WithMessageLogs(logs MessageLogStore, platform string) WorkerOption {
@@ -132,6 +133,12 @@ func (w *Worker) Start() error {
 		}
 
 		recipient := recipients[index]
+		audit, err := w.beginMessage(recipient)
+		if err != nil {
+			// Nothing has been delivered yet, so returning the error is safe and
+			// lets the queue retry without duplicating an email.
+			return err
+		}
 		sendErr := w.send(recipient, content)
 		if errors.Is(sendErr, context.Canceled) || errors.Is(sendErr, context.DeadlineExceeded) {
 			return sendErr
@@ -142,7 +149,7 @@ func (w *Worker) Start() error {
 			text, _ := json.Marshal(sendErrors)
 			taskInfo.Errors = string(text)
 		}
-		w.recordMessage(recipient, sendErr == nil)
+		w.finishMessage(audit, sendErr == nil)
 		taskInfo.Current = uint64(index + 1)
 		scope.DailySent++
 		if err := w.persist(taskInfo, &scope); err != nil {
@@ -174,28 +181,50 @@ func (w *Worker) Start() error {
 	return nil
 }
 
-func (w *Worker) recordMessage(recipient string, sent bool) {
+func (w *Worker) beginMessage(recipient string) (*logEntity.SystemLog, error) {
 	if w.logs == nil {
-		return
-	}
-	status := uint8(2)
-	if sent {
-		status = 1
+		return nil, nil
 	}
 	message := logEntity.Message{
-		To: tool.MaskEmail(recipient), Subject: "custom", Platform: w.platform,
+		To: logger.RedactedValue, Subject: "custom", Platform: w.platform,
 		Content: map[string]interface{}{"redacted": true, "email_type": "custom", "batch_task_id": w.id},
-		Status:  status,
+		Status:  0,
 	}
 	content, err := message.Marshal()
 	if err != nil {
-		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to marshal email log"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
+		return nil, err
+	}
+	audit := &logEntity.SystemLog{
+		Type: logEntity.TypeEmailMessage.Uint8(), Date: timeutil.Now().Format("2006-01-02"), Content: string(content),
+	}
+	if err := w.logs.Insert(w.ctx, audit); err != nil {
+		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to insert email log"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
+		return nil, err
+	}
+	return audit, nil
+}
+
+func (w *Worker) finishMessage(audit *logEntity.SystemLog, sent bool) {
+	if audit == nil || w.logs == nil {
 		return
 	}
-	if err := w.logs.Insert(w.ctx, &logEntity.SystemLog{
-		Type: logEntity.TypeEmailMessage.Uint8(), Date: timeutil.Now().Format("2006-01-02"), Content: string(content),
-	}); err != nil {
-		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to insert email log"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
+	var message logEntity.Message
+	if err := message.Unmarshal([]byte(audit.Content)); err != nil {
+		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to parse pending email log"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
+		return
+	}
+	message.Status = 2
+	if sent {
+		message.Status = 1
+	}
+	content, err := message.Marshal()
+	if err != nil {
+		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to finalize email log"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
+		return
+	}
+	audit.Content = string(content)
+	if err := w.logs.Update(w.ctx, audit); err != nil {
+		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to update email log"), logger.Field("error", err.Error()), logger.Field("task_id", w.id), logger.Field("log_id", audit.Id))
 	}
 }
 

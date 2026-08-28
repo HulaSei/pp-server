@@ -294,7 +294,7 @@ func (l *RotateLogger) initialize() error {
 			}
 		}
 
-		if l.fp, err = os.Create(l.filename); err != nil {
+		if l.fp, err = os.OpenFile(l.filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, defaultFileMode); err != nil {
 			return err
 		}
 	} else {
@@ -303,6 +303,11 @@ func (l *RotateLogger) initialize() error {
 		}
 
 		l.currentSize = fileInfo.Size()
+	}
+	if err := os.Chmod(l.filename, defaultFileMode); err != nil {
+		_ = l.fp.Close()
+		l.fp = nil
+		return err
 	}
 
 	fs.CloseOnExec(l.fp)
@@ -367,7 +372,7 @@ func (l *RotateLogger) rotate() error {
 	}
 
 	l.backup = l.rule.BackupFileName()
-	if l.fp, err = os.Create(l.filename); err == nil {
+	if l.fp, err = os.OpenFile(l.filename, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, defaultFileMode); err == nil {
 		fs.CloseOnExec(l.fp)
 	}
 

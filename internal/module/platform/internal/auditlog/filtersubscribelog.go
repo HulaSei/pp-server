@@ -51,7 +51,7 @@ func (l *FilterSubscribeLogLogic) FilterSubscribeLog(req *dto.FilterSubscribeLog
 		err = content.Unmarshal([]byte(datum.Content))
 		if err != nil {
 			l.Errorf("[FilterSubscribeLog] failed to unmarshal content: %v", err.Error())
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt subscription log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.SubscribeLog{
 			UserId:          datum.ObjectID,

@@ -81,7 +81,10 @@ func (l *OAuthLoginGetTokenLogic) OAuthLoginGetToken(req *dto.OAuthLoginGetToken
 	)
 
 	defer func() {
-		l.recordLoginStatus(loginStatus, userInfo, ip, userAgent, requestID, req.Method)
+		if auditErr := l.recordLoginStatus(loginStatus, userInfo, ip, userAgent, requestID, req.Method); auditErr != nil && err == nil {
+			resp = nil
+			err = auditErr
+		}
 	}()
 
 	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, req.Method); err != nil {
@@ -646,6 +649,25 @@ func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, reques
 		if err := store.Outbox().Append(l.ctx, "identity.user_registered", strconv.FormatInt(userInfo.Id, 10), "{}"); err != nil {
 			return err
 		}
+		registerLog := log.Register{
+			AuthMethod: method,
+			Identifier: logger.RedactedValue,
+			RegisterIP: logger.RedactedValue,
+			UserAgent:  logger.RedactedValue,
+			Timestamp:  timeutil.Now().UnixMilli(),
+		}
+		content, err := registerLog.Marshal()
+		if err != nil {
+			return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "marshal registration audit: %v", err)
+		}
+		if err := store.Log().Insert(l.ctx, &log.SystemLog{
+			Type:     log.TypeRegister.Uint8(),
+			Date:     timeutil.Now().Format(time.DateOnly),
+			ObjectID: userInfo.Id,
+			Content:  string(content),
+		}); err != nil {
+			return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseInsertError), "record OAuth registration audit: %v", err)
+		}
 
 		return nil
 	})
@@ -668,33 +690,7 @@ func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, reques
 		logger.Field("refer_code", userInfo.ReferCode),
 		logger.Field("duration_ms", time.Since(startTime).Milliseconds()),
 	)
-
-	// Register log
-	registerLog := log.Register{
-		AuthMethod: method,
-		Identifier: openid,
-		RegisterIP: ip,
-		UserAgent:  userAgent,
-		Timestamp:  timeutil.Now().UnixMilli(),
-	}
-	content, _ := registerLog.Marshal()
-
-	err = l.deps.Store.Log().Insert(l.ctx, &log.SystemLog{
-		Type:     log.TypeRegister.Uint8(),
-		Date:     timeutil.Now().Format("2006-01-02"),
-		ObjectID: userInfo.Id,
-		Content:  string(content),
-	})
-	if err != nil {
-		l.Errorw("failed to insert register log",
-			logger.Field("request_id", requestID),
-			logger.Field("user_id", userInfo.Id),
-			logger.Field("ip", ip),
-			logger.Field("error", err.Error()),
-		)
-	}
-
-	return userInfo, err
+	return userInfo, nil
 }
 
 func (l *OAuthLoginGetTokenLogic) checkEmailExists(store repository.IdentityStore, email, requestID string) error {
@@ -756,13 +752,13 @@ func (l *OAuthLoginGetTokenLogic) createAuthMethod(store repository.IdentityStor
 	return nil
 }
 
-func (l *OAuthLoginGetTokenLogic) recordLoginStatus(loginStatus bool, userInfo *user.User, ip, userAgent, requestID, authType string) {
+func (l *OAuthLoginGetTokenLogic) recordLoginStatus(loginStatus bool, userInfo *user.User, ip, userAgent, requestID, authType string) error {
 
 	if userInfo != nil && userInfo.Id != 0 {
 		loginLog := log.Login{
 			Method:    authType,
-			LoginIP:   ip,
-			UserAgent: userAgent,
+			LoginIP:   logger.RedactedValue,
+			UserAgent: logger.RedactedValue,
 			Success:   loginStatus,
 			Timestamp: timeutil.Now().UnixMilli(),
 		}
@@ -779,8 +775,10 @@ func (l *OAuthLoginGetTokenLogic) recordLoginStatus(loginStatus bool, userInfo *
 				logger.Field("ip", ip),
 				logger.Field("error", err.Error()),
 			)
+			return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseInsertError), "record OAuth login audit: %v", err)
 		}
 	}
+	return nil
 }
 
 func (l *OAuthLoginGetTokenLogic) handleOAuthProvider(req *dto.OAuthLoginGetTokenRequest, requestID, ip, userAgent string) (*user.User, error) {

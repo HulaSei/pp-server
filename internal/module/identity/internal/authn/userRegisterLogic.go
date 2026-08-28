@@ -131,6 +131,25 @@ func (l *UserRegisterLogic) UserRegister(req *dto.UserRegisterRequest) (resp *dt
 		if err := store.Outbox().Append(l.ctx, "identity.user_registered", strconv.FormatInt(userInfo.Id, 10), "{}"); err != nil {
 			return err
 		}
+		registerLog := log.Register{
+			AuthMethod: "email",
+			Identifier: logger.RedactedValue,
+			RegisterIP: logger.RedactedValue,
+			UserAgent:  logger.RedactedValue,
+			Timestamp:  timeutil.Now().UnixMilli(),
+		}
+		content, err := registerLog.Marshal()
+		if err != nil {
+			return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "marshal registration audit: %v", err)
+		}
+		if err := store.Log().Insert(l.ctx, &log.SystemLog{
+			Type:     log.TypeRegister.Uint8(),
+			ObjectID: userInfo.Id,
+			Date:     timeutil.Now().Format(time.DateOnly),
+			Content:  string(content),
+		}); err != nil {
+			return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseInsertError), "record registration audit: %v", err)
+		}
 		return nil
 	})
 	if err != nil {
@@ -176,45 +195,28 @@ func (l *UserRegisterLogic) UserRegister(req *dto.UserRegisterRequest) (resp *dt
 		if token != "" && userInfo.Id != 0 {
 			loginLog := log.Login{
 				Method:    "email",
-				LoginIP:   req.IP,
-				UserAgent: req.UserAgent,
+				LoginIP:   logger.RedactedValue,
+				UserAgent: logger.RedactedValue,
 				Success:   loginStatus,
 				Timestamp: timeutil.Now().UnixMilli(),
 			}
 			content, _ := loginLog.Marshal()
-			if err := l.deps.Store.Log().Insert(l.ctx, &log.SystemLog{
+			if auditErr := l.deps.Store.Log().Insert(l.ctx, &log.SystemLog{
 				Id:       0,
 				Type:     log.TypeLogin.Uint8(),
 				Date:     timeutil.Now().Format("2006-01-02"),
 				ObjectID: userInfo.Id,
 				Content:  string(content),
-			}); err != nil {
+			}); auditErr != nil {
 				l.Errorw("failed to insert login log",
 					logger.Field("user_id", userInfo.Id),
 					logger.Field("ip", req.IP),
-					logger.Field("error", err.Error()),
+					logger.Field("error", auditErr.Error()),
 				)
-			}
-
-			// Register log
-			registerLog := log.Register{
-				AuthMethod: "email",
-				Identifier: canonicalEmail,
-				RegisterIP: req.IP,
-				UserAgent:  req.UserAgent,
-				Timestamp:  timeutil.Now().UnixMilli(),
-			}
-			content, _ = registerLog.Marshal()
-			if err = l.deps.Store.Log().Insert(l.ctx, &log.SystemLog{
-				Type:     log.TypeRegister.Uint8(),
-				ObjectID: userInfo.Id,
-				Date:     timeutil.Now().Format("2006-01-02"),
-				Content:  string(content),
-			}); err != nil {
-				l.Errorw("failed to insert login log",
-					logger.Field("user_id", userInfo.Id),
-					logger.Field("ip", req.IP),
-					logger.Field("error", err.Error()))
+				if err == nil {
+					resp = nil
+					err = errors.Wrapf(xerr.NewErrCode(xerr.DatabaseInsertError), "record login audit: %v", auditErr)
+				}
 			}
 		}
 	}()

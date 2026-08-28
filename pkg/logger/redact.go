@@ -78,6 +78,13 @@ func redactFields(fields []LogField) []LogField {
 }
 
 func redactValue(value any) any {
+	return redactValueDepth(value, 0)
+}
+
+func redactValueDepth(value any, depth int) any {
+	if depth > 8 {
+		return RedactedValue
+	}
 	switch v := value.(type) {
 	case string:
 		return redactText(v)
@@ -91,8 +98,88 @@ func redactValue(value any) any {
 			redacted[i] = redactText(item)
 		}
 		return redacted
+	case []byte:
+		return redactText(string(v))
+	case map[string]string:
+		redacted := make(map[string]string, len(v))
+		for key, item := range v {
+			if sensitiveFieldKey(key) {
+				redacted[key] = RedactedValue
+			} else {
+				redacted[key] = redactText(item)
+			}
+		}
+		return redacted
+	case map[string]any:
+		redacted := make(map[string]any, len(v))
+		for key, item := range v {
+			if sensitiveFieldKey(key) {
+				redacted[key] = RedactedValue
+			} else {
+				redacted[key] = redactValueDepth(item, depth+1)
+			}
+		}
+		return redacted
+	case []any:
+		redacted := make([]any, len(v))
+		for i, item := range v {
+			redacted[i] = redactValueDepth(item, depth+1)
+		}
+		return redacted
 	default:
 		return value
+	}
+}
+
+func limitValue(value any, maxLen uint32, depth int) (any, bool) {
+	if maxLen == 0 || depth > 8 {
+		return value, false
+	}
+	limit := int(maxLen)
+	switch v := value.(type) {
+	case string:
+		if len(v) <= limit {
+			return v, false
+		}
+		return v[:limit], true
+	case []string:
+		limited := make([]string, len(v))
+		truncated := false
+		for i, item := range v {
+			value, cut := limitValue(item, maxLen, depth+1)
+			limited[i] = value.(string)
+			truncated = truncated || cut
+		}
+		return limited, truncated
+	case map[string]string:
+		limited := make(map[string]string, len(v))
+		truncated := false
+		for key, item := range v {
+			value, cut := limitValue(item, maxLen, depth+1)
+			limited[key] = value.(string)
+			truncated = truncated || cut
+		}
+		return limited, truncated
+	case map[string]any:
+		limited := make(map[string]any, len(v))
+		truncated := false
+		for key, item := range v {
+			value, cut := limitValue(item, maxLen, depth+1)
+			limited[key] = value
+			truncated = truncated || cut
+		}
+		return limited, truncated
+	case []any:
+		limited := make([]any, len(v))
+		truncated := false
+		for i, item := range v {
+			value, cut := limitValue(item, maxLen, depth+1)
+			limited[i] = value
+			truncated = truncated || cut
+		}
+		return limited, truncated
+	default:
+		return value, false
 	}
 }
 

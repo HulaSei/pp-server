@@ -8,9 +8,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"go.uber.org/zap"
-
 	"github.com/gorilla/websocket"
+	"github.com/perfect-panel/server/pkg/logger"
 )
 
 type Operator int
@@ -67,7 +66,7 @@ func (dm *DeviceManager) listenToDevice(userID int64, device *Device) {
 	for {
 		_, msg, err := device.Conn.ReadMessage()
 		if err != nil {
-			zap.S().Infof("Device %s (User %d) disconnected: %v", device.DeviceID, userID, err)
+			logger.Infow("device disconnected", logger.Field("device_id", device.DeviceID), logger.Field("user_id", userID), logger.Field("error", err))
 			break
 		}
 
@@ -96,7 +95,7 @@ func (dm *DeviceManager) UpdateHeartbeat(userID int64, deviceID string) {
 			if d.DeviceID == deviceID {
 				d.LastPingTime = time.Now()
 				if err := d.Conn.WriteMessage(websocket.TextMessage, []byte("ping")); err != nil {
-					zap.S().Infof("✅ Heartbeat updated: Device %s (User %d) err: %s", deviceID, userID, err.Error())
+					logger.Errorw("device heartbeat response failed", logger.Field("device_id", deviceID), logger.Field("user_id", userID), logger.Field("error", err))
 				}
 				break
 			}
@@ -109,7 +108,7 @@ func (dm *DeviceManager) AddDevice(w http.ResponseWriter, r *http.Request, sessi
 	// **Upgrade WebSocket connection**
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		zap.S().Infof("WebSocket upgrade failed: %v", err)
+		logger.Errorw("device websocket upgrade failed", logger.Field("error", err))
 		return
 	}
 
@@ -215,7 +214,7 @@ func (dm *DeviceManager) KickDevice(userID int64, deviceID string) {
 	// Get user's device list
 	val, ok := dm.userDevices.Load(userID)
 	if !ok {
-		zap.S().Infof("⚠️ User %d has no online devices, unable to kick out", userID)
+		logger.Infow("user has no online devices to kick", logger.Field("user_id", userID))
 		return
 	}
 
@@ -236,7 +235,7 @@ func (dm *DeviceManager) KickDevice(userID int64, deviceID string) {
 			// Close WebSocket connection
 			d.Conn.Close()
 			atomic.AddInt32(&dm.totalOnline, -1)
-			zap.S().Infof("❌ Device %s (User %d) kicked out", d.DeviceID, userID)
+			logger.Infow("device kicked", logger.Field("device_id", d.DeviceID), logger.Field("user_id", userID))
 		} else {
 			activeDevices = append(activeDevices, d)
 		}
@@ -269,7 +268,7 @@ func (dm *DeviceManager) StartHeartbeatCheck() {
 			var activeDevices []*Device
 			for _, d := range devices {
 				if now.Sub(d.LastPingTime) > time.Duration(dm.heartbeatTimeout)*time.Second {
-					zap.S().Infof("⚠️ Device %s (User %d) heartbeat timeout, removed", d.DeviceID, uid)
+					logger.Infow("device heartbeat timed out", logger.Field("device_id", d.DeviceID), logger.Field("user_id", uid))
 					d.Conn.Close()
 					atomic.AddInt32(&dm.totalOnline, -1)
 
@@ -288,7 +287,7 @@ func (dm *DeviceManager) StartHeartbeatCheck() {
 			}
 			return true
 		})
-		//zap.S().Infof("Total online devices: %d\n", dm.totalOnline)
+		// Deliberately avoid logging every heartbeat sweep.
 	}
 }
 
@@ -343,7 +342,7 @@ func (dm *DeviceManager) Broadcast(message string) {
 // Gracefully shut down all WebSocket connections
 func (dm *DeviceManager) Shutdown(ctx context.Context) {
 	<-ctx.Done()
-	zap.S().Infof("🔴 Shutting down all WebSocket connections...")
+	logger.Info("shutting down all device websocket connections")
 
 	dm.userDevices.Range(func(userID, val interface{}) bool {
 		uid := userID.(int64)
@@ -351,7 +350,7 @@ func (dm *DeviceManager) Shutdown(ctx context.Context) {
 
 		for _, d := range devices {
 			d.Conn.Close()
-			zap.S().Infof("✅ Closed device %s (User %d)", d.DeviceID, uid)
+			logger.Infow("device websocket closed", logger.Field("device_id", d.DeviceID), logger.Field("user_id", uid))
 		}
 		dm.userDevices.Delete(uid)
 		return true

@@ -74,24 +74,28 @@ func (l *TelephoneLoginLogic) TelephoneLogin(req *dto.TelephoneLoginRequest, ip,
 		if userInfo.Id != 0 {
 			loginLog := log.Login{
 				Method:    "mobile",
-				LoginIP:   ip,
-				UserAgent: userAgent,
+				LoginIP:   logger.RedactedValue,
+				UserAgent: logger.RedactedValue,
 				Success:   loginStatus,
 				Timestamp: timeutil.Now().UnixMilli(),
 			}
 			content, _ := loginLog.Marshal()
-			if err := l.deps.Store.Log().Insert(l.ctx, &log.SystemLog{
+			if auditErr := l.deps.Store.Log().Insert(l.ctx, &log.SystemLog{
 				Id:       0,
 				Type:     log.TypeLogin.Uint8(),
 				Date:     timeutil.Now().Format("2006-01-02"),
 				ObjectID: userInfo.Id,
 				Content:  string(content),
-			}); err != nil {
+			}); auditErr != nil {
 				l.Errorw("failed to insert login log",
 					logger.Field("user_id", userInfo.Id),
 					logger.Field("ip", req.IP),
-					logger.Field("error", err.Error()),
+					logger.Field("error", auditErr.Error()),
 				)
+				if err == nil {
+					resp = nil
+					err = errors.Wrapf(xerr.NewErrCode(xerr.DatabaseInsertError), "record login audit: %v", auditErr)
+				}
 			}
 		}
 	}()

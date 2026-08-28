@@ -31,6 +31,26 @@ func TestDailyRotateRuleMarkRotated(t *testing.T) {
 	})
 }
 
+func TestRotateLoggerEnforcesPrivateFileMode(t *testing.T) {
+	dir := t.TempDir()
+	filename := filepath.Join(dir, "access.log")
+	if err := os.WriteFile(filename, []byte("existing\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	logWriter, err := NewLogger(filename, DefaultRotateRule(filename, "-", 1, false), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = logWriter.Close() })
+	info, err := os.Stat(filename)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := info.Mode().Perm(); got != defaultFileMode {
+		t.Fatalf("log mode = %o, want %o", got, defaultFileMode)
+	}
+}
+
 func TestDailyRotateRuleOutdatedFiles(t *testing.T) {
 	t.Run("no files", func(t *testing.T) {
 		var rule DailyRotateRule

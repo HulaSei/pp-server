@@ -9,10 +9,9 @@ import (
 	"net/http"
 	"strings"
 
-	"go.uber.org/zap"
-
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
+	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/pkg/errors"
 )
 
@@ -59,7 +58,7 @@ func GetRegionByIp(ip string) (*GeoLocationResponse, error) {
 		if enabled {
 			response, err := fetchGeolocation(service, ip)
 			if err != nil {
-				zap.S().Errorf("Failed to fetch geolocation from %s: %v", service, err)
+				logger.Errorw("IP geolocation lookup failed", logger.Field("service", service), logger.Field("error", err))
 				continue
 			}
 			return response, nil

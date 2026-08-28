@@ -110,7 +110,7 @@ func (m *logRepo) FindByDatesType(ctx context.Context, dates []string, typ uint8
 // DeleteBefore deletes system logs whose date is before the given end date.
 func (m *logRepo) DeleteBefore(ctx context.Context, end time.Time) error {
 	return m.WithContext(ctx).
-		Where("date < ?", end.Format(time.DateOnly)).
+		Where("date < ? AND type IN ?", end.Format(time.DateOnly), log.ExpirableTypes()).
 		Delete(&log.SystemLog{}).Error
 }
 

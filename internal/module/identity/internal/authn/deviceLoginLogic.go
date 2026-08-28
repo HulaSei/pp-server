@@ -56,23 +56,27 @@ func (l *DeviceLoginLogic) DeviceLogin(req *dto.DeviceLoginRequest) (resp *dto.L
 		if userInfo != nil && userInfo.Id != 0 {
 			loginLog := log.Login{
 				Method:    "device",
-				LoginIP:   req.IP,
-				UserAgent: req.UserAgent,
+				LoginIP:   logger.RedactedValue,
+				UserAgent: logger.RedactedValue,
 				Success:   loginStatus,
 				Timestamp: timeutil.Now().UnixMilli(),
 			}
 			content, _ := loginLog.Marshal()
-			if err := l.deps.Store.Log().Insert(l.ctx, &log.SystemLog{
+			if auditErr := l.deps.Store.Log().Insert(l.ctx, &log.SystemLog{
 				Type:     log.TypeLogin.Uint8(),
 				Date:     timeutil.Now().Format("2006-01-02"),
 				ObjectID: userInfo.Id,
 				Content:  string(content),
-			}); err != nil {
+			}); auditErr != nil {
 				l.Errorw("failed to insert login log",
 					logger.Field("user_id", userInfo.Id),
 					logger.Field("ip", req.IP),
-					logger.Field("error", err.Error()),
+					logger.Field("error", auditErr.Error()),
 				)
+				if err == nil {
+					resp = nil
+					err = errors.Wrapf(xerr.NewErrCode(xerr.DatabaseInsertError), "record login audit: %v", auditErr)
+				}
 			}
 		}
 	}()
@@ -241,6 +245,25 @@ func (l *DeviceLoginLogic) registerUserAndDevice(req *dto.DeviceLoginRequest) (*
 		if err := store.Outbox().Append(l.ctx, "identity.user_registered", strconv.FormatInt(userInfo.Id, 10), "{}"); err != nil {
 			return err
 		}
+		registerLog := log.Register{
+			AuthMethod: "device",
+			Identifier: logger.RedactedValue,
+			RegisterIP: logger.RedactedValue,
+			UserAgent:  logger.RedactedValue,
+			Timestamp:  timeutil.Now().UnixMilli(),
+		}
+		content, err := registerLog.Marshal()
+		if err != nil {
+			return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "marshal registration audit: %v", err)
+		}
+		if err := store.Log().Insert(l.ctx, &log.SystemLog{
+			Type:     log.TypeRegister.Uint8(),
+			Date:     timeutil.Now().Format(time.DateOnly),
+			ObjectID: userInfo.Id,
+			Content:  string(content),
+		}); err != nil {
+			return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseInsertError), "record device registration audit: %v", err)
+		}
 
 		return nil
 	})
@@ -258,29 +281,5 @@ func (l *DeviceLoginLogic) registerUserAndDevice(req *dto.DeviceLoginRequest) (*
 		logger.Field("identifier", req.Identifier),
 		logger.Field("refer_code", userInfo.ReferCode),
 	)
-
-	// Register log
-	registerLog := log.Register{
-		AuthMethod: "device",
-		Identifier: req.Identifier,
-		RegisterIP: req.IP,
-		UserAgent:  req.UserAgent,
-		Timestamp:  timeutil.Now().UnixMilli(),
-	}
-	content, _ := registerLog.Marshal()
-
-	if err := l.deps.Store.Log().Insert(l.ctx, &log.SystemLog{
-		Type:     log.TypeRegister.Uint8(),
-		Date:     timeutil.Now().Format("2006-01-02"),
-		ObjectID: userInfo.Id,
-		Content:  string(content),
-	}); err != nil {
-		l.Errorw("failed to insert register log",
-			logger.Field("user_id", userInfo.Id),
-			logger.Field("ip", req.IP),
-			logger.Field("error", err.Error()),
-		)
-	}
-
 	return userInfo, nil
 }

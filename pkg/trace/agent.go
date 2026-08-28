@@ -69,6 +69,7 @@ func StopAgent() {
 		_ = tp.Shutdown(context.Background())
 		tp = nil
 	}
+	clear(agents)
 }
 
 func createExporter(c Config) (sdktrace.SpanExporter, error) {
@@ -114,9 +115,13 @@ func createExporter(c Config) (sdktrace.SpanExporter, error) {
 		}
 		return otlptracehttp.New(context.Background(), opts...)
 	case kindFile:
-		f, err := os.OpenFile(c.Endpoint, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0666)
+		f, err := os.OpenFile(c.Endpoint, os.O_WRONLY|os.O_CREATE|os.O_APPEND, 0o600)
 		if err != nil {
 			return nil, fmt.Errorf("file exporter endpoint error: %s", err.Error())
+		}
+		if err := os.Chmod(c.Endpoint, 0o600); err != nil {
+			_ = f.Close()
+			return nil, fmt.Errorf("secure file exporter endpoint: %s", err.Error())
 		}
 		return stdouttrace.New(stdouttrace.WithWriter(f))
 	default:

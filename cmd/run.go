@@ -235,6 +235,7 @@ func initConfig(c *config.Config) bool {
 			Debug:    c.Debug,
 			JwtAuth:  c.JwtAuth,
 			Logger:   c.Logger,
+			Trace:    c.Trace,
 			Database: c.DatabaseConfig(),
 			Redis:    c.Redis,
 		}
