@@ -221,8 +221,11 @@ func TestMySQLTaskScopeGeneratedColumnUsesInstantDDL(t *testing.T) {
 			t.Fatalf("read %s: %v", name, err)
 		}
 		sql := string(data)
-		if !strings.Contains(sql, "ALGORITHM=INSTANT") || !strings.Contains(sql, "LOCK=NONE") {
+		if !strings.Contains(sql, "ALGORITHM=INSTANT") {
 			t.Errorf("%s must add or drop the virtual column without rebuilding the table", name)
+		}
+		if strings.Contains(sql, "LOCK=") {
+			t.Errorf("%s must not combine ALGORITHM=INSTANT with a LOCK clause", name)
 		}
 		if got := strings.Count(sql, ";"); got != 1 {
 			t.Errorf("%s contains %d statements, want 1", name, got)
