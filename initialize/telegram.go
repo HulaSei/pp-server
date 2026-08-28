@@ -58,8 +58,15 @@ func Telegram(svc *Dependencies) {
 	}
 
 	if tgConfig.BotToken == "" {
-		// The bot is deliberately unconfigured: stop a leftover poller.
+		// The bot is deliberately unconfigured: stop a leftover poller and
+		// revoke every in-process reference to the previous client. Leaving the
+		// old runtime snapshot or bot pointer published would let notification
+		// paths keep sending with the token the administrator just cleared.
 		swapTelegramPoller(nil)
+		if svc.SetTelegramBot != nil {
+			svc.SetTelegramBot(nil)
+		}
+		svc.updateConfig(func(current *config.Config) { current.Telegram = config.Telegram{} })
 		logger.Debug("[Init Telegram Config] Telegram Token is empty")
 		return
 	}

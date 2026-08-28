@@ -163,7 +163,7 @@ func handleInitConfig(_ context.Context, ctx *app.RequestContext) {
 		defer sqlDB.Close()
 	}
 	// migrate database
-	if err = migrate.Migrate(dbClient.Driver(), dbClient.MigrationDsn()).Up(); err != nil {
+	if err = migrate.Up(dbClient.Driver(), dbClient.MigrationDsn()); err != nil {
 		logger.Errorf("[Init Database] Migrate failed: %v", err.Error())
 		ctx.JSON(http.StatusOK, utils.H{
 			"code": 500,

@@ -21,7 +21,7 @@ func Migrate(ctx *Dependencies) {
 		Config: current.DatabaseConfig(),
 	}
 	now := time.Now()
-	if err := migrate.Migrate(mc.Driver(), mc.MigrationDsn()).Up(); err != nil {
+	if err := migrate.Up(mc.Driver(), mc.MigrationDsn()); err != nil {
 		if errors.Is(err, migrate.NoChange) {
 			logger.Info("[Migrate] database not change")
 			return
