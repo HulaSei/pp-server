@@ -652,8 +652,8 @@ func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, reques
 		registerLog := log.Register{
 			AuthMethod: method,
 			Identifier: logger.RedactedValue,
-			RegisterIP: logger.RedactedValue,
-			UserAgent:  logger.RedactedValue,
+			RegisterIP: ip,
+			UserAgent:  userAgent,
 			Timestamp:  timeutil.Now().UnixMilli(),
 		}
 		content, err := registerLog.Marshal()
@@ -757,8 +757,8 @@ func (l *OAuthLoginGetTokenLogic) recordLoginStatus(loginStatus bool, userInfo *
 	if userInfo != nil && userInfo.Id != 0 {
 		loginLog := log.Login{
 			Method:    authType,
-			LoginIP:   logger.RedactedValue,
-			UserAgent: logger.RedactedValue,
+			LoginIP:   ip,
+			UserAgent: userAgent,
 			Success:   loginStatus,
 			Timestamp: timeutil.Now().UnixMilli(),
 		}

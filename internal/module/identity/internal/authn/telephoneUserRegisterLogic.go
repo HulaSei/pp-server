@@ -127,8 +127,8 @@ func (l *TelephoneUserRegisterLogic) TelephoneUserRegister(req *dto.TelephoneReg
 		registerLog := log.Register{
 			AuthMethod: "mobile",
 			Identifier: logger.RedactedValue,
-			RegisterIP: logger.RedactedValue,
-			UserAgent:  logger.RedactedValue,
+			RegisterIP: req.IP,
+			UserAgent:  req.UserAgent,
 			Timestamp:  timeutil.Now().UnixMilli(),
 		}
 		content, err := registerLog.Marshal()
@@ -187,8 +187,8 @@ func (l *TelephoneUserRegisterLogic) TelephoneUserRegister(req *dto.TelephoneReg
 		if token != "" && userInfo.Id != 0 {
 			loginLog := log.Login{
 				Method:    "mobile",
-				LoginIP:   logger.RedactedValue,
-				UserAgent: logger.RedactedValue,
+				LoginIP:   req.IP,
+				UserAgent: req.UserAgent,
 				Success:   token != "",
 				Timestamp: timeutil.Now().UnixMilli(),
 			}

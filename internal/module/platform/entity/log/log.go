@@ -3,6 +3,7 @@ package log
 import (
 	"encoding/json"
 	"time"
+	"unicode/utf8"
 
 	"github.com/perfect-panel/server/pkg/logger"
 )
@@ -206,8 +207,8 @@ type Login struct {
 func (l *Login) Marshal() ([]byte, error) {
 	type Alias Login
 	safe := Alias(*l)
-	safe.LoginIP = logger.RedactedValue
-	safe.UserAgent = logger.RedactedValue
+	safe.LoginIP = boundedRiskValue(safe.LoginIP, 255)
+	safe.UserAgent = boundedRiskValue(safe.UserAgent, 512)
 	return json.Marshal(&struct {
 		*Alias
 	}{
@@ -222,8 +223,8 @@ func (l *Login) Unmarshal(data []byte) error {
 	if err := json.Unmarshal(data, aux); err != nil {
 		return err
 	}
-	l.LoginIP = logger.RedactedValue
-	l.UserAgent = logger.RedactedValue
+	l.LoginIP = boundedRiskValue(l.LoginIP, 255)
+	l.UserAgent = boundedRiskValue(l.UserAgent, 512)
 	return nil
 }
 
@@ -241,8 +242,8 @@ func (r *Register) Marshal() ([]byte, error) {
 	type Alias Register
 	safe := Alias(*r)
 	safe.Identifier = logger.RedactedValue
-	safe.RegisterIP = logger.RedactedValue
-	safe.UserAgent = logger.RedactedValue
+	safe.RegisterIP = boundedRiskValue(safe.RegisterIP, 255)
+	safe.UserAgent = boundedRiskValue(safe.UserAgent, 512)
 	return json.Marshal(&struct {
 		*Alias
 	}{
@@ -259,8 +260,8 @@ func (r *Register) Unmarshal(data []byte) error {
 		return err
 	}
 	r.Identifier = logger.RedactedValue
-	r.RegisterIP = logger.RedactedValue
-	r.UserAgent = logger.RedactedValue
+	r.RegisterIP = boundedRiskValue(r.RegisterIP, 255)
+	r.UserAgent = boundedRiskValue(r.UserAgent, 512)
 	return nil
 }
 
@@ -277,8 +278,8 @@ func (s *Subscribe) Marshal() ([]byte, error) {
 	type Alias Subscribe
 	safe := Alias(*s)
 	safe.Token = logger.RedactedValue
-	safe.UserAgent = logger.RedactedValue
-	safe.ClientIP = logger.RedactedValue
+	safe.UserAgent = boundedRiskValue(safe.UserAgent, 512)
+	safe.ClientIP = boundedRiskValue(safe.ClientIP, 255)
 	return json.Marshal(&struct {
 		*Alias
 	}{
@@ -294,9 +295,23 @@ func (s *Subscribe) Unmarshal(data []byte) error {
 		return err
 	}
 	s.Token = logger.RedactedValue
-	s.UserAgent = logger.RedactedValue
-	s.ClientIP = logger.RedactedValue
+	s.UserAgent = boundedRiskValue(s.UserAgent, 512)
+	s.ClientIP = boundedRiskValue(s.ClientIP, 255)
 	return nil
+}
+
+// boundedRiskValue retains exact request metadata used by risk analysis while
+// preventing attacker-controlled headers from growing an audit row without
+// bound. The limits match the existing user_device storage contract.
+func boundedRiskValue(value string, maxBytes int) string {
+	if maxBytes <= 0 || len(value) <= maxBytes {
+		return value
+	}
+	value = value[:maxBytes]
+	for len(value) > 0 && !utf8.ValidString(value) {
+		value = value[:len(value)-1]
+	}
+	return value
 }
 
 // ResetSubscribe represents a reset subscription log entry.

@@ -240,8 +240,8 @@ func (l *SubscribeLogic) getUserSubscribe(token string) (*usersub.Subscribe, err
 func (l *SubscribeLogic) logSubscribeActivity(userSub *usersub.Subscribe) error {
 	subscribeLog := log.Subscribe{
 		Token:           logger.RedactedValue,
-		UserAgent:       logger.RedactedValue,
-		ClientIP:        logger.RedactedValue,
+		UserAgent:       l.request.UserAgent,
+		ClientIP:        l.request.ClientIP,
 		UserSubscribeId: userSub.Id,
 	}
 

@@ -49,8 +49,8 @@ func (l *ResetPasswordLogic) ResetPassword(req *dto.ResetPasswordRequest) (resp 
 		if userInfo != nil && userInfo.Id != 0 && loginStatus {
 			loginLog := log.Login{
 				Method:    "email",
-				LoginIP:   logger.RedactedValue,
-				UserAgent: logger.RedactedValue,
+				LoginIP:   req.IP,
+				UserAgent: req.UserAgent,
 				Success:   loginStatus,
 				Timestamp: timeutil.Now().UnixMilli(),
 			}

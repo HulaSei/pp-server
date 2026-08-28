@@ -74,8 +74,8 @@ func (l *TelephoneLoginLogic) TelephoneLogin(req *dto.TelephoneLoginRequest, ip,
 		if userInfo.Id != 0 {
 			loginLog := log.Login{
 				Method:    "mobile",
-				LoginIP:   logger.RedactedValue,
-				UserAgent: logger.RedactedValue,
+				LoginIP:   ip,
+				UserAgent: userAgent,
 				Success:   loginStatus,
 				Timestamp: timeutil.Now().UnixMilli(),
 			}

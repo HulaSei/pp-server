@@ -51,8 +51,8 @@ func (l *UserLoginLogic) UserLogin(req *dto.UserLoginRequest) (resp *dto.LoginRe
 		if userInfo != nil && userInfo.Id != 0 {
 			loginLog := log.Login{
 				Method:    "email",
-				LoginIP:   logger.RedactedValue,
-				UserAgent: logger.RedactedValue,
+				LoginIP:   req.IP,
+				UserAgent: req.UserAgent,
 				Success:   loginStatus,
 				Timestamp: timeutil.Now().UnixMilli(),
 			}

@@ -120,8 +120,8 @@ func (l *TelephoneResetPasswordLogic) TelephoneResetPassword(req *dto.TelephoneR
 		if token != "" && userInfo.Id != 0 {
 			loginLog := log.Login{
 				Method:    "mobile",
-				LoginIP:   logger.RedactedValue,
-				UserAgent: logger.RedactedValue,
+				LoginIP:   req.IP,
+				UserAgent: req.UserAgent,
 				Success:   token != "",
 				Timestamp: timeutil.Now().UnixMilli(),
 			}

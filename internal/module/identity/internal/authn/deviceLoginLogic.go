@@ -56,8 +56,8 @@ func (l *DeviceLoginLogic) DeviceLogin(req *dto.DeviceLoginRequest) (resp *dto.L
 		if userInfo != nil && userInfo.Id != 0 {
 			loginLog := log.Login{
 				Method:    "device",
-				LoginIP:   logger.RedactedValue,
-				UserAgent: logger.RedactedValue,
+				LoginIP:   req.IP,
+				UserAgent: req.UserAgent,
 				Success:   loginStatus,
 				Timestamp: timeutil.Now().UnixMilli(),
 			}
@@ -248,8 +248,8 @@ func (l *DeviceLoginLogic) registerUserAndDevice(req *dto.DeviceLoginRequest) (*
 		registerLog := log.Register{
 			AuthMethod: "device",
 			Identifier: logger.RedactedValue,
-			RegisterIP: logger.RedactedValue,
-			UserAgent:  logger.RedactedValue,
+			RegisterIP: req.IP,
+			UserAgent:  req.UserAgent,
 			Timestamp:  timeutil.Now().UnixMilli(),
 		}
 		content, err := registerLog.Marshal()

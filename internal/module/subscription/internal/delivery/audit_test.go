@@ -29,13 +29,13 @@ func (r *deliveryAuditRepo) Insert(_ context.Context, row *log.SystemLog) error 
 
 func TestSubscriptionAuditIsRedactedAndFailClosed(t *testing.T) {
 	repo := &deliveryAuditRepo{}
-	logic := newSubscribeLogic(context.Background(), Deps{Logs: repo}, RequestMeta{ClientIP: "192.0.2.1"})
+	logic := newSubscribeLogic(context.Background(), Deps{Logs: repo}, RequestMeta{ClientIP: "192.0.2.1", UserAgent: "risk-client/1.0"})
 	sub := &usersub.Subscribe{Id: 9, UserId: 7}
 
 	if err := logic.logSubscribeActivity(sub); err != nil {
 		t.Fatal(err)
 	}
-	if repo.row == nil || strings.Contains(repo.row.Content, "subscription-secret") || strings.Contains(repo.row.Content, "private-agent") || !strings.Contains(repo.row.Content, logger.RedactedValue) {
+	if repo.row == nil || strings.Contains(repo.row.Content, "subscription-secret") || !strings.Contains(repo.row.Content, logger.RedactedValue) || !strings.Contains(repo.row.Content, "192.0.2.1") || !strings.Contains(repo.row.Content, "risk-client/1.0") {
 		t.Fatalf("unsafe subscription audit: %+v", repo.row)
 	}
 

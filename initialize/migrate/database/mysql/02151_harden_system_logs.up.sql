@@ -1,5 +1,5 @@
--- Historical security/audit rows predate centralized redaction. Remove raw
--- bearer credentials and personal request metadata already persisted there.
+-- Historical security/audit rows predate centralized redaction. Remove
+-- credentials and message bodies while retaining IP/User-Agent risk metadata.
 UPDATE system_logs
 SET content = CASE type
     WHEN 10 THEN JSON_SET(
@@ -18,24 +18,15 @@ SET content = CASE type
     )
     WHEN 20 THEN JSON_SET(
         content,
-        '$.token', '[REDACTED]',
-        '$.user_agent', '[REDACTED]',
-        '$.client_ip', '[REDACTED]'
-    )
-    WHEN 30 THEN JSON_SET(
-        content,
-        '$.login_ip', '[REDACTED]',
-        '$.user_agent', '[REDACTED]'
+        '$.token', '[REDACTED]'
     )
     WHEN 31 THEN JSON_SET(
         content,
-        '$.identifier', '[REDACTED]',
-        '$.register_ip', '[REDACTED]',
-        '$.user_agent', '[REDACTED]'
+        '$.identifier', '[REDACTED]'
     )
     ELSE content
 END
-WHERE type IN (10, 11, 20, 30, 31)
+WHERE type IN (10, 11, 20, 31)
   AND JSON_VALID(content);
 
 -- Invalid historical retention values must not turn the next daily cleanup

@@ -7,11 +7,12 @@ import (
 	"github.com/perfect-panel/server/pkg/logger"
 )
 
-func TestSecurityLogMarshalRedactsPersonalDataAndCredentials(t *testing.T) {
+func TestSecurityLogMarshalKeepsRiskMetadataAndRedactsSecrets(t *testing.T) {
 	tests := []struct {
-		name    string
-		marshal func() ([]byte, error)
-		secrets []string
+		name         string
+		marshal      func() ([]byte, error)
+		secrets      []string
+		riskMetadata []string
 	}{
 		{
 			name: "message",
@@ -31,21 +32,23 @@ func TestSecurityLogMarshalRedactsPersonalDataAndCredentials(t *testing.T) {
 			marshal: func() ([]byte, error) {
 				return (&Login{LoginIP: "192.0.2.10", UserAgent: "private-agent", Success: true}).Marshal()
 			},
-			secrets: []string{"192.0.2.10", "private-agent"},
+			riskMetadata: []string{"192.0.2.10", "private-agent"},
 		},
 		{
 			name: "registration",
 			marshal: func() ([]byte, error) {
 				return (&Register{Identifier: "person@example.com", RegisterIP: "192.0.2.11", UserAgent: "private-agent"}).Marshal()
 			},
-			secrets: []string{"person@example.com", "192.0.2.11", "private-agent"},
+			secrets:      []string{"person@example.com"},
+			riskMetadata: []string{"192.0.2.11", "private-agent"},
 		},
 		{
 			name: "subscription",
 			marshal: func() ([]byte, error) {
 				return (&Subscribe{Token: "bearer-token", ClientIP: "192.0.2.12", UserAgent: "private-agent"}).Marshal()
 			},
-			secrets: []string{"bearer-token", "192.0.2.12", "private-agent"},
+			secrets:      []string{"bearer-token"},
+			riskMetadata: []string{"192.0.2.12", "private-agent"},
 		},
 	}
 
@@ -61,7 +64,12 @@ func TestSecurityLogMarshalRedactsPersonalDataAndCredentials(t *testing.T) {
 					t.Fatalf("serialized audit log contains %q: %s", secret, text)
 				}
 			}
-			if !strings.Contains(text, logger.RedactedValue) {
+			for _, value := range tc.riskMetadata {
+				if !strings.Contains(text, value) {
+					t.Fatalf("serialized audit log lost risk metadata %q: %s", value, text)
+				}
+			}
+			if len(tc.secrets) > 0 && !strings.Contains(text, logger.RedactedValue) {
 				t.Fatalf("serialized audit log is not marked redacted: %s", text)
 			}
 		})
@@ -81,7 +89,7 @@ func TestExpirableTypesNeverIncludesFinancialLedgers(t *testing.T) {
 	}
 }
 
-func TestSecurityLogUnmarshalRedactsLegacyRows(t *testing.T) {
+func TestSecurityLogUnmarshalRetainsRiskMetadataAndRedactsSecrets(t *testing.T) {
 	var message Message
 	if err := message.Unmarshal([]byte(`{"to":"person@example.com","subject":"Hello","content":{"code":"123456"},"template":"secret","platform":"smtp","status":1}`)); err != nil {
 		t.Fatal(err)
@@ -94,7 +102,7 @@ func TestSecurityLogUnmarshalRedactsLegacyRows(t *testing.T) {
 	if err := subscribe.Unmarshal([]byte(`{"token":"legacy-token","user_agent":"legacy-agent","client_ip":"192.0.2.1","user_subscribe_id":7}`)); err != nil {
 		t.Fatal(err)
 	}
-	if subscribe.Token != logger.RedactedValue || subscribe.UserAgent != logger.RedactedValue || subscribe.ClientIP != logger.RedactedValue || subscribe.UserSubscribeId != 7 {
+	if subscribe.Token != logger.RedactedValue || subscribe.UserAgent != "legacy-agent" || subscribe.ClientIP != "192.0.2.1" || subscribe.UserSubscribeId != 7 {
 		t.Fatalf("legacy subscription audit was not safely decoded: %+v", subscribe)
 	}
 
@@ -102,7 +110,22 @@ func TestSecurityLogUnmarshalRedactsLegacyRows(t *testing.T) {
 	if err := login.Unmarshal([]byte(`{"method":"email","login_ip":"192.0.2.2","user_agent":"legacy-agent","success":true}`)); err != nil {
 		t.Fatal(err)
 	}
-	if login.LoginIP != logger.RedactedValue || login.UserAgent != logger.RedactedValue || !login.Success {
+	if login.LoginIP != "192.0.2.2" || login.UserAgent != "legacy-agent" || !login.Success {
 		t.Fatalf("legacy login audit was not safely decoded: %+v", login)
+	}
+}
+
+func TestRiskMetadataIsBoundedWithoutBreakingUTF8(t *testing.T) {
+	ua := strings.Repeat("客", 300)
+	data, err := (&Login{LoginIP: strings.Repeat("1", 300), UserAgent: ua}).Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var decoded Login
+	if err := decoded.Unmarshal(data); err != nil {
+		t.Fatal(err)
+	}
+	if len(decoded.LoginIP) != 255 || len(decoded.UserAgent) > 512 || !strings.HasPrefix(ua, decoded.UserAgent) {
+		t.Fatalf("risk metadata bounds were not enforced: ip=%d ua=%d", len(decoded.LoginIP), len(decoded.UserAgent))
 	}
 }

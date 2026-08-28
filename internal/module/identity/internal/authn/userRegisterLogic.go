@@ -134,8 +134,8 @@ func (l *UserRegisterLogic) UserRegister(req *dto.UserRegisterRequest) (resp *dt
 		registerLog := log.Register{
 			AuthMethod: "email",
 			Identifier: logger.RedactedValue,
-			RegisterIP: logger.RedactedValue,
-			UserAgent:  logger.RedactedValue,
+			RegisterIP: req.IP,
+			UserAgent:  req.UserAgent,
 			Timestamp:  timeutil.Now().UnixMilli(),
 		}
 		content, err := registerLog.Marshal()
@@ -195,8 +195,8 @@ func (l *UserRegisterLogic) UserRegister(req *dto.UserRegisterRequest) (resp *dt
 		if token != "" && userInfo.Id != 0 {
 			loginLog := log.Login{
 				Method:    "email",
-				LoginIP:   logger.RedactedValue,
-				UserAgent: logger.RedactedValue,
+				LoginIP:   req.IP,
+				UserAgent: req.UserAgent,
 				Success:   loginStatus,
 				Timestamp: timeutil.Now().UnixMilli(),
 			}
