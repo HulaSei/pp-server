@@ -34,16 +34,17 @@ Logger: # Logging configuration
   MaxBackups: 3                     # Maximum number of log backups
   MaxSize: 50                       # Maximum log file size (MB)
   Rotation: "daily"                 # Log rotation strategy (daily, size)
-MySQL: # MySQL database configuration
-  Addr: ""                          # MySQL address (required)
-  Username: ""                      # MySQL username (required)
-  Password: ""                      # MySQL password (required)
-  Dbname: ""                        # MySQL database name (required)
-  Config: "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"  # MySQL connection parameters
+Database: # MySQL or PostgreSQL database configuration
+  Driver: "mysql"                   # mysql or postgres
+  Addr: ""                          # Database address (required)
+  Username: ""                      # Database username (required)
+  Password: ""                      # Database password (required)
+  Dbname: ""                        # Database name (required)
+  Config: "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"  # Dialect connection parameters
   MaxIdleConns: 10                  # Maximum idle connections
-  MaxOpenConns: 100                 # Maximum open connections
-  LogMode: "info"                   # Log level (debug, error, warn, info)
-  LogZap: true                      # Enable Zap logging for SQL
+  MaxOpenConns: 10                  # Maximum open connections
+  ConnMaxLifetime: 1800             # Maximum connection lifetime (seconds)
+  ConnMaxIdleTime: 300              # Maximum connection idle time (seconds)
   SlowThreshold: 1000               # Slow query threshold (milliseconds)
 Redis: # Redis configuration
   Host: "localhost:6379"            # Redis address
@@ -103,27 +104,29 @@ Administer: # Admin login configuration
   - Options: `daily` (rotate daily), `size` (rotate by size).
   - Default: `daily`.
 
-### 3.4 MySQL Database (`MySQL`)
+### 3.4 Database (`Database`)
 
-- **`Addr`**: MySQL server address.
+- **`Driver`**: Database dialect: `mysql` or `postgres`.
+  - Default: `mysql`.
+- **`Addr`**: Database server address.
   - Required.
-- **`Username`**: MySQL username.
+- **`Username`**: Database username.
   - Required.
-- **`Password`**: MySQL password.
+- **`Password`**: Database password.
   - Required.
-- **`Dbname`**: MySQL database name.
+- **`Dbname`**: Database name.
   - Required.
-- **`Config`**: MySQL connection parameters.
-  - Default: `charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai`.
+- **`Config`**: Dialect-specific connection parameters.
+  - MySQL default: `charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai`.
+  - PostgreSQL default: `sslmode=disable&TimeZone=Asia%2FShanghai&application_name=perfect-panel`.
 - **`MaxIdleConns`**: Maximum idle connections.
   - Default: `10`.
 - **`MaxOpenConns`**: Maximum open connections.
-  - Default: `100`.
-- **`LogMode`**: SQL logging level.
-  - Options: `debug`, `error`, `warn`, `info`.
-  - Default: `info`.
-- **`LogZap`**: Enable Zap logging for SQL queries.
-  - Default: `true`.
+  - Default: `10`.
+- **`ConnMaxLifetime`**: Maximum time a pooled connection may be reused, in seconds.
+  - Default: `1800`.
+- **`ConnMaxIdleTime`**: Maximum time an idle pooled connection is retained, in seconds.
+  - Default: `300`.
 - **`SlowThreshold`**: Threshold for slow query logging (in milliseconds).
   - Default: `1000`.
 
@@ -158,7 +161,7 @@ The following environment variables can be used to override configuration settin
   values.
 - **Logging**: Use `file` or `volume` mode for production to persist logs. Adjust `Level` to `error` or `severe` to
   reduce log volume.
-- **Database**: Ensure `MySQL` and `Redis` credentials are secure and not exposed in version control.
+- **Database**: Ensure `Database` and `Redis` credentials are secure and not exposed in version control.
 - **JWT**: Specify a strong `AccessSecret` for `JwtAuth` to enhance security.
 
 For further assistance, refer to the official PPanel documentation or contact support.

@@ -16,15 +16,17 @@ func ParseDSN(dsn string) *Config {
 		return nil
 	}
 	return &Config{
-		Driver:        DriverMySQL,
-		Addr:          cfg.Addr,
-		Dbname:        cfg.DBName,
-		Username:      cfg.User,
-		Password:      cfg.Passwd,
-		Config:        DefaultMySQLConfig,
-		MaxIdleConns:  10,
-		MaxOpenConns:  10,
-		SlowThreshold: DefaultSlowThresholdMs,
+		Driver:          DriverMySQL,
+		Addr:            cfg.Addr,
+		Dbname:          cfg.DBName,
+		Username:        cfg.User,
+		Password:        cfg.Passwd,
+		Config:          DefaultMySQLConfig,
+		MaxIdleConns:    10,
+		MaxOpenConns:    10,
+		ConnMaxLifetime: DefaultConnMaxLifetimeSeconds,
+		ConnMaxIdleTime: DefaultConnMaxIdleTimeSeconds,
+		SlowThreshold:   DefaultSlowThresholdMs,
 	}
 }
 
@@ -47,14 +49,16 @@ func parseURLDSN(dsn string) *Config {
 		}
 	}
 	return &Config{
-		Driver:        driver,
-		Addr:          u.Host,
-		Dbname:        strings.TrimPrefix(u.Path, "/"),
-		Username:      u.User.Username(),
-		Password:      password,
-		Config:        query,
-		MaxIdleConns:  10,
-		MaxOpenConns:  10,
-		SlowThreshold: DefaultSlowThresholdMs,
+		Driver:          driver,
+		Addr:            u.Host,
+		Dbname:          strings.TrimPrefix(u.Path, "/"),
+		Username:        u.User.Username(),
+		Password:        password,
+		Config:          query,
+		MaxIdleConns:    10,
+		MaxOpenConns:    10,
+		ConnMaxLifetime: DefaultConnMaxLifetimeSeconds,
+		ConnMaxIdleTime: DefaultConnMaxIdleTimeSeconds,
+		SlowThreshold:   DefaultSlowThresholdMs,
 	}
 }

@@ -12,6 +12,20 @@ jobs:
   check:
     name: Build, vet and test
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: ppanel
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ppanel"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -38,6 +52,8 @@ jobs:
         run: go vet ./...
 
       - name: Test
+        env:
+          PPANEL_TEST_POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:5432/ppanel?sslmode=disable
         run: go test ./...
 
       # master is the LTS line and main takes the features, so the two can each

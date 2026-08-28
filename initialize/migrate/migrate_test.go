@@ -4,6 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"reflect"
+	"sort"
+	"strings"
 	"testing"
 
 	"github.com/perfect-panel/server/pkg/orm"
@@ -109,5 +113,82 @@ func TestUpAndCloseDoesNotHideCloseFailureBehindNoChange(t *testing.T) {
 	}
 	if errors.Is(err, NoChange) {
 		t.Fatalf("upAndClose() error = %v hides a close failure behind ErrNoChange", err)
+	}
+}
+
+func TestDialectMigrationVersionsStayAligned(t *testing.T) {
+	for _, direction := range []string{"up", "down"} {
+		mysqlFiles := migrationNames(t, "database/mysql", direction)
+		postgresFiles := migrationNames(t, "database/postgres", direction)
+		if !reflect.DeepEqual(mysqlFiles, postgresFiles) {
+			t.Fatalf("%s migration versions differ:\nmysql:    %v\npostgres: %v", direction, mysqlFiles, postgresFiles)
+		}
+	}
+}
+
+func migrationNames(t *testing.T, directory, direction string) []string {
+	t.Helper()
+	entries, err := sqlFiles.ReadDir(directory)
+	if err != nil {
+		t.Fatalf("read %s migrations: %v", directory, err)
+	}
+	suffix := "." + direction + ".sql"
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), suffix) {
+			continue
+		}
+		base := strings.TrimSuffix(entry.Name(), suffix)
+		version, _, ok := strings.Cut(base, "_")
+		if !ok {
+			t.Fatalf("migration %s/%s has no version prefix", directory, entry.Name())
+		}
+		names = append(names, version)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func TestPostgresOnlineIndexMigrationsContainOneConcurrentStatement(t *testing.T) {
+	entries, err := sqlFiles.ReadDir("database/postgres")
+	if err != nil {
+		t.Fatalf("read postgres migrations: %v", err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || name < "02155" || name > "02169_zzzz" {
+			continue
+		}
+		data, err := sqlFiles.ReadFile(filepath.Join("database/postgres", name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		sql := string(data)
+		if !strings.Contains(sql, "CONCURRENTLY") {
+			t.Errorf("%s must build or drop its index concurrently", name)
+		}
+		if got := strings.Count(sql, ";"); got != 1 {
+			t.Errorf("%s contains %d statements; online index migrations must contain exactly one", name, got)
+		}
+	}
+}
+
+func TestMySQLPostgresOnlyMigrationsRemainExecutableNoOps(t *testing.T) {
+	entries, err := sqlFiles.ReadDir("database/mysql")
+	if err != nil {
+		t.Fatalf("read mysql migrations: %v", err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || name < "02155" || name > "02172_zzzz" {
+			continue
+		}
+		data, err := sqlFiles.ReadFile(filepath.Join("database/mysql", name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if !strings.Contains(string(data), "SELECT 1;") {
+			t.Errorf("%s must be an executable no-op, not an empty/comment-only query", name)
+		}
 	}
 }

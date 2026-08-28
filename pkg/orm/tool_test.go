@@ -1,8 +1,8 @@
 package orm
 
 import (
+	"net/url"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -26,8 +26,36 @@ func TestParsePostgresDSN(t *testing.T) {
 	}
 
 	dsn := Mysql{Config: *cfg}.Dsn()
-	if want := "TimeZone=Asia/Shanghai"; !strings.Contains(dsn, want) {
-		t.Fatalf("postgres dsn %q does not contain %q", dsn, want)
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("parse generated postgres dsn: %v", err)
+	}
+	if got := parsed.Query().Get("TimeZone"); got != "Asia/Shanghai" {
+		t.Fatalf("postgres TimeZone = %q, want Asia/Shanghai", got)
+	}
+	if got := parsed.Query().Get("application_name"); got != defaultPostgresApplicationName {
+		t.Fatalf("postgres application_name = %q, want %q", got, defaultPostgresApplicationName)
+	}
+	if cfg.ConnMaxLifetime != DefaultConnMaxLifetimeSeconds || cfg.ConnMaxIdleTime != DefaultConnMaxIdleTimeSeconds {
+		t.Fatalf("postgres pool lifetimes = (%d, %d), want (%d, %d)",
+			cfg.ConnMaxLifetime, cfg.ConnMaxIdleTime, DefaultConnMaxLifetimeSeconds, DefaultConnMaxIdleTimeSeconds)
+	}
+}
+
+func TestPostgresDSNPreservesApplicationNameOverride(t *testing.T) {
+	cfg := Config{
+		Driver:   DriverPostgres,
+		Addr:     "localhost:5432",
+		Dbname:   "ppanel",
+		Username: "postgres",
+		Config:   "sslmode=disable&application_name=worker",
+	}
+	parsed, err := url.Parse((Mysql{Config: cfg}).Dsn())
+	if err != nil {
+		t.Fatalf("parse generated postgres dsn: %v", err)
+	}
+	if got := parsed.Query().Get("application_name"); got != "worker" {
+		t.Fatalf("postgres application_name = %q, want worker", got)
 	}
 }
 

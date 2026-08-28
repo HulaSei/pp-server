@@ -33,16 +33,17 @@ Logger: # 日志配置
   MaxBackups: 3                     # 最大日志备份数
   MaxSize: 50                       # 最大日志文件大小（MB）
   Rotation: "daily"                 # 日志轮转策略（daily、size）
-MySQL: # MySQL 数据库配置
-  Addr: ""                          # MySQL 地址（必填）
-  Username: ""                      # MySQL 用户名（必填）
-  Password: ""                      # MySQL 密码（必填）
-  Dbname: ""                        # MySQL 数据库名（必填）
-  Config: "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"  # MySQL 连接参数
+Database: # MySQL 或 PostgreSQL 数据库配置
+  Driver: "mysql"                   # mysql 或 postgres
+  Addr: ""                          # 数据库地址（必填）
+  Username: ""                      # 数据库用户名（必填）
+  Password: ""                      # 数据库密码（必填）
+  Dbname: ""                        # 数据库名（必填）
+  Config: "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"  # 对应数据库的连接参数
   MaxIdleConns: 10                  # 最大空闲连接数
-  MaxOpenConns: 100                 # 最大打开连接数
-  LogMode: "info"                   # 日志级别（debug、error、warn、info）
-  LogZap: true                      # 是否使用 Zap 记录 SQL 日志
+  MaxOpenConns: 10                  # 最大打开连接数
+  ConnMaxLifetime: 1800             # 连接最大生命周期（秒）
+  ConnMaxIdleTime: 300              # 空闲连接最大保留时间（秒）
   SlowThreshold: 1000               # 慢查询阈值（毫秒）
 Redis: # Redis 配置
   Host: "localhost:6379"            # Redis 地址
@@ -102,27 +103,29 @@ Administer: # 管理员登录配置
   - 选项：`daily`（按天轮转）、`size`（按大小轮转）。
   - 默认：`daily`。
 
-### 3.4 MySQL 数据库 (`MySQL`)
+### 3.4 数据库 (`Database`)
 
-- **`Addr`**：MySQL 服务器地址。
+- **`Driver`**：数据库类型，可选 `mysql` 或 `postgres`。
+  - 默认：`mysql`。
+- **`Addr`**：数据库服务器地址。
   - 必填。
-- **`Username`**：MySQL 用户名。
+- **`Username`**：数据库用户名。
   - 必填。
-- **`Password`**：MySQL 密码。
+- **`Password`**：数据库密码。
   - 必填。
-- **`Dbname`**：MySQL 数据库名。
+- **`Dbname`**：数据库名。
   - 必填。
-- **`Config`**：MySQL 连接参数。
-  - 默认：`charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai`。
+- **`Config`**：对应数据库的连接参数。
+  - MySQL 默认：`charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai`。
+  - PostgreSQL 默认：`sslmode=disable&TimeZone=Asia%2FShanghai&application_name=perfect-panel`。
 - **`MaxIdleConns`**：最大空闲连接数。
   - 默认：`10`。
 - **`MaxOpenConns`**：最大打开连接数。
-  - 默认：`100`。
-- **`LogMode`**：SQL 日志级别。
-  - 选项：`debug`、`error`、`warn`、`info`。
-  - 默认：`info`。
-- **`LogZap`**：是否使用 Zap 记录 SQL 日志。
-  - 默认：`true`。
+  - 默认：`10`。
+- **`ConnMaxLifetime`**：连接池中单个连接的最大复用时间（秒）。
+  - 默认：`1800`。
+- **`ConnMaxIdleTime`**：空闲连接在连接池中的最大保留时间（秒）。
+  - 默认：`300`。
 - **`SlowThreshold`**：慢查询阈值（毫秒）。
   - 默认：`1000`。
 
@@ -155,7 +158,7 @@ Administer: # 管理员登录配置
 
 - **安全性**：生产环境中避免使用默认的 `Administer` 凭据，更新 `Email` 和 `Password` 为安全值。
 - **日志**：生产环境中建议使用 `file` 或 `volume` 模式持久化日志，将 `Level` 设置为 `error` 或 `severe` 以减少日志量。
-- **数据库**：确保 `MySQL` 和 `Redis` 凭据安全，避免在版本控制中暴露。
+- **数据库**：确保 `Database` 和 `Redis` 凭据安全，避免在版本控制中暴露。
 - **JWT**：为 `JwtAuth` 的 `AccessSecret` 设置强密钥以增强安全性。
 
 如需进一步帮助，请参考 PPanel 官方文档或联系支持团队。

@@ -540,6 +540,15 @@ func (m *UserSubscriptionRepo) ClearSubscribeCache(ctx context.Context, data ...
 
 // --- subscription checks (expired / traffic exceeded) ---
 
+// activeLifecycleSubscribes deliberately keeps the fixed state set as SQL
+// literals. PostgreSQL can only use the matching partial expiry index when
+// its planner can prove the query predicate implies the index predicate; a
+// generic prepared plan with status parameters cannot make that proof.
+func activeLifecycleSubscribes(conn *gorm.DB) *gorm.DB {
+	return conn.Model(&usersub.Subscribe{}).
+		Where("status IN (0, 1) AND finished_at IS NULL")
+}
+
 func (m *UserSubscriptionRepo) FindTrafficExceededSubscribes(ctx context.Context) ([]*usersub.Subscribe, error) {
 	var list []*usersub.Subscribe
 	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
@@ -553,8 +562,8 @@ func (m *UserSubscriptionRepo) FindTrafficExceededSubscribes(ctx context.Context
 func (m *UserSubscriptionRepo) FindExpiredSubscribes(ctx context.Context, now time.Time) ([]*usersub.Subscribe, error) {
 	var list []*usersub.Subscribe
 	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
-		return conn.Model(&usersub.Subscribe{}).
-			Where("status IN ? AND expire_time < ? AND expire_time != ? AND finished_at IS NULL", []int64{0, 1}, now, time.UnixMilli(0)).
+		return activeLifecycleSubscribes(conn).
+			Where("expire_time < ? AND expire_time != ?", now, time.UnixMilli(0)).
 			Find(&list).Error
 	})
 	return list, err
@@ -566,9 +575,8 @@ func (m *UserSubscriptionRepo) FindExpiredSubscribes(ctx context.Context, now ti
 func (m *UserSubscriptionRepo) FindExpiringSubscribes(ctx context.Context, from, to time.Time) ([]*usersub.Subscribe, error) {
 	var list []*usersub.Subscribe
 	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
-		return conn.Model(&usersub.Subscribe{}).
-			Where("status IN ? AND expire_time >= ? AND expire_time < ? AND expire_time != ? AND finished_at IS NULL",
-				[]int64{0, 1}, from, to, time.UnixMilli(0)).
+		return activeLifecycleSubscribes(conn).
+			Where("expire_time >= ? AND expire_time < ? AND expire_time != ?", from, to, time.UnixMilli(0)).
 			Find(&list).Error
 	})
 	return list, err
