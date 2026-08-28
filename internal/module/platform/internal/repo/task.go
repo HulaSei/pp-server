@@ -13,8 +13,15 @@ import (
 
 var _ repository.TaskRepo = (*taskRepo)(nil)
 
+const taskPageSelect = "task.*, COUNT(*) OVER() AS total_count"
+
 type taskRepo struct {
 	db *gorm.DB
+}
+
+type taskPageRow struct {
+	task.Task
+	TotalCount int64 `gorm:"column:total_count"`
 }
 
 // NewTaskRepo builds the module-owned implementation.
@@ -41,8 +48,6 @@ func (m *taskRepo) FindOneByType(ctx context.Context, id int64, typ task.Type) (
 }
 
 func (m *taskRepo) QueryTaskList(ctx context.Context, filter *task.Filter) (int64, []*task.Task, error) {
-	var total int64
-	var data []*task.Task
 	if filter == nil {
 		filter = &task.Filter{
 			Type: task.Undefined,
@@ -52,6 +57,34 @@ func (m *taskRepo) QueryTaskList(ctx context.Context, filter *task.Filter) (int6
 	}
 	filter.Page, filter.Size = repository.NormalizePage(filter.Page, filter.Size)
 
+	query := m.taskListQuery(ctx, filter)
+	var rows []taskPageRow
+	err := query.Select(taskPageSelect).
+		Offset((filter.Page - 1) * filter.Size).
+		Limit(filter.Size).
+		Order("created_at DESC, id DESC").
+		Scan(&rows).Error
+	if err != nil {
+		return 0, nil, err
+	}
+	if len(rows) == 0 {
+		// A window aggregate has no row on an out-of-range page. Preserve the
+		// existing API contract by counting only in this uncommon case.
+		var total int64
+		if err := m.taskListQuery(ctx, filter).Count(&total).Error; err != nil {
+			return 0, nil, err
+		}
+		return total, []*task.Task{}, nil
+	}
+
+	data := make([]*task.Task, 0, len(rows))
+	for i := range rows {
+		data = append(data, &rows[i].Task)
+	}
+	return rows[0].TotalCount, data, nil
+}
+
+func (m *taskRepo) taskListQuery(ctx context.Context, filter *task.Filter) *gorm.DB {
 	query := m.db.WithContext(ctx).Model(&task.Task{})
 	if filter.Type != task.Undefined {
 		query = query.Where("type = ?", filter.Type)
@@ -64,20 +97,15 @@ func (m *taskRepo) QueryTaskList(ctx context.Context, filter *task.Filter) (int6
 		// fallback transferred and decoded the entire task history before paging.
 		switch m.db.Dialector.Name() {
 		case "mysql":
-			query = query.Where("JSON_VALID(scope) AND CAST(JSON_UNQUOTE(JSON_EXTRACT(scope, '$.Type')) AS SIGNED) = ?", *filter.Scope)
+			// MySQL 8 and MariaDB 11.8 index this virtual generated column.
+			query = query.Where("scope_type = ?", *filter.Scope)
 		case "postgres":
 			query = query.Where("CAST(scope AS jsonb) ->> 'Type' = ?", fmt.Sprint(*filter.Scope))
 		default:
 			query = query.Where("CAST(json_extract(scope, '$.Type') AS INTEGER) = ?", *filter.Scope)
 		}
 	}
-
-	err := query.Count(&total).
-		Offset((filter.Page - 1) * filter.Size).
-		Limit(filter.Size).
-		Order("created_at DESC").
-		Find(&data).Error
-	return total, data, err
+	return query
 }
 
 func (m *taskRepo) Update(ctx context.Context, data *task.Task) error {

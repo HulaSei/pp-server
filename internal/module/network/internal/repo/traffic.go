@@ -15,6 +15,8 @@ import (
 
 var _ repository.TrafficRepo = (*trafficRepo)(nil)
 
+const trafficLogNewestFirst = "timestamp DESC, id DESC"
+
 type trafficRepo struct {
 	Conn  *gorm.DB
 	table string
@@ -186,7 +188,15 @@ func (m *trafficRepo) QueryTrafficLogPageList(ctx context.Context, userId, subsc
 	var list []*traffic.TrafficLog
 	var total int64
 	page, size = repository.NormalizePage(page, size)
-	err := m.Conn.WithContext(ctx).Model(&traffic.TrafficLog{}).Where("user_id = ? and subscribe_id= ?", userId, subscribeId).Count(&total).Limit(size).Offset((page - 1) * size).Find(&list).Error
+	query := m.Conn.WithContext(ctx).Model(&traffic.TrafficLog{}).
+		Where("user_id = ? AND subscribe_id = ?", userId, subscribeId)
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := query.Order(trafficLogNewestFirst).
+		Limit(size).
+		Offset((page - 1) * size).
+		Find(&list).Error
 	return list, total, err
 }
 
@@ -213,7 +223,7 @@ func (m *trafficRepo) QueryTrafficLogDetails(ctx context.Context, filter *traffi
 	var list []*traffic.TrafficLog
 	var total int64
 	err := query.Count(&total).
-		Order("timestamp DESC").
+		Order(trafficLogNewestFirst).
 		Limit(filter.Size).
 		Offset((filter.Page - 1) * filter.Size).
 		Find(&list).Error

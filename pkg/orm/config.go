@@ -15,19 +15,51 @@ func ParseDSN(dsn string) *Config {
 	if err != nil {
 		return nil
 	}
+	query := DefaultMySQLConfig
+	if formattedQuery := mysqlDSNRawQuery(cfg.FormatDSN()); formattedQuery != "" {
+		query = withDefaultMySQLParams(formattedQuery)
+	}
+	// FormatDSN omits false-valued booleans, so preserve an explicit caller
+	// override before this parsed configuration is written into YAML.
+	if originalQuery := mysqlDSNRawQuery(dsn); originalQuery != "" {
+		if original, parseErr := url.ParseQuery(originalQuery); parseErr == nil {
+			if values, configured := original["interpolateParams"]; configured {
+				parsed, parseErr := url.ParseQuery(query)
+				if parseErr == nil {
+					parsed["interpolateParams"] = values
+					query = parsed.Encode()
+				}
+			}
+		}
+	}
 	return &Config{
 		Driver:          DriverMySQL,
 		Addr:            cfg.Addr,
 		Dbname:          cfg.DBName,
 		Username:        cfg.User,
 		Password:        cfg.Passwd,
-		Config:          DefaultMySQLConfig,
+		Config:          query,
 		MaxIdleConns:    10,
 		MaxOpenConns:    10,
 		ConnMaxLifetime: DefaultConnMaxLifetimeSeconds,
 		ConnMaxIdleTime: DefaultConnMaxIdleTimeSeconds,
 		SlowThreshold:   DefaultSlowThresholdMs,
 	}
+}
+
+// mysqlDSNRawQuery extracts only the parameters following the database name.
+// Looking for the first or last question mark in the full DSN is incorrect
+// because MySQL passwords may contain one without escaping.
+func mysqlDSNRawQuery(dsn string) string {
+	databaseSeparator := strings.LastIndex(dsn, "/")
+	if databaseSeparator < 0 {
+		return ""
+	}
+	querySeparator := strings.IndexByte(dsn[databaseSeparator+1:], '?')
+	if querySeparator < 0 {
+		return ""
+	}
+	return dsn[databaseSeparator+querySeparator+2:]
 }
 
 func parseURLDSN(dsn string) *Config {
@@ -47,6 +79,8 @@ func parseURLDSN(dsn string) *Config {
 		} else {
 			query = DefaultMySQLConfig
 		}
+	} else if driver == DriverMySQL {
+		query = withDefaultMySQLParams(query)
 	}
 	return &Config{
 		Driver:          driver,

@@ -18,6 +18,34 @@ jobs:
     name: Build, vet and test
     runs-on: ubuntu-latest
     services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_DATABASE: ppanel
+          MYSQL_ROOT_PASSWORD: mysql
+          MYSQL_ROOT_HOST: "%"
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd "mysqladmin ping -h 127.0.0.1 -uroot -pmysql"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-start-period 10s
+          --health-retries 10
+      mariadb:
+        image: mariadb:11.8
+        env:
+          MARIADB_DATABASE: ppanel
+          MARIADB_ROOT_PASSWORD: mariadb
+          MARIADB_ROOT_HOST: "%"
+        ports:
+          - 3307:3306
+        options: >-
+          --health-cmd "healthcheck.sh --connect --innodb_initialized"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-start-period 10s
+          --health-retries 10
       postgres:
         image: postgres:16-alpine
         env:
@@ -56,10 +84,16 @@ jobs:
       - name: Vet
         run: go vet ./...
 
-      - name: Test
+      - name: Test with MySQL 8 and PostgreSQL
         env:
+          PPANEL_TEST_MYSQL_DSN: "root:mysql@tcp(127.0.0.1:3306)/ppanel?charset=utf8mb4&parseTime=true&loc=UTC&interpolateParams=true"
           PPANEL_TEST_POSTGRES_DSN: postgres://postgres:postgres@127.0.0.1:5432/ppanel?sslmode=disable
         run: go test ./...
+
+      - name: Test MariaDB 11.8 compatibility
+        env:
+          PPANEL_TEST_MYSQL_DSN: "root:mariadb@tcp(127.0.0.1:3307)/ppanel?charset=utf8mb4&parseTime=true&loc=UTC&interpolateParams=true"
+        run: go test -count=1 ./pkg/orm ./initialize/migrate
 
   publish:
     name: Publish nightly

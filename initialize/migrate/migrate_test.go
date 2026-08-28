@@ -192,3 +192,86 @@ func TestMySQLPostgresOnlyMigrationsRemainExecutableNoOps(t *testing.T) {
 		}
 	}
 }
+
+func TestPostgresMySQLOnlyMigrationsRemainExecutableNoOps(t *testing.T) {
+	entries, err := sqlFiles.ReadDir("database/postgres")
+	if err != nil {
+		t.Fatalf("read postgres migrations: %v", err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || name < "02173" || name > "02178_zzzz" {
+			continue
+		}
+		data, err := sqlFiles.ReadFile(filepath.Join("database/postgres", name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		if !strings.Contains(string(data), "SELECT 1;") {
+			t.Errorf("%s must be an executable no-op, not an empty/comment-only query", name)
+		}
+	}
+}
+
+func TestMySQLTaskScopeGeneratedColumnUsesInstantDDL(t *testing.T) {
+	for _, direction := range []string{"up", "down"} {
+		name := "02177_mysql_task_scope_generated." + direction + ".sql"
+		data, err := sqlFiles.ReadFile(filepath.Join("database/mysql", name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		sql := string(data)
+		if !strings.Contains(sql, "ALGORITHM=INSTANT") || !strings.Contains(sql, "LOCK=NONE") {
+			t.Errorf("%s must add or drop the virtual column without rebuilding the table", name)
+		}
+		if got := strings.Count(sql, ";"); got != 1 {
+			t.Errorf("%s contains %d statements, want 1", name, got)
+		}
+	}
+}
+
+func TestMySQLTaskScopeIndexUsesPortableOnlineDDL(t *testing.T) {
+	for _, direction := range []string{"up", "down"} {
+		name := "02178_mysql_task_scope_index." + direction + ".sql"
+		data, err := sqlFiles.ReadFile(filepath.Join("database/mysql", name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		sql := string(data)
+		// MySQL 8 can build this index INPLACE. MariaDB must choose its
+		// online COPY path once a virtual generated column becomes indexed.
+		if !strings.Contains(sql, "ALGORITHM=DEFAULT") || !strings.Contains(sql, "LOCK=NONE") {
+			t.Errorf("%s must let each engine choose its compatible online algorithm", name)
+		}
+		if direction == "up" && (!strings.Contains(sql, "`created_at` DESC") || !strings.Contains(sql, "`id` DESC")) {
+			t.Errorf("%s must match newest-first task pagination", name)
+		}
+		if got := strings.Count(sql, ";"); got != 1 {
+			t.Errorf("%s contains %d statements, want 1", name, got)
+		}
+	}
+}
+
+func TestMySQLHotIndexMigrationsUseOnlineDDL(t *testing.T) {
+	entries, err := sqlFiles.ReadDir("database/mysql")
+	if err != nil {
+		t.Fatalf("read mysql migrations: %v", err)
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		if entry.IsDir() || name < "02173" || name > "02176_zzzz" {
+			continue
+		}
+		data, err := sqlFiles.ReadFile(filepath.Join("database/mysql", name))
+		if err != nil {
+			t.Fatalf("read %s: %v", name, err)
+		}
+		sql := string(data)
+		if !strings.Contains(sql, "ALGORITHM=INPLACE") || !strings.Contains(sql, "LOCK=NONE") {
+			t.Errorf("%s must request online InnoDB DDL", name)
+		}
+		if got := strings.Count(sql, ";"); got != 1 {
+			t.Errorf("%s contains %d statements; each table optimization must be atomic", name, got)
+		}
+	}
+}

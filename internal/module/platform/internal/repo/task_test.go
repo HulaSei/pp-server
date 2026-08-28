@@ -2,12 +2,38 @@ package repo
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/perfect-panel/server/internal/module/platform/entity/task"
+	"gorm.io/driver/mysql"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+func TestMySQLTaskScopeFilterUsesGeneratedColumnIndexShape(t *testing.T) {
+	db, err := gorm.Open(mysql.New(mysql.Config{
+		DSN:                       "gorm:gorm@tcp(localhost:9910)/gorm?charset=utf8mb4&parseTime=true",
+		SkipInitializeWithVersion: true,
+	}), &gorm.Config{DryRun: true, DisableAutomaticPing: true})
+	if err != nil {
+		t.Fatalf("open dry-run mysql: %v", err)
+	}
+
+	scope := task.ScopeActive.Int8()
+	var rows []*task.Task
+	stmt := db.Model(&task.Task{}).
+		Where("scope_type = ?", scope).
+		Select(taskPageSelect).
+		Order("created_at DESC, id DESC").
+		Scan(&rows).Statement
+	sql := stmt.SQL.String()
+	for _, want := range []string{"scope_type = ?", "COUNT(*) OVER()", "ORDER BY created_at DESC, id DESC"} {
+		if !strings.Contains(sql, want) {
+			t.Fatalf("task query missing %q:\n%s", want, sql)
+		}
+	}
+}
 
 func TestTaskRepoActiveUpdatesAreTypeAndStateGuarded(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open("file:task-state-guards?mode=memory&cache=shared"), &gorm.Config{})
@@ -99,5 +125,9 @@ func TestTaskRepoActiveUpdatesAreTypeAndStateGuarded(t *testing.T) {
 	total, filtered, err := repo.QueryTaskList(context.Background(), &task.Filter{Type: task.TypeEmail, Page: 1, Size: 10, Scope: &scopeFilter})
 	if err != nil || total != 1 || len(filtered) != 1 {
 		t.Fatalf("database-side scope filter total=%d list=%d err=%v", total, len(filtered), err)
+	}
+	total, filtered, err = repo.QueryTaskList(context.Background(), &task.Filter{Type: task.TypeEmail, Page: 2, Size: 10, Scope: &scopeFilter})
+	if err != nil || total != 1 || len(filtered) != 0 {
+		t.Fatalf("out-of-range scope page total=%d list=%d err=%v", total, len(filtered), err)
 	}
 }

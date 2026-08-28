@@ -34,13 +34,13 @@ Logger: # Logging configuration
   MaxBackups: 3                     # Maximum number of log backups
   MaxSize: 50                       # Maximum log file size (MB)
   Rotation: "daily"                 # Log rotation strategy (daily, size)
-Database: # MySQL or PostgreSQL database configuration
+Database: # MySQL, MariaDB, or PostgreSQL database configuration
   Driver: "mysql"                   # mysql or postgres
   Addr: ""                          # Database address (required)
   Username: ""                      # Database username (required)
   Password: ""                      # Database password (required)
   Dbname: ""                        # Database name (required)
-  Config: "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"  # Dialect connection parameters
+  Config: "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai&interpolateParams=true"  # Dialect connection parameters
   MaxIdleConns: 10                  # Maximum idle connections
   MaxOpenConns: 10                  # Maximum open connections
   ConnMaxLifetime: 1800             # Maximum connection lifetime (seconds)
@@ -106,7 +106,7 @@ Administer: # Admin login configuration
 
 ### 3.4 Database (`Database`)
 
-- **`Driver`**: Database dialect: `mysql` or `postgres`.
+- **`Driver`**: Database dialect: `mysql` or `postgres`. Use `mysql` for both MySQL 8 and MariaDB 11.8.
   - Default: `mysql`.
 - **`Addr`**: Database server address.
   - Required.
@@ -117,7 +117,7 @@ Administer: # Admin login configuration
 - **`Dbname`**: Database name.
   - Required.
 - **`Config`**: Dialect-specific connection parameters.
-  - MySQL default: `charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai`.
+  - MySQL default: `charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai&interpolateParams=true`.
   - PostgreSQL default: `sslmode=disable&TimeZone=Asia%2FShanghai&application_name=perfect-panel`.
 - **`MaxIdleConns`**: Maximum idle connections.
   - Default: `10`.
@@ -152,7 +152,7 @@ The following environment variables can be used to override configuration settin
 
 | Environment Variable | Configuration Section | Example Value                                |
 |----------------------|-----------------------|----------------------------------------------|
-| `PPANEL_DB`          | MySQL                 | `root:password@tcp(localhost:3306)/vpnboard` |
+| `PPANEL_DB`          | MySQL/MariaDB          | `root:password@tcp(localhost:3306)/vpnboard` |
 | `PPANEL_REDIS`       | Redis                 | `redis://localhost:6379`                     |
 
 ## 5. Best Practices

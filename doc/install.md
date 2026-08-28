@@ -1,7 +1,7 @@
 ### Installation Instructions
 
 #### Prerequisites
-- MySQL 5.7+ (recommended: 8.0)
+- MySQL 8.0+ or MariaDB 11.8+
 - Redis 6.0+ (recommended: 7.0)
 
 #### Binary Installation

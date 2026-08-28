@@ -33,13 +33,13 @@ Logger: # 日志配置
   MaxBackups: 3                     # 最大日志备份数
   MaxSize: 50                       # 最大日志文件大小（MB）
   Rotation: "daily"                 # 日志轮转策略（daily、size）
-Database: # MySQL 或 PostgreSQL 数据库配置
+Database: # MySQL、MariaDB 或 PostgreSQL 数据库配置
   Driver: "mysql"                   # mysql 或 postgres
   Addr: ""                          # 数据库地址（必填）
   Username: ""                      # 数据库用户名（必填）
   Password: ""                      # 数据库密码（必填）
   Dbname: ""                        # 数据库名（必填）
-  Config: "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"  # 对应数据库的连接参数
+  Config: "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai&interpolateParams=true"  # 对应数据库的连接参数
   MaxIdleConns: 10                  # 最大空闲连接数
   MaxOpenConns: 10                  # 最大打开连接数
   ConnMaxLifetime: 1800             # 连接最大生命周期（秒）
@@ -105,7 +105,7 @@ Administer: # 管理员登录配置
 
 ### 3.4 数据库 (`Database`)
 
-- **`Driver`**：数据库类型，可选 `mysql` 或 `postgres`。
+- **`Driver`**：数据库类型，可选 `mysql` 或 `postgres`。MySQL 8 与 MariaDB 11.8 均使用 `mysql`。
   - 默认：`mysql`。
 - **`Addr`**：数据库服务器地址。
   - 必填。
@@ -116,7 +116,7 @@ Administer: # 管理员登录配置
 - **`Dbname`**：数据库名。
   - 必填。
 - **`Config`**：对应数据库的连接参数。
-  - MySQL 默认：`charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai`。
+  - MySQL 默认：`charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai&interpolateParams=true`。
   - PostgreSQL 默认：`sslmode=disable&TimeZone=Asia%2FShanghai&application_name=perfect-panel`。
 - **`MaxIdleConns`**：最大空闲连接数。
   - 默认：`10`。
@@ -151,7 +151,7 @@ Administer: # 管理员登录配置
 
 | 环境变量           | 配置项      | 示例值                                          |
 |----------------|----------|----------------------------------------------|
-| `PPANEL_DB`    | MySQL 配置 | `root:password@tcp(localhost:3306)/vpnboard` |
+| `PPANEL_DB`    | MySQL/MariaDB 配置 | `root:password@tcp(localhost:3306)/vpnboard` |
 | `PPANEL_REDIS` | Redis 配置 | `redis://localhost:6379`                     |
 
 ## 5. 最佳实践

@@ -20,7 +20,8 @@ const (
 	DriverPostgres  = "postgres"
 	DriverPostgres2 = "postgresql"
 
-	DefaultMySQLConfig             = "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"
+	DefaultMySQLConfig             = "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai&interpolateParams=true"
+	legacyDefaultMySQLConfig       = "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"
 	DefaultPostgresConfig          = "sslmode=disable&TimeZone=Asia%2FShanghai&application_name=perfect-panel"
 	DefaultSlowThresholdMs         = 1000
 	DefaultConnMaxLifetimeSeconds  = 1800
@@ -34,7 +35,7 @@ type Config struct {
 	Username        string `yaml:"Username"`
 	Password        string `yaml:"Password"`
 	Dbname          string `yaml:"Dbname"`
-	Config          string `yaml:"Config" default:"charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"`
+	Config          string `yaml:"Config" default:"charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai&interpolateParams=true"`
 	MaxIdleConns    int    `yaml:"MaxIdleConns" default:"10"`
 	MaxOpenConns    int    `yaml:"MaxOpenConns" default:"10"`
 	ConnMaxLifetime int64  `yaml:"ConnMaxLifetime" default:"1800"`
@@ -78,13 +79,40 @@ func (m Mysql) mysqlDsn() string {
 	query := m.Config.Config
 	if query == "" {
 		query = DefaultMySQLConfig
+	} else {
+		query = withDefaultMySQLParams(query)
 	}
 	return m.Config.Username + ":" + m.Config.Password + "@tcp(" + m.Config.Addr + ")/" + m.Config.Dbname + "?" + query
 }
 
+// withDefaultMySQLParams enables client-side placeholder interpolation only
+// for the UTF-8 connection settings the application supports by default. It
+// saves a prepare/execute/close round trip for ordinary GORM queries, while an
+// explicit false value and custom legacy multibyte character sets are left
+// untouched.
+func withDefaultMySQLParams(query string) string {
+	params, err := url.ParseQuery(query)
+	if err != nil {
+		return query
+	}
+	if _, configured := params["interpolateParams"]; configured {
+		return query
+	}
+	charset := strings.ToLower(params.Get("charset"))
+	collation := strings.ToLower(params.Get("collation"))
+	if charset != "utf8mb4" && charset != "utf8mb4,utf8" {
+		return query
+	}
+	if collation != "" && !strings.HasPrefix(collation, "utf8mb4_") && !strings.HasPrefix(collation, "utf8_") {
+		return query
+	}
+	params.Set("interpolateParams", "true")
+	return params.Encode()
+}
+
 func (m Mysql) postgresDsn() string {
 	query := m.Config.Config
-	if query == "" || query == DefaultMySQLConfig {
+	if query == "" || query == DefaultMySQLConfig || query == legacyDefaultMySQLConfig {
 		query = DefaultPostgresConfig
 	}
 	u := url.URL{
