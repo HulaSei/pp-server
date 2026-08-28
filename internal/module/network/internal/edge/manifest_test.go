@@ -31,6 +31,12 @@ func (r edgeManifestUsers) FindOne(context.Context, int64) (*userEntity.User, er
 	return r.user, nil
 }
 
+func (r edgeManifestUsers) FindAccountState(context.Context, int64) (*userEntity.AccountState, error) {
+	return &userEntity.AccountState{
+		Id: r.user.Id, Enable: r.user.Enable, UpdatedAt: r.user.UpdatedAt, DeletedAt: r.user.DeletedAt,
+	}, nil
+}
+
 type edgeManifestStore struct {
 	repository.Store
 	userSubs repository.UserSubscriptionRepo

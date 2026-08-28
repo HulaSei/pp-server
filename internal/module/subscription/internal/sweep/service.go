@@ -30,7 +30,7 @@ type Notifier interface {
 // OwnerEmailReader is the read-only identity port resolving a user's email
 // binding; the legacy user-auth repository satisfies it structurally.
 type OwnerEmailReader interface {
-	FindUserAuthMethodByUserId(ctx context.Context, method string, userId int64) (*user.AuthMethods, error)
+	FindUserAuthMethodsByUserIds(ctx context.Context, method string, userIds []int64) ([]*user.AuthMethods, error)
 }
 
 // Deps declares the subdomain's dependencies; the module facade forwards
@@ -75,7 +75,7 @@ func (s *Service) CheckSubscriptions(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) markSubscribes(ctx context.Context, status uint8, tag string, notify func(context.Context, []int64), find func(repository.SubscriptionStore) ([]*usersub.Subscribe, error)) error {
+func (s *Service) markSubscribes(ctx context.Context, status uint8, tag string, notify func(context.Context, []*usersub.Subscribe), find func(repository.SubscriptionStore) ([]*usersub.Subscribe, error)) error {
 	var list []*usersub.Subscribe
 	err := s.deps.Store.InSubscriptionTx(ctx, func(store repository.SubscriptionStore) error {
 		var err error
@@ -104,7 +104,7 @@ func (s *Service) markSubscribes(ctx context.Context, status uint8, tag string, 
 	for _, item := range list {
 		ids = append(ids, item.Id)
 	}
-	notify(ctx, ids)
+	notify(ctx, list)
 	if err := s.deps.Cache.ClearSubscribeCache(ctx, list...); err != nil {
 		logger.Errorw(tag+" Clear subscribe cache failed", logger.Field("error", err.Error()))
 	}
@@ -113,33 +113,55 @@ func (s *Service) markSubscribes(ctx context.Context, status uint8, tag string, 
 	return nil
 }
 
-// ownerEmail resolves the subscription's owner email; failures are logged
-// and skipped, matching the sweep's best-effort notification semantics.
-func (s *Service) ownerEmail(ctx context.Context, id int64) (email string, expireAt time.Time, ok bool) {
-	sub, err := s.deps.UserSubs.FindOneUserSubscribe(ctx, id)
-	if err != nil {
-		logger.Errorw("[CheckSubscription] FindOneUserSubscribe failed", logger.Field("error", err.Error()))
-		return "", time.Time{}, false
+func (s *Service) ownerEmails(ctx context.Context, subs []*usersub.Subscribe) map[int64]string {
+	if len(subs) == 0 || s.deps.Emails == nil {
+		return nil
 	}
-	method, err := s.deps.Emails.FindUserAuthMethodByUserId(ctx, "email", sub.UserId)
-	if err != nil {
-		logger.Errorw("[CheckSubscription] FindUserAuthMethodByUserId failed", logger.Field("error", err.Error()), logger.Field("user_id", sub.UserId))
-		return "", time.Time{}, false
+	userIDs := make([]int64, 0, len(subs))
+	seen := make(map[int64]struct{}, len(subs))
+	for _, sub := range subs {
+		if sub == nil || sub.UserId <= 0 {
+			continue
+		}
+		if _, ok := seen[sub.UserId]; ok {
+			continue
+		}
+		seen[sub.UserId] = struct{}{}
+		userIDs = append(userIDs, sub.UserId)
 	}
-	return method.AuthIdentifier, sub.ExpireTime, true
+	methods, err := s.deps.Emails.FindUserAuthMethodsByUserIds(ctx, "email", userIDs)
+	if err != nil {
+		logger.Errorw("[CheckSubscription] FindUserAuthMethodsByUserIds failed", logger.Field("error", err.Error()), logger.Field("user_count", len(userIDs)))
+		return nil
+	}
+	emails := make(map[int64]string, len(methods))
+	for _, method := range methods {
+		if method != nil && method.UserId > 0 && method.AuthIdentifier != "" {
+			emails[method.UserId] = method.AuthIdentifier
+		}
+	}
+	return emails
 }
 
-func (s *Service) sendExpiredNotify(ctx context.Context, subs []int64) {
-	for _, id := range subs {
-		if email, expireAt, ok := s.ownerEmail(ctx, id); ok {
-			s.deps.Notify.NotifySubscriptionExpired(ctx, email, expireAt)
+func (s *Service) sendExpiredNotify(ctx context.Context, subs []*usersub.Subscribe) {
+	emails := s.ownerEmails(ctx, subs)
+	for _, sub := range subs {
+		if sub == nil {
+			continue
+		}
+		if email := emails[sub.UserId]; email != "" {
+			s.deps.Notify.NotifySubscriptionExpired(ctx, email, sub.ExpireTime)
 		}
 	}
 }
 
-func (s *Service) sendTrafficNotify(ctx context.Context, subs []int64) {
-	for _, id := range subs {
-		if email, _, ok := s.ownerEmail(ctx, id); ok {
+func (s *Service) sendTrafficNotify(ctx context.Context, subs []*usersub.Subscribe) {
+	emails := s.ownerEmails(ctx, subs)
+	for _, sub := range subs {
+		if sub == nil {
+			continue
+		}
+		if email := emails[sub.UserId]; email != "" {
 			s.deps.Notify.NotifyTrafficExceeded(ctx, email)
 		}
 	}

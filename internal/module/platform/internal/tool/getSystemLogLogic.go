@@ -3,6 +3,7 @@ package tool
 import (
 	"context"
 	"encoding/json"
+	"sort"
 
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
@@ -27,7 +28,7 @@ func newGetSystemLogLogic(ctx context.Context, deps Deps) *GetSystemLogLogic {
 }
 
 func (l *GetSystemLogLogic) GetSystemLog() (resp *dto.LogResponse, err error) {
-	lines, err := logger.ReadLastNLines(l.deps.LogPath, 50)
+	lines, err := logger.ReadLastNLogLines(l.deps.LogPath, 50)
 	if err != nil {
 		l.Error(err)
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "get system log error: %v", err.Error())
@@ -40,6 +41,17 @@ func (l *GetSystemLogLogic) GetSystemLog() (resp *dto.LogResponse, err error) {
 			continue
 		}
 		list = append(list, log)
+	}
+	if len(lines) > 0 && len(list) == 0 {
+		return nil, errors.Wrap(xerr.NewErrCode(xerr.ERROR), "system logs are not JSON encoded")
+	}
+	sort.SliceStable(list, func(i, j int) bool {
+		left, _ := list[i]["timestamp"].(string)
+		right, _ := list[j]["timestamp"].(string)
+		return left > right
+	})
+	if len(list) > 50 {
+		list = list[:50]
 	}
 
 	return &dto.LogResponse{

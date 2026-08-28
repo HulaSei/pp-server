@@ -47,7 +47,7 @@ func (l *FilterResetSubscribeLogLogic) FilterResetSubscribeLog(req *dto.FilterRe
 		err = content.Unmarshal([]byte(item.Content))
 		if err != nil {
 			l.Errorf("[FilterResetSubscribeLog] failed to unmarshal content: %v", err.Error())
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt reset subscription log %d: %v", item.Id, err)
 		}
 		list = append(list, dto.ResetSubscribeLog{
 			Type:            content.Type,

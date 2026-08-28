@@ -141,7 +141,7 @@ func NewRepoBuilder() repository.PlatformBuilder {
 			System: repo.NewSystemRepo(conn),
 			Logs:   repo.NewLogRepo(c.DB),
 			Tasks:  repo.NewTaskRepo(c.DB),
-			Client: repo.NewClientRepo(c.DB),
+			Client: repo.NewClientRepo(conn),
 			Inbox:  repo.NewInboxRepo(c.DB),
 			Outbox: repo.NewOutboxRepo(c.DB),
 		}

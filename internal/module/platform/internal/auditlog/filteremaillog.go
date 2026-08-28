@@ -46,7 +46,7 @@ func (l *FilterEmailLogLogic) FilterEmailLog(req *dto.FilterLogParams) (resp *dt
 		err = content.Unmarshal([]byte(datum.Content))
 		if err != nil {
 			l.Errorf("[FilterEmailLog] failed to unmarshal content: %v", err.Error())
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt email log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.MessageLog{
 			Id:        datum.Id,

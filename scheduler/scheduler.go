@@ -91,6 +91,12 @@ func (m *Service) Start() {
 	if _, err := m.server.Register("0 0 * * *", trafficStatTask, asynq.MaxRetry(3)); err != nil {
 		logger.Errorf("register traffic stat task failed: %s", err.Error())
 	}
+	// Retention runs independently after daily statistics. It retries failures
+	// instead of waiting silently for the next day's statistics task.
+	logCleanupTask := asynq.NewTask(types.SchedulerLogCleanup, nil)
+	if _, err := m.server.Register("30 2 * * *", logCleanupTask, asynq.MaxRetry(3)); err != nil {
+		logger.Errorf("register log cleanup task failed: %s", err.Error())
+	}
 
 	// schedule update exchange rate task: every day at 01:00
 	rateTask := asynq.NewTask(types.SchedulerExchangeRate, nil)

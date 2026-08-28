@@ -2,6 +2,7 @@ package migrate
 
 import (
 	"embed"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -16,6 +17,34 @@ import (
 //go:embed database/mysql/*.sql database/postgres/*.sql
 var sqlFiles embed.FS
 var NoChange = migrate.ErrNoChange
+
+// Up applies every pending migration and always releases the source and
+// database drivers opened by golang-migrate. Callers previously invoked
+// Migrate(...).Up() directly and leaked the migration driver's independent
+// database connection after startup or installation.
+func Up(driver, dsn string) error {
+	return upAndClose(Migrate(driver, dsn))
+}
+
+type migrationRunner interface {
+	Up() error
+	Close() (sourceErr, databaseErr error)
+}
+
+func upAndClose(client migrationRunner) error {
+	migrateErr := client.Up()
+	sourceErr, databaseErr := client.Close()
+	closeErr := errors.Join(sourceErr, databaseErr)
+	if closeErr == nil {
+		return migrateErr
+	}
+
+	closeErr = fmt.Errorf("close migration drivers: %w", closeErr)
+	if migrateErr == nil || errors.Is(migrateErr, migrate.ErrNoChange) {
+		return closeErr
+	}
+	return errors.Join(migrateErr, closeErr)
+}
 
 func Migrate(driver, dsn string) *migrate.Migrate {
 	driver = orm.NormalizeDriver(driver)

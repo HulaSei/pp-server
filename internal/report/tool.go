@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/perfect-panel/server/pkg/constant"
@@ -71,7 +72,7 @@ func RegisterModule(port int) error {
 
 	var response RegisterResponse
 
-	client := resty.New().SetBaseURL(fmt.Sprintf("http://127.0.0.1:%d", gatewayPort))
+	client := resty.New().SetBaseURL(fmt.Sprintf("http://127.0.0.1:%d", gatewayPort)).SetTimeout(5 * time.Second)
 	result, err := client.R().SetHeader("Content-Type", "application/json").SetBody(RegisterServiceRequest{
 		Secret:         value,
 		ProxyPath:      "/api",

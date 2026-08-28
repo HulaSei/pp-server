@@ -1,10 +1,12 @@
 package svc
 
 import (
+	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/oschwald/geoip2-golang"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -54,21 +56,50 @@ func DownloadGeoIPDatabase(url, path string) error {
 		return err
 	}
 
-	// 创建文件
-	out, err := os.Create(path)
+	// Write into a sibling temporary file so a timeout or truncated response
+	// never leaves a corrupt database that blocks the next startup retry.
+	out, err := os.CreateTemp(filepath.Dir(path), ".geoip-*.tmp")
 	if err != nil {
 		return err
 	}
-	defer out.Close()
+	tempPath := out.Name()
+	committed := false
+	defer func() {
+		_ = out.Close()
+		if !committed {
+			_ = os.Remove(tempPath)
+		}
+	}()
 
 	// 请求远程文件
-	resp, err := http.Get(url)
+	client := &http.Client{Timeout: 2 * time.Minute}
+	resp, err := client.Get(url)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return fmt.Errorf("download GeoIP database: HTTP %d", resp.StatusCode)
+	}
 
 	// 保存文件
-	_, err = io.Copy(out, resp.Body)
-	return err
+	const maxGeoIPDatabaseSize = int64(256 << 20)
+	written, err := io.Copy(out, io.LimitReader(resp.Body, maxGeoIPDatabaseSize+1))
+	if err != nil {
+		return err
+	}
+	if written > maxGeoIPDatabaseSize {
+		return fmt.Errorf("download GeoIP database: response exceeds %d bytes", maxGeoIPDatabaseSize)
+	}
+	if err := out.Sync(); err != nil {
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	if err := os.Rename(tempPath, path); err != nil {
+		return err
+	}
+	committed = true
+	return nil
 }

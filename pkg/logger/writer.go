@@ -362,16 +362,18 @@ func marshalJson(t interface{}) ([]byte, error) {
 
 func output(writer io.Writer, level string, val any, fields ...LogField) {
 	val = redactValue(val)
-	// only truncate string content, don't know how to truncate the values of other types.
-	if v, ok := val.(string); ok {
-		maxLen := atomic.LoadUint32(&maxContentLength)
-		if maxLen > 0 && len(v) > int(maxLen) {
-			val = v[:maxLen]
-			fields = append(fields, truncatedField)
-		}
-	}
-
 	fields = redactFields(combineGlobalFields(fields))
+	maxLen := atomic.LoadUint32(&maxContentLength)
+	var truncated bool
+	val, truncated = limitValue(val, maxLen, 0)
+	for i := range fields {
+		var cut bool
+		fields[i].Value, cut = limitValue(fields[i].Value, maxLen, 0)
+		truncated = truncated || cut
+	}
+	if truncated {
+		fields = append(fields, truncatedField)
+	}
 	// +3 for timestamp, level and content
 	entry := make(logEntry, len(fields)+3)
 	for _, field := range fields {

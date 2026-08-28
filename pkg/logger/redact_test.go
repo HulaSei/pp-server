@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -35,7 +36,7 @@ func TestGormTraceDoesNotLogExpandedSQL(t *testing.T) {
 		writer.Store(oldWriter)
 	})
 
-	(&GormLogger{}).Trace(context.Background(), time.Now(), func() (string, int64) {
+	(&GormLogger{SlowThreshold: time.Nanosecond}).Trace(context.Background(), time.Now().Add(-time.Millisecond), func() (string, int64) {
 		return `SELECT * FROM users WHERE email = '` + secret + `'`, 1
 	}, nil)
 
@@ -45,6 +46,28 @@ func TestGormTraceDoesNotLogExpandedSQL(t *testing.T) {
 	}
 	if !strings.Contains(got, `"operation":"SELECT"`) || !strings.Contains(got, `"rows":1`) {
 		t.Fatalf("gorm trace is missing safe diagnostics: %s", got)
+	}
+}
+
+func TestGormTraceSkipsFastSuccessfulQueries(t *testing.T) {
+	setTestLogState(t, jsonEncodingType)
+	w := new(mockWriter)
+	oldWriter := writer.Swap(w)
+	t.Cleanup(func() {
+		writer.Store(oldWriter)
+	})
+
+	called := false
+	(&GormLogger{SlowThreshold: time.Second}).Trace(context.Background(), time.Now(), func() (string, int64) {
+		called = true
+		return "SELECT 1", 1
+	}, nil)
+
+	if called {
+		t.Fatal("fast query expanded SQL callback was invoked")
+	}
+	if got := w.String(); got != "" {
+		t.Fatalf("fast query produced a log entry: %s", got)
 	}
 }
 
@@ -77,6 +100,31 @@ func TestRedactTextRemovesCommonCredentialsAndEmail(t *testing.T) {
 	}
 	if !strings.Contains(got, RedactedValue) {
 		t.Fatalf("redacted text does not contain replacement marker: %s", got)
+	}
+}
+
+func TestRedactValueRecursesThroughStructuredPayloads(t *testing.T) {
+	value := map[string]any{
+		"safe": "ok",
+		"nested": map[string]any{
+			"token": "subscription-secret",
+			"note":  "contact person@example.com",
+		},
+		"items": []any{map[string]string{"password": "secret", "status": "ready"}},
+	}
+
+	redacted, ok := redactValue(value).(map[string]any)
+	if !ok {
+		t.Fatalf("redacted value has type %T", redactValue(value))
+	}
+	nested := redacted["nested"].(map[string]any)
+	if nested["token"] != RedactedValue || nested["note"] != "contact "+RedactedValue {
+		t.Fatalf("nested payload was not redacted: %#v", nested)
+	}
+	items := redacted["items"].([]any)
+	item := items[0].(map[string]string)
+	if item["password"] != RedactedValue || item["status"] != "ready" {
+		t.Fatalf("slice payload was not redacted: %#v", items)
 	}
 }
 
@@ -120,5 +168,19 @@ func TestWriterRedactsDirectFieldsAndMessagePatterns(t *testing.T) {
 	}
 	if !strings.Contains(got, `"token":"[REDACTED]"`) || !strings.Contains(got, `"status":401`) {
 		t.Fatalf("writer output is missing expected redaction or safe field: %s", got)
+	}
+}
+
+func TestWriterLimitsStructuredAndFieldValues(t *testing.T) {
+	old := atomic.SwapUint32(&maxContentLength, 4)
+	t.Cleanup(func() { atomic.StoreUint32(&maxContentLength, old) })
+
+	var output bytes.Buffer
+	w := NewWriter(&output)
+	w.Info(map[string]any{"status": "abcdefgh"}, LogField{Key: "detail", Value: "abcdefgh"})
+
+	got := output.String()
+	if strings.Contains(got, "abcdefgh") || !strings.Contains(got, `"status":"abcd"`) || !strings.Contains(got, `"detail":"abcd"`) || !strings.Contains(got, `"truncated":true`) {
+		t.Fatalf("structured values were not limited: %s", got)
 	}
 }

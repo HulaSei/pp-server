@@ -85,7 +85,7 @@ func (l *FilterServerTrafficLogLogic) FilterServerTrafficLog(req *dto.FilterServ
 			var content log.ServerTraffic
 			if err = content.Unmarshal([]byte(item.Content)); err != nil {
 				l.Errorw("[FilterServerTrafficLog] Unmarshal Error", logger.Field("error", err.Error()), logger.Field("content", item.Content))
-				continue
+				return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt server traffic log %d: %v", item.Id, err)
 			}
 
 			hasDetails := true
@@ -139,7 +139,7 @@ func (l *FilterServerTrafficLogLogic) FilterServerTrafficLog(req *dto.FilterServ
 		var content log.ServerTraffic
 		if err = content.Unmarshal([]byte(item.Content)); err != nil {
 			l.Errorw("[FilterServerTrafficLog] Unmarshal Error", logger.Field("error", err.Error()), logger.Field("content", item.Content))
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt server traffic log %d: %v", item.Id, err)
 		}
 		list = append(list, dto.ServerTrafficLog{
 			ServerId: item.ObjectID,

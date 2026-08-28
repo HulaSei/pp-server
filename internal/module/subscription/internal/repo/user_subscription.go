@@ -166,9 +166,18 @@ func (m *UserSubscriptionRepo) FindOneSubscribeForUpdate(ctx context.Context, id
 }
 
 func (m *UserSubscriptionRepo) FindUsersSubscribeBySubscribeId(ctx context.Context, subscribeId int64) ([]*usersub.Subscribe, error) {
+	return m.FindUsersSubscribeBySubscribeIds(ctx, []int64{subscribeId})
+}
+
+func (m *UserSubscriptionRepo) FindUsersSubscribeBySubscribeIds(ctx context.Context, subscribeIds []int64) ([]*usersub.Subscribe, error) {
 	var data []*usersub.Subscribe
+	if len(subscribeIds) == 0 {
+		return data, nil
+	}
 	err := m.QueryNoCacheCtx(ctx, &data, func(conn *gorm.DB, v interface{}) error {
-		return conn.Model(&usersub.Subscribe{}).Where("subscribe_id = ? AND status IN ?", subscribeId, []int64{1, 0}).Find(v).Error
+		return conn.Model(&usersub.Subscribe{}).
+			Where("subscribe_id IN ? AND status IN ?", subscribeIds, []int64{1, 0}).
+			Order("subscribe_id ASC, id ASC").Find(v).Error
 	})
 	return data, err
 }
@@ -186,9 +195,16 @@ func (m *UserSubscriptionRepo) FindUserSubscribesByStatus(ctx context.Context, s
 }
 
 func (m *UserSubscriptionRepo) ActivatePendingSubscribesBySubscribeId(ctx context.Context, subscribeId int64) error {
+	return m.ActivatePendingSubscribesBySubscribeIds(ctx, []int64{subscribeId})
+}
+
+func (m *UserSubscriptionRepo) ActivatePendingSubscribesBySubscribeIds(ctx context.Context, subscribeIds []int64) error {
+	if len(subscribeIds) == 0 {
+		return nil
+	}
 	var pending []*usersub.Subscribe
 	err := m.QueryNoCacheCtx(ctx, &pending, func(conn *gorm.DB, v interface{}) error {
-		return conn.Model(&usersub.Subscribe{}).Where("subscribe_id = ? AND status = ?", subscribeId, 0).Find(v).Error
+		return conn.Model(&usersub.Subscribe{}).Where("subscribe_id IN ? AND status = ?", subscribeIds, 0).Find(v).Error
 	})
 	if err != nil || len(pending) == 0 {
 		return err
@@ -200,7 +216,7 @@ func (m *UserSubscriptionRepo) ActivatePendingSubscribesBySubscribeId(ctx contex
 	}
 
 	return m.ExecCtx(ctx, func(conn *gorm.DB) error {
-		return conn.Model(&usersub.Subscribe{}).Where("subscribe_id = ? AND status = ?", subscribeId, 0).Update("status", 1).Error
+		return conn.Model(&usersub.Subscribe{}).Where("subscribe_id IN ? AND status = ?", subscribeIds, 0).Update("status", 1).Error
 	}, cacheKeys...)
 }
 
@@ -524,6 +540,15 @@ func (m *UserSubscriptionRepo) ClearSubscribeCache(ctx context.Context, data ...
 
 // --- subscription checks (expired / traffic exceeded) ---
 
+// activeLifecycleSubscribes deliberately keeps the fixed state set as SQL
+// literals. PostgreSQL can only use the matching partial expiry index when
+// its planner can prove the query predicate implies the index predicate; a
+// generic prepared plan with status parameters cannot make that proof.
+func activeLifecycleSubscribes(conn *gorm.DB) *gorm.DB {
+	return conn.Model(&usersub.Subscribe{}).
+		Where("status IN (0, 1) AND finished_at IS NULL")
+}
+
 func (m *UserSubscriptionRepo) FindTrafficExceededSubscribes(ctx context.Context) ([]*usersub.Subscribe, error) {
 	var list []*usersub.Subscribe
 	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
@@ -537,8 +562,8 @@ func (m *UserSubscriptionRepo) FindTrafficExceededSubscribes(ctx context.Context
 func (m *UserSubscriptionRepo) FindExpiredSubscribes(ctx context.Context, now time.Time) ([]*usersub.Subscribe, error) {
 	var list []*usersub.Subscribe
 	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
-		return conn.Model(&usersub.Subscribe{}).
-			Where("status IN ? AND expire_time < ? AND expire_time != ? AND finished_at IS NULL", []int64{0, 1}, now, time.UnixMilli(0)).
+		return activeLifecycleSubscribes(conn).
+			Where("expire_time < ? AND expire_time != ?", now, time.UnixMilli(0)).
 			Find(&list).Error
 	})
 	return list, err
@@ -550,9 +575,8 @@ func (m *UserSubscriptionRepo) FindExpiredSubscribes(ctx context.Context, now ti
 func (m *UserSubscriptionRepo) FindExpiringSubscribes(ctx context.Context, from, to time.Time) ([]*usersub.Subscribe, error) {
 	var list []*usersub.Subscribe
 	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
-		return conn.Model(&usersub.Subscribe{}).
-			Where("status IN ? AND expire_time >= ? AND expire_time < ? AND expire_time != ? AND finished_at IS NULL",
-				[]int64{0, 1}, from, to, time.UnixMilli(0)).
+		return activeLifecycleSubscribes(conn).
+			Where("expire_time >= ? AND expire_time < ? AND expire_time != ?", from, to, time.UnixMilli(0)).
 			Find(&list).Error
 	})
 	return list, err

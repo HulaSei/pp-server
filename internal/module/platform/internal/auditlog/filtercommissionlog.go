@@ -43,7 +43,7 @@ func (l *FilterCommissionLogLogic) FilterCommissionLog(req *dto.FilterCommission
 		var content log.Commission
 		if err = content.Unmarshal([]byte(datum.Content)); err != nil {
 			l.Errorf("unmarshal commission log content failed: %v", err.Error())
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt commission log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.CommissionLog{
 			UserId:    datum.ObjectID,

@@ -2,12 +2,11 @@ package auditlog
 
 import (
 	"context"
-	"reflect"
+	"strconv"
 
 	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -28,30 +27,16 @@ func newUpdateLogSettingLogic(ctx context.Context, deps Deps) *UpdateLogSettingL
 }
 
 func (l *UpdateLogSettingLogic) UpdateLogSetting(req *dto.LogSetting) error {
-	v := reflect.ValueOf(*req)
-	// Get the reflection type of the structure
-	t := v.Type()
+	if err := validateLogSetting(req); err != nil {
+		return err
+	}
 	err := l.deps.Store.InPlatformTx(l.ctx, func(store repository.PlatformStore) error {
 		systemStore := store.System()
-		for i := 0; i < v.NumField(); i++ {
-			// Get the field name
-			fieldName := t.Field(i).Name
-			// Get the field value to string
-			field := v.Field(i)
-			fieldValue := tool.ConvertValueToString(field)
-			fieldType := "string"
-			if field.Kind() == reflect.Ptr {
-				field = reflect.New(field.Type().Elem()).Elem()
-			}
-			switch field.Kind() {
-			case reflect.Bool:
-				fieldType = "bool"
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
-				fieldType = "int64"
-			}
-			if err := systemStore.UpdateValueByCategoryKey(l.ctx, "log", fieldName, fieldValue, fieldType); err != nil {
-				return err
-			}
+		if err := systemStore.UpdateValueByCategoryKey(l.ctx, "log", "AutoClear", strconv.FormatBool(*req.AutoClear), "bool"); err != nil {
+			return err
+		}
+		if err := systemStore.UpdateValueByCategoryKey(l.ctx, "log", "ClearDays", strconv.FormatInt(req.ClearDays, 10), "int64"); err != nil {
+			return err
 		}
 		return nil
 	})
@@ -64,5 +49,12 @@ func (l *UpdateLogSettingLogic) UpdateLogSetting(req *dto.LogSetting) error {
 		l.deps.OnLogSettingChanged(*req.AutoClear, req.ClearDays)
 	}
 
+	return nil
+}
+
+func validateLogSetting(req *dto.LogSetting) error {
+	if req == nil || req.AutoClear == nil || req.ClearDays < 1 || req.ClearDays > 3650 {
+		return errors.Wrap(xerr.NewErrCode(xerr.InvalidParams), "log retention requires auto_clear and clear_days between 1 and 3650")
+	}
 	return nil
 }

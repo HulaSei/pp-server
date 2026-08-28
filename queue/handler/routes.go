@@ -78,6 +78,9 @@ func RegisterHandlers(mux *asynq.ServeMux, deps Dependencies) {
 
 	// ScheduledTrafficStat
 	mux.Handle(types.SchedulerTrafficStat, traffic.NewStatLogic(deps.Traffic))
+	// ScheduledLogCleanup is independent from traffic aggregation so either
+	// task can retry without suppressing the other.
+	mux.Handle(types.SchedulerLogCleanup, traffic.NewLogCleanupLogic(deps.Traffic.Store, deps.Traffic.Log))
 
 	// ForthwithQuotaTask
 	mux.Handle(types.ForthwithQuotaTask, task.NewQuotaTaskLogic(deps.Subscription, taskRepo))

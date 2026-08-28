@@ -3,6 +3,9 @@ package log
 import (
 	"encoding/json"
 	"time"
+	"unicode/utf8"
+
+	"github.com/perfect-panel/server/pkg/logger"
 )
 
 type Type uint8
@@ -58,6 +61,27 @@ func (t Type) Uint8() uint8 {
 	return uint8(t)
 }
 
+// ExpirableTypes returns the operational log classes that may be removed by
+// the configured retention policy. Financial logs are deliberately absent:
+// balance, commission and gift entries are durable ledgers and are also used
+// by business queries, so treating them as disposable logs corrupts history.
+// Keep this as an allowlist so newly-added log types are retained by default.
+func ExpirableTypes() []int {
+	return []int{
+		int(TypeEmailMessage),
+		int(TypeMobileMessage),
+		int(TypeSubscribe),
+		int(TypeSubscribeTraffic),
+		int(TypeServerTraffic),
+		int(TypeResetSubscribe),
+		int(TypeLogin),
+		int(TypeRegister),
+		int(TypeUserTrafficRank),
+		int(TypeServerTrafficRank),
+		int(TypeTrafficStat),
+	}
+}
+
 // FilterParams log 列表查询过滤条件
 type FilterParams struct {
 	Page      int
@@ -91,16 +115,17 @@ type Message struct {
 	Content  map[string]interface{} `json:"content"`
 	Platform string                 `json:"platform"`
 	Template string                 `json:"template"`
-	Status   uint8                  `json:"status"` // 1: Sent, 2: Failed
+	Status   uint8                  `json:"status"` // 0: Attempt started, 1: Sent, 2: Failed
 }
 
 // Marshal implements the json.Marshaler interface for Message.
 func (m *Message) Marshal() ([]byte, error) {
 	type Alias Message
+	safe := Alias(sanitizeMessage(*m))
 	return json.Marshal(&struct {
 		*Alias
 	}{
-		Alias: (*Alias)(m),
+		Alias: &safe,
 	})
 }
 
@@ -108,7 +133,42 @@ func (m *Message) Marshal() ([]byte, error) {
 func (m *Message) Unmarshal(data []byte) error {
 	type Alias Message
 	aux := (*Alias)(m)
-	return json.Unmarshal(data, aux)
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	*m = sanitizeMessage(*m)
+	return nil
+}
+
+func sanitizeMessage(message Message) Message {
+	message.To = logger.RedactedValue
+	safeContent := map[string]interface{}{"redacted": true}
+	if emailType, ok := message.Content["email_type"].(string); ok && safeMessageCategory(emailType) {
+		safeContent["email_type"] = emailType
+	}
+	switch taskID := message.Content["batch_task_id"].(type) {
+	case int, int8, int16, int32, int64, uint, uint8, uint16, uint32, uint64, float32, float64:
+		safeContent["batch_task_id"] = taskID
+	}
+	message.Content = safeContent
+	if message.Template != "" {
+		message.Template = logger.RedactedValue
+	}
+	// Retain only fixed operational categories. Historical custom subjects can
+	// contain names, addresses or one-time credentials and must not be exposed.
+	if !safeMessageCategory(message.Subject) {
+		message.Subject = logger.RedactedValue
+	}
+	return message
+}
+
+func safeMessageCategory(value string) bool {
+	switch value {
+	case "verify", "maintenance", "expiration", "traffic_exceed", "custom", "register", "security", "unknown":
+		return true
+	default:
+		return false
+	}
 }
 
 // Traffic represents a subscription traffic log entry.
@@ -146,10 +206,13 @@ type Login struct {
 // Marshal implements the json.Marshaler interface for Login.
 func (l *Login) Marshal() ([]byte, error) {
 	type Alias Login
+	safe := Alias(*l)
+	safe.LoginIP = boundedRiskValue(safe.LoginIP, 255)
+	safe.UserAgent = boundedRiskValue(safe.UserAgent, 512)
 	return json.Marshal(&struct {
 		*Alias
 	}{
-		Alias: (*Alias)(l),
+		Alias: &safe,
 	})
 }
 
@@ -157,7 +220,12 @@ func (l *Login) Marshal() ([]byte, error) {
 func (l *Login) Unmarshal(data []byte) error {
 	type Alias Login
 	aux := (*Alias)(l)
-	return json.Unmarshal(data, aux)
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	l.LoginIP = boundedRiskValue(l.LoginIP, 255)
+	l.UserAgent = boundedRiskValue(l.UserAgent, 512)
+	return nil
 }
 
 // Register represents a registration log entry.
@@ -172,10 +240,14 @@ type Register struct {
 // Marshal implements the json.Marshaler interface for Register.
 func (r *Register) Marshal() ([]byte, error) {
 	type Alias Register
+	safe := Alias(*r)
+	safe.Identifier = logger.RedactedValue
+	safe.RegisterIP = boundedRiskValue(safe.RegisterIP, 255)
+	safe.UserAgent = boundedRiskValue(safe.UserAgent, 512)
 	return json.Marshal(&struct {
 		*Alias
 	}{
-		Alias: (*Alias)(r),
+		Alias: &safe,
 	})
 }
 
@@ -184,7 +256,13 @@ func (r *Register) Marshal() ([]byte, error) {
 func (r *Register) Unmarshal(data []byte) error {
 	type Alias Register
 	aux := (*Alias)(r)
-	return json.Unmarshal(data, aux)
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	r.Identifier = logger.RedactedValue
+	r.RegisterIP = boundedRiskValue(r.RegisterIP, 255)
+	r.UserAgent = boundedRiskValue(r.UserAgent, 512)
+	return nil
 }
 
 // Subscribe represents a subscription log entry.
@@ -198,10 +276,14 @@ type Subscribe struct {
 // Marshal implements the json.Marshaler interface for Subscribe.
 func (s *Subscribe) Marshal() ([]byte, error) {
 	type Alias Subscribe
+	safe := Alias(*s)
+	safe.Token = logger.RedactedValue
+	safe.UserAgent = boundedRiskValue(safe.UserAgent, 512)
+	safe.ClientIP = boundedRiskValue(safe.ClientIP, 255)
 	return json.Marshal(&struct {
 		*Alias
 	}{
-		Alias: (*Alias)(s),
+		Alias: &safe,
 	})
 }
 
@@ -209,7 +291,27 @@ func (s *Subscribe) Marshal() ([]byte, error) {
 func (s *Subscribe) Unmarshal(data []byte) error {
 	type Alias Subscribe
 	aux := (*Alias)(s)
-	return json.Unmarshal(data, aux)
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	s.Token = logger.RedactedValue
+	s.UserAgent = boundedRiskValue(s.UserAgent, 512)
+	s.ClientIP = boundedRiskValue(s.ClientIP, 255)
+	return nil
+}
+
+// boundedRiskValue retains exact request metadata used by risk analysis while
+// preventing attacker-controlled headers from growing an audit row without
+// bound. The limits match the existing user_device storage contract.
+func boundedRiskValue(value string, maxBytes int) string {
+	if maxBytes <= 0 || len(value) <= maxBytes {
+		return value
+	}
+	value = value[:maxBytes]
+	for len(value) > 0 && !utf8.ValidString(value) {
+		value = value[:len(value)-1]
+	}
+	return value
 }
 
 // ResetSubscribe represents a reset subscription log entry.

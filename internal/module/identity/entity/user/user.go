@@ -30,6 +30,15 @@ type User struct {
 	DeletedAt             gorm.DeletedAt `gorm:"index;comment:Deletion Time"`
 }
 
+// AccountState is the minimal account gate used on request hot paths that do
+// not need credentials, devices, notification settings, or auth methods.
+type AccountState struct {
+	Id        int64
+	Enable    *bool
+	UpdatedAt time.Time
+	DeletedAt gorm.DeletedAt
+}
+
 func (*User) TableName() string {
 	return "user"
 }

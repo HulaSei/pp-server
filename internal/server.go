@@ -95,11 +95,11 @@ func (m *Service) Start() {
 	if m.server == nil {
 		return
 	}
-	trace.StartAgent(trace.Config{
-		Name:    "ppanel",
-		Sampler: 1.0,
-		Batcher: "",
-	})
+	traceConfig := runtimeConfig.Trace
+	if traceConfig.Name == "" {
+		traceConfig.Name = trace.TraceName
+	}
+	trace.StartAgent(traceConfig)
 	proc.AddShutdownListener(func() {
 		trace.StopAgent()
 	})

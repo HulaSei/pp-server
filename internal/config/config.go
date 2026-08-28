@@ -5,6 +5,7 @@ import (
 
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/orm"
+	"github.com/perfect-panel/server/pkg/trace"
 )
 
 type Config struct {
@@ -17,6 +18,7 @@ type Config struct {
 	TLS           TLS                 `yaml:"TLS"`
 	JwtAuth       JwtAuth             `yaml:"JwtAuth"`
 	Logger        logger.LogConf      `yaml:"Logger"`
+	Trace         trace.Config        `yaml:"Trace"`
 	Database      orm.Config          `yaml:"Database"`
 	MySQL         *orm.Config         `yaml:"MySQL,omitempty"` // Deprecated: use Database.
 	Redis         RedisConfig         `yaml:"Redis"`
@@ -268,6 +270,7 @@ type File struct {
 	Debug         bool                `yaml:"Debug" default:"true"`
 	JwtAuth       JwtAuth             `yaml:"JwtAuth"`
 	Logger        logger.LogConf      `yaml:"Logger"`
+	Trace         trace.Config        `yaml:"Trace"`
 	Database      orm.Config          `yaml:"Database"`
 	MySQL         *orm.Config         `yaml:"MySQL,omitempty"` // Deprecated: use Database.
 	Redis         RedisConfig         `yaml:"Redis"`

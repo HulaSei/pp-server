@@ -52,30 +52,39 @@ func (l *SendSmsLogic) ProcessTask(ctx context.Context, task *asynq.Task) error 
 		return err
 	}
 	createSms := newSMSMessageLog(l.deps.Mobile().Platform, payload.Type)
+	content, marshalErr := createSms.Marshal()
+	if marshalErr != nil {
+		return marshalErr
+	}
+	audit := &log.SystemLog{
+		Type:     log.TypeMobileMessage.Uint8(),
+		Date:     timeutil.Now().Format("2006-01-02"),
+		ObjectID: 0,
+		Content:  string(content),
+	}
+	// Record the attempt before contacting the provider so a storage failure
+	// cannot produce a successful but unaudited SMS delivery.
+	if err = l.deps.Store.Log().Insert(ctx, audit); err != nil {
+		logger.WithContext(ctx).Error("[SendSmsLogic] Insert sms log failed", logger.Field("error", err.Error()))
+		return err
+	}
 	err = client.SendCode(payload.TelephoneArea, payload.Telephone, payload.Content)
 
 	if err != nil {
 		logger.WithContext(ctx).Error("[SendSmsLogic] Send sms failed", logger.Field("error", err.Error()), logger.Field("payload", payload))
-		if l.deps.Model() != constant.DevMode {
-			createSms.Status = 2
-		} else {
-			return nil
-		}
+		createSms.Status = 2
 	} else {
 		createSms.Status = 1
 	}
 	logger.WithContext(ctx).Info("[SendSmsLogic] Send sms", logger.Field("telephone", payload.Telephone), logger.Field("content", createSms.Content))
 
-	content, _ := createSms.Marshal()
-	err = l.deps.Store.Log().Insert(ctx, &log.SystemLog{
-		Type:     log.TypeMobileMessage.Uint8(),
-		Date:     timeutil.Now().Format("2006-01-02"),
-		ObjectID: 0,
-		Content:  string(content),
-	})
-	if err != nil {
-		logger.WithContext(ctx).Error("[SendSmsLogic] Send sms failed", logger.Field("error", err.Error()), logger.Field("payload", payload))
+	content, marshalErr = createSms.Marshal()
+	if marshalErr != nil {
 		return nil
+	}
+	audit.Content = string(content)
+	if updateErr := l.deps.Store.Log().Update(ctx, audit); updateErr != nil {
+		logger.WithContext(ctx).Error("[SendSmsLogic] Finalize sms log failed", logger.Field("error", updateErr.Error()), logger.Field("log_id", audit.Id))
 	}
 	return nil
 }

@@ -57,7 +57,7 @@ func SubscribeHandler(deps SubscribeDeps) app.HandlerFunc {
 				return
 			}
 			if strings.ToLower(short) != strings.ToLower(domainArr[0]) {
-				logger.WithContext(c).Debugf("[SubscribeHandler] short token mismatch, short: %s, domain: %s", short, domainArr[0])
+				logger.WithContext(c).Debug("[SubscribeHandler] short token mismatch")
 				ctx.String(consts.StatusForbidden, "Access denied")
 				return
 			}

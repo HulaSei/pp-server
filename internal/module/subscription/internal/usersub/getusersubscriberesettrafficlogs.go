@@ -43,7 +43,7 @@ func (l *GetUserSubscribeResetTrafficLogsLogic) GetUserSubscribeResetTrafficLogs
 		var content log.ResetSubscribe
 		if err = content.Unmarshal([]byte(item.Content)); err != nil {
 			l.Errorf("[ResetSubscribeTrafficLog] failed to unmarshal log: %v", err)
-			continue
+			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt reset subscription log %d: %v", item.Id, err)
 		}
 		list = append(list, dto.ResetSubscribeTrafficLog{
 			Id:              item.Id,

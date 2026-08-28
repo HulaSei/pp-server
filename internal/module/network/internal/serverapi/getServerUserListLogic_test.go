@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/gofrs/uuid/v5"
-	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 )
 
 func TestPlaceholderServerUserIsStable(t *testing.T) {
@@ -30,26 +29,5 @@ func TestPlaceholderServerUserIsStable(t *testing.T) {
 	}
 	if first.UUID == otherSecret.UUID {
 		t.Fatalf("placeholder uuid should include node secret: %s", first.UUID)
-	}
-}
-
-func TestMergeSubscribeLists(t *testing.T) {
-	sub1 := &subscribe.Subscribe{Id: 1}
-	sub2 := &subscribe.Subscribe{Id: 2}
-	sub3 := &subscribe.Subscribe{Id: 3}
-
-	got := mergeSubscribeLists(
-		[]*subscribe.Subscribe{sub1, sub2, nil},
-		[]*subscribe.Subscribe{sub2, sub3},
-		[]*subscribe.Subscribe{sub1},
-	)
-
-	if len(got) != 3 {
-		t.Fatalf("mergeSubscribeLists() len = %d, want 3", len(got))
-	}
-	for i, wantID := range []int64{1, 2, 3} {
-		if got[i].Id != wantID {
-			t.Fatalf("mergeSubscribeLists()[%d].Id = %d, want %d", i, got[i].Id, wantID)
-		}
 	}
 }

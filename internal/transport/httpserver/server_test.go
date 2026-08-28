@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	appconfig "github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/module/platform"
 	"github.com/perfect-panel/server/internal/route"
 )
 
@@ -89,12 +90,13 @@ func TestCorsPreflightBypassesServerSecretMiddleware(t *testing.T) {
 }
 
 func newTestServer(secret string) *Server {
+	platformService := platform.New(platform.Deps{})
 	return New(Dependencies{
 		Routes: route.Dependencies{Config: appconfig.Config{
 			Node: appconfig.NodeConfig{
 				NodeSecret: secret,
 			},
-		}},
+		}, Platform: platformService},
 	}, "127.0.0.1:0", nil)
 }
 

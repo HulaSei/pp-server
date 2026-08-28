@@ -16,6 +16,7 @@ import (
 // Cache key prefixes shared with the user entity's key derivation.
 const (
 	cacheUserIdPrefix           = "cache:user:id:"
+	cacheUserStatePrefix        = "cache:user:state:"
 	cacheUserEmailPrefix        = "cache:user:email:v2:"
 	cacheUserDeviceNumberPrefix = "cache:user:device:number:"
 	cacheUserDeviceIdPrefix     = "cache:user:device:id:"

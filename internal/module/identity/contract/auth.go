@@ -83,6 +83,7 @@ type OAthLoginRequest struct {
 type OAuthLoginGetTokenRequest struct {
 	Method   string      `json:"method" validate:"required"` // google, facebook, apple, telegram, github etc.
 	Callback interface{} `json:"callback" validate:"required"`
+	Invite   string      `json:"invite,optional"`
 	CfToken  string      `json:"cf_token,optional"`
 }
 

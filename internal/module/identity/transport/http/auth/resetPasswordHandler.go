@@ -39,6 +39,7 @@ func ResetPasswordHandler(service identity.Service, verifyConfig func() config.V
 		}
 		// get client ip
 		req.IP = c.ClientIP()
+		req.UserAgent = string(c.UserAgent())
 		verify := verifyConfig()
 		if verify.ResetPasswordVerify {
 			verifyTurns := turnstile.New(turnstile.Config{

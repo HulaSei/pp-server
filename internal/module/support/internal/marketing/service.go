@@ -5,6 +5,7 @@ package marketing
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"math"
 	"net/mail"
@@ -49,6 +50,12 @@ type Queue interface {
 // BatchEmailStopper aborts a running batch-email worker, if any.
 type BatchEmailStopper interface {
 	StopBatchEmail(taskID int64)
+}
+
+type emailTaskError struct {
+	Error string `json:"error"`
+	Email string `json:"email"`
+	Time  int64  `json:"time"`
 }
 
 type Service struct {
@@ -173,18 +180,30 @@ func (s *Service) GetPreSendEmailCount(ctx context.Context, req *dto.GetPreSendE
 		return nil, xerr.NewErrMsg("registration timestamps must not be negative")
 	}
 	scope := task.ParseScopeType(req.Scope)
-	emails, err := s.recipients.QueryEmailRecipients(ctx, &user.EmailRecipientFilter{
+	filter := &user.EmailRecipientFilter{
 		Scope:             scope.Int8(),
 		RegisterStartTime: req.RegisterStartTime,
 		RegisterEndTime:   req.RegisterEndTime,
-	})
-	if err != nil {
-		logger.WithContext(ctx).Errorf("[GetPreSendEmailCount] Count error: %v", err)
-		return nil, xerr.NewErrMsg("Failed to count emails")
 	}
 	additional, err := normalizeAdditionalEmails(req.Additional)
 	if err != nil {
 		return nil, xerr.NewErrMsg(err.Error())
+	}
+	if len(additional) == 0 {
+		count, err := s.recipients.CountEmailRecipients(ctx, filter)
+		if err != nil {
+			logger.WithContext(ctx).Errorf("[GetPreSendEmailCount] Count error: %v", err)
+			return nil, xerr.NewErrMsg("Failed to count emails")
+		}
+		return &dto.GetPreSendEmailCountResponse{Count: count}, nil
+	}
+	// Exact de-duplication against manually supplied addresses still requires
+	// the matching identifiers. The common no-additional-address path above is
+	// a pure COUNT and no longer materializes the whole campaign.
+	emails, err := s.recipients.QueryEmailRecipients(ctx, filter)
+	if err != nil {
+		logger.WithContext(ctx).Errorf("[GetPreSendEmailCount] Count error: %v", err)
+		return nil, xerr.NewErrMsg("Failed to count emails")
 	}
 	count := len(tool.RemoveDuplicateElements(append(emails, additional...)...))
 	return &dto.GetPreSendEmailCountResponse{Count: int64(count)}, nil
@@ -212,6 +231,21 @@ func (s *Service) GetBatchSendEmailTaskList(ctx context.Context, req *dto.GetBat
 		log.Errorf("failed to get email tasks: %v", err)
 		return nil, xerr.NewErrCode(xerr.DatabaseQueryError)
 	}
+	taskIDs := make([]int64, 0, len(tasks))
+	for _, item := range tasks {
+		taskIDs = append(taskIDs, item.Id)
+	}
+	taskErrors, err := s.tasks.FindErrors(ctx, taskIDs)
+	if err != nil {
+		log.Errorf("failed to get email task errors: %v", err)
+		return nil, xerr.NewErrCode(xerr.DatabaseQueryError)
+	}
+	errorsByTask := make(map[int64][]emailTaskError, len(taskIDs))
+	for _, item := range taskErrors {
+		errorsByTask[item.TaskId] = append(errorsByTask[item.TaskId], emailTaskError{
+			Error: item.Error, Email: item.Target, Time: item.OccurredAt,
+		})
+	}
 
 	list := make([]dto.BatchSendEmailTask, 0)
 	for _, t := range tasks {
@@ -226,6 +260,14 @@ func (s *Service) GetBatchSendEmailTaskList(ctx context.Context, req *dto.GetBat
 			return nil, xerr.NewErrCode(xerr.DatabaseQueryError)
 		}
 
+		errorText := t.Errors
+		if entries := errorsByTask[t.Id]; len(entries) > 0 {
+			encoded, marshalErr := json.Marshal(entries)
+			if marshalErr != nil {
+				return nil, errors.Wrap(marshalErr, "marshal email task errors")
+			}
+			errorText = string(encoded)
+		}
 		list = append(list, dto.BatchSendEmailTask{
 			Id:                t.Id,
 			Subject:           contentInfo.Subject,
@@ -239,7 +281,7 @@ func (s *Service) GetBatchSendEmailTaskList(ctx context.Context, req *dto.GetBat
 			Interval:          scopeInfo.Interval,
 			Limit:             scopeInfo.Limit,
 			Status:            uint8(t.Status),
-			Errors:            t.Errors,
+			Errors:            errorText,
 			Total:             t.Total,
 			Current:           t.Current,
 			CreatedAt:         t.CreatedAt.UnixMilli(),
@@ -259,11 +301,28 @@ func (s *Service) GetBatchSendEmailTaskStatus(ctx context.Context, req *dto.GetB
 		logger.WithContext(ctx).Errorf("failed to get email task status, error: %v", err)
 		return nil, xerr.NewErrCode(xerr.DatabaseQueryError)
 	}
+	errorText := taskInfo.Errors
+	taskErrors, err := s.tasks.FindErrors(ctx, []int64{taskInfo.Id})
+	if err != nil {
+		logger.WithContext(ctx).Errorf("failed to get email task errors, error: %v", err)
+		return nil, xerr.NewErrCode(xerr.DatabaseQueryError)
+	}
+	if len(taskErrors) > 0 {
+		entries := make([]emailTaskError, 0, len(taskErrors))
+		for _, item := range taskErrors {
+			entries = append(entries, emailTaskError{Error: item.Error, Email: item.Target, Time: item.OccurredAt})
+		}
+		encoded, marshalErr := json.Marshal(entries)
+		if marshalErr != nil {
+			return nil, errors.Wrap(marshalErr, "marshal email task errors")
+		}
+		errorText = string(encoded)
+	}
 	return &dto.GetBatchSendEmailTaskStatusResponse{
 		Status:  uint8(taskInfo.Status),
 		Total:   int64(taskInfo.Total),
 		Current: int64(taskInfo.Current),
-		Errors:  taskInfo.Errors,
+		Errors:  errorText,
 	}, nil
 }
 

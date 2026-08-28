@@ -11,8 +11,6 @@ import (
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
 type CurrentUserLogic struct {
@@ -37,7 +35,7 @@ func (l *CurrentUserLogic) CurrentUser() (*dto.User, error) {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
 	}
 
-	l.Logger.Info("current user", zap.Field{Key: "userId", Type: zapcore.Int64Type, Integer: u.Id})
+	l.Logger.Infow("current user", logger.Field("user_id", u.Id))
 	tool.DeepCopy(resp, u)
 	// The context user is the middleware's cached identity row; wallet
 	// values come from the billing-owned table, and a read failure fails

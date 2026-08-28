@@ -163,7 +163,7 @@ func handleInitConfig(_ context.Context, ctx *app.RequestContext) {
 		defer sqlDB.Close()
 	}
 	// migrate database
-	if err = migrate.Migrate(dbClient.Driver(), dbClient.MigrationDsn()).Up(); err != nil {
+	if err = migrate.Up(dbClient.Driver(), dbClient.MigrationDsn()); err != nil {
 		logger.Errorf("[Init Database] Migrate failed: %v", err.Error())
 		ctx.JSON(http.StatusOK, utils.H{
 			"code": 500,
@@ -286,14 +286,16 @@ func buildDatabaseConfig(driver, host, port, database, user, password string) (o
 		return orm.Config{}, fmt.Errorf("unsupported database driver: %s", driver)
 	}
 	cfg := orm.Config{
-		Driver:        normalizedDriver,
-		Addr:          fmt.Sprintf("%s:%s", host, port),
-		Username:      user,
-		Password:      password,
-		Dbname:        database,
-		MaxIdleConns:  10,
-		MaxOpenConns:  10,
-		SlowThreshold: orm.DefaultSlowThresholdMs,
+		Driver:          normalizedDriver,
+		Addr:            fmt.Sprintf("%s:%s", host, port),
+		Username:        user,
+		Password:        password,
+		Dbname:          database,
+		MaxIdleConns:    10,
+		MaxOpenConns:    10,
+		ConnMaxLifetime: orm.DefaultConnMaxLifetimeSeconds,
+		ConnMaxIdleTime: orm.DefaultConnMaxIdleTimeSeconds,
+		SlowThreshold:   orm.DefaultSlowThresholdMs,
 	}
 	if normalizedDriver == orm.DriverPostgres {
 		cfg.Config = orm.DefaultPostgresConfig

@@ -29,6 +29,16 @@ func (m *logRepo) Insert(ctx context.Context, data *log.SystemLog) error {
 	return m.WithContext(ctx).Create(data).Error
 }
 
+func (m *logRepo) InsertBatch(ctx context.Context, data []*log.SystemLog, batchSize int) error {
+	if len(data) == 0 {
+		return nil
+	}
+	if batchSize <= 0 {
+		batchSize = 1000
+	}
+	return m.WithContext(ctx).CreateInBatches(data, batchSize).Error
+}
+
 func (m *logRepo) FindOne(ctx context.Context, id int64) (*log.SystemLog, error) {
 	var data log.SystemLog
 	err := m.WithContext(ctx).Where("id = ?", id).First(&data).Error
@@ -110,8 +120,26 @@ func (m *logRepo) FindByDatesType(ctx context.Context, dates []string, typ uint8
 // DeleteBefore deletes system logs whose date is before the given end date.
 func (m *logRepo) DeleteBefore(ctx context.Context, end time.Time) error {
 	return m.WithContext(ctx).
-		Where("date < ?", end.Format(time.DateOnly)).
+		Where("date < ? AND type IN ?", end.Format(time.DateOnly), log.ExpirableTypes()).
 		Delete(&log.SystemLog{}).Error
+}
+
+func (m *logRepo) DeleteBeforeBatch(ctx context.Context, end time.Time, limit int) (int64, error) {
+	if limit <= 0 {
+		return 0, nil
+	}
+	var ids []int64
+	if err := m.WithContext(ctx).Model(&log.SystemLog{}).
+		Select("id").
+		Where("date < ? AND type IN ?", end.Format(time.DateOnly), log.ExpirableTypes()).
+		Order("id ASC").Limit(limit).Pluck("id", &ids).Error; err != nil {
+		return 0, err
+	}
+	if len(ids) == 0 {
+		return 0, nil
+	}
+	result := m.WithContext(ctx).Where("id IN ?", ids).Delete(&log.SystemLog{})
+	return result.RowsAffected, result.Error
 }
 
 // SumAmountByTypeAndObjectID returns the sum of the "amount" field extracted from JSON content

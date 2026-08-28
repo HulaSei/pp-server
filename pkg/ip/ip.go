@@ -8,11 +8,11 @@ import (
 	"net"
 	"net/http"
 	"strings"
-
-	"go.uber.org/zap"
+	"time"
 
 	"github.com/andybalholm/brotli"
 	"github.com/klauspost/compress/zstd"
+	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/pkg/errors"
 )
 
@@ -51,6 +51,7 @@ var (
 		ipwhois: true,
 		ipinfo:  true,
 	}
+	geoHTTPClient = &http.Client{Timeout: 4 * time.Second}
 )
 
 // GetRegionByIp queries the geolocation of an IP address using supported services.
@@ -59,7 +60,7 @@ func GetRegionByIp(ip string) (*GeoLocationResponse, error) {
 		if enabled {
 			response, err := fetchGeolocation(service, ip)
 			if err != nil {
-				zap.S().Errorf("Failed to fetch geolocation from %s: %v", service, err)
+				logger.Errorw("IP geolocation lookup failed", logger.Field("service", service), logger.Field("error", err))
 				continue
 			}
 			return response, nil
@@ -95,12 +96,14 @@ func fetchGeolocation(service, ip string) (*GeoLocationResponse, error) {
 	setHeaders(req, service)
 
 	// Create the HTTP client and send the request.
-	client := &http.Client{}
-	resp, err := client.Do(req)
+	resp, err := geoHTTPClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to send request: %v", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("geolocation service returned HTTP %d", resp.StatusCode)
+	}
 
 	// Decompress the response body based on Content-Encoding.
 	body, err := decompressResponse(resp)
@@ -164,7 +167,7 @@ func decompressResponse(resp *http.Response) ([]byte, error) {
 	}
 	defer reader.Close()
 
-	return io.ReadAll(reader)
+	return io.ReadAll(io.LimitReader(reader, 1<<20))
 }
 
 // GeoLocationResponse represents the geolocation data returned by the API.

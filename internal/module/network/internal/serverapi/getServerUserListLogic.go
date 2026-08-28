@@ -47,52 +47,8 @@ func placeholderServerUser(serverID int64, protocol, secret string) dto.ServerUs
 	}
 }
 
-func mergeSubscribeLists(lists ...[]*subscribe.Subscribe) []*subscribe.Subscribe {
-	seen := make(map[int64]struct{})
-	result := make([]*subscribe.Subscribe, 0)
-	for _, list := range lists {
-		for _, item := range list {
-			if item == nil {
-				continue
-			}
-			if _, ok := seen[item.Id]; ok {
-				continue
-			}
-			seen[item.Id] = struct{}{}
-			result = append(result, item)
-		}
-	}
-	return result
-}
-
 func (l *GetServerUserListLogic) queryMatchedSubscribes(nodeIds []int64, nodeTags []string) ([]*subscribe.Subscribe, error) {
-	var lists [][]*subscribe.Subscribe
-	if len(nodeIds) > 0 {
-		_, subs, err := l.deps.Store.Subscribe().FilterList(l.ctx, &subscribe.FilterParams{
-			Page: 1,
-			Size: 9999,
-			Node: nodeIds,
-		})
-		if err != nil {
-			return nil, err
-		}
-		lists = append(lists, subs)
-	}
-
-	nodeTags = tool.RemoveDuplicateElements(nodeTags...)
-	if len(nodeTags) > 0 {
-		_, subs, err := l.deps.Store.Subscribe().FilterList(l.ctx, &subscribe.FilterParams{
-			Page: 1,
-			Size: 9999,
-			Tags: nodeTags,
-		})
-		if err != nil {
-			return nil, err
-		}
-		lists = append(lists, subs)
-	}
-
-	return mergeSubscribeLists(lists...), nil
+	return l.deps.Store.Subscribe().FindByNodeScope(l.ctx, nodeIds, nodeTags)
 }
 
 func (l *GetServerUserListLogic) GetServerUserList(req *dto.GetServerUserListRequest) (resp *dto.GetServerUserListResponse, err error) {
@@ -122,9 +78,7 @@ func (l *GetServerUserListLogic) GetServerUserList(req *dto.GetServerUserListReq
 		return nil, err
 	}
 
-	_, nodes, err := l.deps.Store.Node().FilterNodeList(l.ctx, &node.FilterNodeParams{
-		Page:     1,
-		Size:     1000,
+	nodes, err := l.deps.Store.Node().ListNodes(l.ctx, &node.FilterNodeParams{
 		ServerId: []int64{server.Id},
 		Protocol: req.Protocol,
 	})
@@ -156,17 +110,23 @@ func (l *GetServerUserListLogic) GetServerUserList(req *dto.GetServerUserListReq
 		userSub *usersub.Subscribe
 		plan    *subscribe.Subscribe
 	}
-	candidates := make([]candidate, 0)
+	planIDs := make([]int64, 0, len(subs))
+	plansByID := make(map[int64]*subscribe.Subscribe, len(subs))
 	for _, sub := range subs {
-		if err := l.deps.Store.UserSubscription().ActivatePendingSubscribesBySubscribeId(l.ctx, sub.Id); err != nil {
-			return nil, err
-		}
-		data, err := l.deps.Store.UserSubscription().FindUsersSubscribeBySubscribeId(l.ctx, sub.Id)
-		if err != nil {
-			return nil, err
-		}
-		for _, datum := range data {
-			candidates = append(candidates, candidate{userSub: datum, plan: sub})
+		planIDs = append(planIDs, sub.Id)
+		plansByID[sub.Id] = sub
+	}
+	if err := l.deps.Store.UserSubscription().ActivatePendingSubscribesBySubscribeIds(l.ctx, planIDs); err != nil {
+		return nil, err
+	}
+	data, err := l.deps.Store.UserSubscription().FindUsersSubscribeBySubscribeIds(l.ctx, planIDs)
+	if err != nil {
+		return nil, err
+	}
+	candidates := make([]candidate, 0, len(data))
+	for _, datum := range data {
+		if plan := plansByID[datum.SubscribeId]; plan != nil {
+			candidates = append(candidates, candidate{userSub: datum, plan: plan})
 		}
 	}
 	userIDs := make([]int64, 0, len(candidates))

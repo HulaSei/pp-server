@@ -1,8 +1,8 @@
 package orm
 
 import (
+	"net/url"
 	"os"
-	"strings"
 	"testing"
 )
 
@@ -14,6 +14,120 @@ func TestParseMySQLDSN(t *testing.T) {
 	if cfg.Driver != DriverMySQL || cfg.Addr != "localhost:3306" || cfg.Dbname != "ppanel" || cfg.Username != "root" {
 		t.Fatalf("unexpected config: %+v", cfg)
 	}
+	query, err := mysqlDSNQuery(Mysql{Config: *cfg}.Dsn())
+	if err != nil {
+		t.Fatalf("parse generated mysql dsn: %v", err)
+	}
+	if got := query.Get("interpolateParams"); got != "true" {
+		t.Fatalf("mysql interpolateParams = %q, want true", got)
+	}
+}
+
+func TestMySQLDSNPreservesInterpolationOverrideAndUnsafeCharset(t *testing.T) {
+	tests := []struct {
+		name   string
+		config string
+		want   string
+	}{
+		{name: "explicit false", config: legacyDefaultMySQLConfig + "&interpolateParams=false", want: "false"},
+		{name: "legacy utf8 default", config: legacyDefaultMySQLConfig, want: "true"},
+		{name: "custom legacy charset", config: "charset=gbk&parseTime=true", want: ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			query, err := mysqlDSNQuery((Mysql{Config: Config{
+				Driver: DriverMySQL, Addr: "localhost:3306", Dbname: "ppanel",
+				Username: "root", Password: "password", Config: tt.config,
+			}}).Dsn())
+			if err != nil {
+				t.Fatalf("parse generated mysql dsn: %v", err)
+			}
+			if got := query.Get("interpolateParams"); got != tt.want {
+				t.Fatalf("interpolateParams = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseMySQLDSNPreservesDriverOptions(t *testing.T) {
+	cfg := ParseDSN("root:password@tcp(localhost:3306)/ppanel?charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai&interpolateParams=false&readTimeout=3s")
+	if cfg == nil {
+		t.Fatal("config is nil")
+	}
+	query, err := mysqlDSNQuery(Mysql{Config: *cfg}.Dsn())
+	if err != nil {
+		t.Fatalf("parse generated mysql dsn: %v", err)
+	}
+	if got := query.Get("interpolateParams"); got != "false" {
+		t.Fatalf("interpolateParams = %q, want false", got)
+	}
+	if got := query.Get("readTimeout"); got != "3s" {
+		t.Fatalf("readTimeout = %q, want 3s", got)
+	}
+}
+
+func TestParseMySQLDSNDoesNotTreatPasswordQuestionMarkAsOptions(t *testing.T) {
+	cfg := ParseDSN("root:secret?interpolateParams=false@tcp(localhost:3306)/ppanel")
+	if cfg == nil {
+		t.Fatal("config is nil")
+	}
+	if cfg.Password != "secret?interpolateParams=false" {
+		t.Fatalf("password = %q, want embedded question mark preserved", cfg.Password)
+	}
+	query, err := mysqlDSNQuery(Mysql{Config: *cfg}.Dsn())
+	if err != nil {
+		t.Fatalf("parse generated mysql dsn: %v", err)
+	}
+	if got := query.Get("interpolateParams"); got != "true" {
+		t.Fatalf("interpolateParams = %q, want safe default true", got)
+	}
+}
+
+func TestParseMySQLURLDSNAppliesOnlySafeInterpolationDefault(t *testing.T) {
+	tests := []struct {
+		name string
+		dsn  string
+		want string
+	}{
+		{
+			name: "utf8mb4",
+			dsn:  "mysql://root:password@localhost:3306/ppanel?charset=utf8mb4&parseTime=true",
+			want: "true",
+		},
+		{
+			name: "explicit false",
+			dsn:  "mysql://root:password@localhost:3306/ppanel?charset=utf8mb4&interpolateParams=false",
+			want: "false",
+		},
+		{
+			name: "legacy charset",
+			dsn:  "mysql://root:password@localhost:3306/ppanel?charset=gbk",
+			want: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := ParseDSN(tt.dsn)
+			if cfg == nil {
+				t.Fatal("config is nil")
+			}
+			query, err := url.ParseQuery(cfg.Config)
+			if err != nil {
+				t.Fatalf("parse config query: %v", err)
+			}
+			if got := query.Get("interpolateParams"); got != tt.want {
+				t.Fatalf("interpolateParams = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
+func mysqlDSNQuery(dsn string) (url.Values, error) {
+	rawQuery := mysqlDSNRawQuery(dsn)
+	if rawQuery == "" {
+		return nil, nil
+	}
+	return url.ParseQuery(rawQuery)
 }
 
 func TestParsePostgresDSN(t *testing.T) {
@@ -26,8 +140,36 @@ func TestParsePostgresDSN(t *testing.T) {
 	}
 
 	dsn := Mysql{Config: *cfg}.Dsn()
-	if want := "TimeZone=Asia/Shanghai"; !strings.Contains(dsn, want) {
-		t.Fatalf("postgres dsn %q does not contain %q", dsn, want)
+	parsed, err := url.Parse(dsn)
+	if err != nil {
+		t.Fatalf("parse generated postgres dsn: %v", err)
+	}
+	if got := parsed.Query().Get("TimeZone"); got != "Asia/Shanghai" {
+		t.Fatalf("postgres TimeZone = %q, want Asia/Shanghai", got)
+	}
+	if got := parsed.Query().Get("application_name"); got != defaultPostgresApplicationName {
+		t.Fatalf("postgres application_name = %q, want %q", got, defaultPostgresApplicationName)
+	}
+	if cfg.ConnMaxLifetime != DefaultConnMaxLifetimeSeconds || cfg.ConnMaxIdleTime != DefaultConnMaxIdleTimeSeconds {
+		t.Fatalf("postgres pool lifetimes = (%d, %d), want (%d, %d)",
+			cfg.ConnMaxLifetime, cfg.ConnMaxIdleTime, DefaultConnMaxLifetimeSeconds, DefaultConnMaxIdleTimeSeconds)
+	}
+}
+
+func TestPostgresDSNPreservesApplicationNameOverride(t *testing.T) {
+	cfg := Config{
+		Driver:   DriverPostgres,
+		Addr:     "localhost:5432",
+		Dbname:   "ppanel",
+		Username: "postgres",
+		Config:   "sslmode=disable&application_name=worker",
+	}
+	parsed, err := url.Parse((Mysql{Config: cfg}).Dsn())
+	if err != nil {
+		t.Fatalf("parse generated postgres dsn: %v", err)
+	}
+	if got := parsed.Query().Get("application_name"); got != "worker" {
+		t.Fatalf("postgres application_name = %q, want worker", got)
 	}
 }
 

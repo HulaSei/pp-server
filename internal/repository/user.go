@@ -17,6 +17,7 @@ import (
 type UserRepo interface {
 	Insert(ctx context.Context, data *user.User, tx ...*gorm.DB) error
 	FindOne(ctx context.Context, id int64) (*user.User, error)
+	FindAccountState(ctx context.Context, id int64) (*user.AccountState, error)
 	FindOneForUpdate(ctx context.Context, id int64) (*user.User, error)
 	FindOneByEmail(ctx context.Context, email string) (*user.User, error)
 	FindOneByReferCode(ctx context.Context, referCode string) (*user.User, error)
@@ -43,6 +44,7 @@ type UserRepo interface {
 // UserAuthRepo manages external authentication identities linked to users.
 type UserAuthRepo interface {
 	FindUserAuthMethods(ctx context.Context, userId int64) ([]*user.AuthMethods, error)
+	FindUserAuthMethodsByUserIds(ctx context.Context, method string, userIds []int64) ([]*user.AuthMethods, error)
 	FindUserAuthMethodByOpenID(ctx context.Context, method, openID string) (*user.AuthMethods, error)
 	ValidateEmailIdentityUniqueness(ctx context.Context) error
 	FindUserAuthMethodByPlatform(ctx context.Context, userId int64, platform string) (*user.AuthMethods, error)
@@ -74,9 +76,11 @@ type UserSubscriptionRepo interface {
 	UpdateUserSubscribeWithTraffic(ctx context.Context, id, download, upload int64, tx ...*gorm.DB) error
 	BatchUpdateUserSubscribeWithTraffic(ctx context.Context, deltas []trafficEntity.SubscribeTrafficDelta, tx ...*gorm.DB) error
 	FindUsersSubscribeBySubscribeId(ctx context.Context, subscribeId int64) ([]*usersub.Subscribe, error)
+	FindUsersSubscribeBySubscribeIds(ctx context.Context, subscribeIds []int64) ([]*usersub.Subscribe, error)
 	FindUserSubscribesByStatus(ctx context.Context, status ...int64) ([]*usersub.Subscribe, error)
 	FindSubscribesByIds(ctx context.Context, ids []int64) ([]*usersub.Subscribe, error)
 	ActivatePendingSubscribesBySubscribeId(ctx context.Context, subscribeId int64) error
+	ActivatePendingSubscribesBySubscribeIds(ctx context.Context, subscribeIds []int64) error
 	CountQuotaConsumingSubscriptions(ctx context.Context, userId, subscribeId int64) (int64, error)
 	HasBlockingSubscription(ctx context.Context, userId int64) (bool, error)
 	CountUserSubscribesBySubscribeIdAndStatus(ctx context.Context, subscribeId int64, status ...int64) (int64, error)

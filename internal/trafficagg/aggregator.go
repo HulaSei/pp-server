@@ -82,6 +82,19 @@ func (a *Aggregator) AddReport(ctx context.Context, serverInfo *node.Server, pro
 	return a.AddReportAt(ctx, serverInfo, protocol, logs, timeutil.Now())
 }
 
+// RecordServerReport records the latest heartbeat in Redis. The scheduled
+// traffic flush persists all servers' latest timestamps to the database in one
+// batch, avoiding a database write for every node heartbeat.
+func (a *Aggregator) RecordServerReport(ctx context.Context, serverID int64, reportedAt time.Time) error {
+	if a == nil || a.deps.Redis == nil {
+		return errors.New("traffic aggregator is not initialized")
+	}
+	if serverID <= 0 {
+		return errors.New("server not found")
+	}
+	return a.deps.Redis.HSet(ctx, serverLastReportedKey, strconv.FormatInt(serverID, 10), strconv.FormatInt(reportedAt.UnixMilli(), 10)).Err()
+}
+
 func (a *Aggregator) AddReportAt(ctx context.Context, serverInfo *node.Server, protocol string, logs []UserTraffic, now time.Time) error {
 	if a == nil || a.deps.Redis == nil {
 		return errors.New("traffic aggregator is not initialized")
