@@ -1,9 +1,12 @@
 package orm
 
 import (
+	"context"
 	"net/url"
 	"os"
+	"strings"
 	"testing"
+	"time"
 )
 
 func TestParseMySQLDSN(t *testing.T) {
@@ -140,6 +143,12 @@ func TestParsePostgresDSN(t *testing.T) {
 	}
 
 	dsn := Mysql{Config: *cfg}.Dsn()
+	if !strings.Contains(dsn, "TimeZone=Asia/Shanghai") {
+		t.Fatalf("postgres dsn %q must expose the IANA zone to GORM", dsn)
+	}
+	if strings.Contains(dsn, "TimeZone=Asia%2FShanghai") {
+		t.Fatalf("postgres dsn %q contains a URL-encoded zone that GORM treats literally", dsn)
+	}
 	parsed, err := url.Parse(dsn)
 	if err != nil {
 		t.Fatalf("parse generated postgres dsn: %v", err)
@@ -153,6 +162,21 @@ func TestParsePostgresDSN(t *testing.T) {
 	if cfg.ConnMaxLifetime != DefaultConnMaxLifetimeSeconds || cfg.ConnMaxIdleTime != DefaultConnMaxIdleTimeSeconds {
 		t.Fatalf("postgres pool lifetimes = (%d, %d), want (%d, %d)",
 			cfg.ConnMaxLifetime, cfg.ConnMaxIdleTime, DefaultConnMaxLifetimeSeconds, DefaultConnMaxIdleTimeSeconds)
+	}
+}
+
+func TestPostgresDSNAcceptsLiteralAndEncodedIANAZone(t *testing.T) {
+	for _, zone := range []string{"Asia/Shanghai", "Asia%2FShanghai"} {
+		t.Run(zone, func(t *testing.T) {
+			cfg := Config{
+				Driver: DriverPostgres, Addr: "localhost:5432", Dbname: "ppanel",
+				Username: "postgres", Password: "password", Config: "sslmode=disable&TimeZone=" + zone,
+			}
+			dsn := (Mysql{Config: cfg}).Dsn()
+			if !strings.Contains(dsn, "TimeZone=Asia/Shanghai") {
+				t.Fatalf("postgres dsn %q must expose the IANA zone to GORM", dsn)
+			}
+		})
 	}
 }
 
@@ -190,5 +214,42 @@ func TestPingPostgres(t *testing.T) {
 	}
 	if !PingDatabase(DriverPostgres, dsn) {
 		t.Fatal("postgres ping failed")
+	}
+}
+
+func TestConnectPostgresWithIANAZone(t *testing.T) {
+	dsn := os.Getenv("PPANEL_TEST_POSTGRES_DSN")
+	if dsn == "" {
+		t.Skip("set PPANEL_TEST_POSTGRES_DSN to run PostgreSQL connection tests")
+	}
+	cfg := ParseDSN(dsn)
+	if cfg == nil {
+		t.Fatalf("parse PostgreSQL test DSN %q", dsn)
+	}
+	params, err := url.ParseQuery(cfg.Config)
+	if err != nil {
+		t.Fatalf("parse PostgreSQL test parameters: %v", err)
+	}
+	params.Set("TimeZone", "Asia/Shanghai")
+	cfg.Config = params.Encode()
+
+	db, err := ConnectDatabase(Mysql{Config: *cfg})
+	if err != nil {
+		t.Fatalf("connect PostgreSQL with IANA zone: %v", err)
+	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("get PostgreSQL connection pool: %v", err)
+	}
+	defer sqlDB.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var zone string
+	if err := sqlDB.QueryRowContext(ctx, "SHOW timezone").Scan(&zone); err != nil {
+		t.Fatalf("read PostgreSQL session timezone: %v", err)
+	}
+	if zone != "Asia/Shanghai" {
+		t.Fatalf("PostgreSQL session timezone = %q, want Asia/Shanghai", zone)
 	}
 }
