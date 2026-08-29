@@ -31,6 +31,7 @@ const (
 	TypeBalance           Type = 32 // Balance log
 	TypeCommission        Type = 33 // Commission log
 	TypeGift              Type = 34 // Gift log
+	TypeOrderCreated      Type = 35 // Order creation audit log
 	TypeUserTrafficRank   Type = 40 // Top 10 User traffic rank log
 	TypeServerTrafficRank Type = 41 // Top 10 Server traffic rank log
 	TypeTrafficStat       Type = 42 // Daily traffic statistics log
@@ -436,6 +437,50 @@ type Gift struct {
 	Balance     int64  `json:"balance"`
 	Remark      string `json:"remark,omitempty"`
 	Timestamp   int64  `json:"timestamp"`
+}
+
+// OrderCreated represents a durable order-creation audit entry. It contains
+// only the order summary needed for operations and risk analysis; coupon
+// codes, gateway trade numbers and guest credentials are deliberately absent.
+type OrderCreated struct {
+	requestmeta.Metadata
+	OrderNo        string `json:"order_no"`
+	OrderType      uint8  `json:"order_type"`
+	Quantity       int64  `json:"quantity"`
+	Price          int64  `json:"price"`
+	Amount         int64  `json:"amount"`
+	GiftAmount     int64  `json:"gift_amount"`
+	Discount       int64  `json:"discount"`
+	CouponDiscount int64  `json:"coupon_discount"`
+	PaymentID      int64  `json:"payment_id"`
+	Method         string `json:"method"`
+	FeeAmount      int64  `json:"fee_amount"`
+	SubscribeID    int64  `json:"subscribe_id,omitempty"`
+	Source         string `json:"source"`
+	Timestamp      int64  `json:"timestamp"`
+}
+
+// Marshal implements the json.Marshaler interface for OrderCreated.
+func (o *OrderCreated) Marshal() ([]byte, error) {
+	type Alias OrderCreated
+	safe := *o
+	safe.Metadata = sanitizeRequestMetadata(safe.Metadata)
+	return json.Marshal(&struct {
+		*Alias
+	}{
+		Alias: (*Alias)(&safe),
+	})
+}
+
+// Unmarshal implements the json.Unmarshaler interface for OrderCreated.
+func (o *OrderCreated) Unmarshal(data []byte) error {
+	type Alias OrderCreated
+	aux := (*Alias)(o)
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	o.Metadata = sanitizeRequestMetadata(o.Metadata)
+	return nil
 }
 
 // Marshal implements the json.Marshaler interface for Gift.

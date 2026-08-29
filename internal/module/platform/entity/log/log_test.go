@@ -26,6 +26,15 @@ func TestSecurityLogMarshalKeepsRiskMetadataAndRedactsSecrets(t *testing.T) {
 			riskMetadata: []string{"192.0.2.13", "private-agent", `"actor_id":7`, `"ip_country_code":"SG"`, `"ip_asn":64500`, `"ip_as_organization":"Example Network"`},
 		},
 		{
+			name: "order",
+			marshal: func() ([]byte, error) {
+				return (&OrderCreated{Metadata: requestmeta.Metadata{
+					ClientIP: "192.0.2.14", UserAgent: "order-agent", ActorID: 8,
+				}, OrderNo: "202608290001", OrderType: 1, Amount: 9900, Method: "stripe", Source: "user"}).Marshal()
+			},
+			riskMetadata: []string{"192.0.2.14", "order-agent", `"actor_id":8`, "202608290001", `"amount":9900`, `"source":"user"`},
+		},
+		{
 			name: "message",
 			marshal: func() ([]byte, error) {
 				return (&Message{
@@ -89,9 +98,10 @@ func TestSecurityLogMarshalKeepsRiskMetadataAndRedactsSecrets(t *testing.T) {
 
 func TestExpirableTypesNeverIncludesFinancialLedgers(t *testing.T) {
 	financial := map[int]bool{
-		int(TypeBalance):    true,
-		int(TypeCommission): true,
-		int(TypeGift):       true,
+		int(TypeBalance):      true,
+		int(TypeCommission):   true,
+		int(TypeGift):         true,
+		int(TypeOrderCreated): true,
 	}
 	for _, typ := range ExpirableTypes() {
 		if financial[typ] {

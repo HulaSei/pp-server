@@ -7,6 +7,7 @@ import (
 
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
+	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -56,7 +57,7 @@ func (s *Service) Create(ctx context.Context, req *dto.CreateOrderRequest) error
 		return errors.Wrapf(xerr.NewErrCode(xerr.PaymentMethodNotFound), "PaymentMethod not found: %v", err.Error())
 	}
 
-	if err := s.orders.Insert(ctx, &order.Order{
+	orderInfo := &order.Order{
 		UserId:         req.UserId,
 		OrderNo:        tool.GenerateTradeNo(),
 		Type:           req.Type,
@@ -72,6 +73,12 @@ func (s *Service) Create(ctx context.Context, req *dto.CreateOrderRequest) error
 		TradeNo:        req.TradeNo,
 		Status:         1,
 		SubscribeId:    req.SubscribeId,
+	}
+	if err := s.tx.InBillingTx(ctx, func(txStore repository.BillingStore) error {
+		if err := txStore.Order().Insert(ctx, orderInfo); err != nil {
+			return err
+		}
+		return orderaudit.InsertCreated(ctx, txStore.Log(), orderInfo, orderaudit.SourceAdmin)
 	}); err != nil {
 		log.Error("[CreateOrder] Database Error", logger.Field("error", err.Error()))
 		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseInsertError), "Insert error: %v", err.Error())

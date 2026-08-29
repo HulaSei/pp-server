@@ -67,6 +67,7 @@ func TestHandlerFactories_returnNativeHertzHandlers(t *testing.T) {
 	var _ func(platform.Service) app.HandlerFunc = adminlog.FilterGiftLogHandler
 	var _ func(platform.Service) app.HandlerFunc = adminlog.FilterLoginLogHandler
 	var _ func(platform.Service) app.HandlerFunc = adminlog.FilterMobileLogHandler
+	var _ func(platform.Service) app.HandlerFunc = adminlog.FilterOrderLogHandler
 	var _ func(platform.Service) app.HandlerFunc = adminlog.FilterRegisterLogHandler
 	var _ func(platform.Service) app.HandlerFunc = adminlog.FilterResetSubscribeLogHandler
 	var _ func(platform.Service) app.HandlerFunc = adminlog.FilterServerTrafficLogHandler

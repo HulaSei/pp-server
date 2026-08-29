@@ -8,6 +8,7 @@ import (
 
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
+	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/orderflow"
@@ -272,8 +273,11 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PurchaseOrderRequest) (
 			}
 		}
 
-		// insert order
-		return txStore.Order().Insert(ctx, orderInfo)
+		// The order and its audit trail are one atomic billing operation.
+		if e := txStore.Order().Insert(ctx, orderInfo); e != nil {
+			return e
+		}
+		return orderaudit.InsertCreated(ctx, txStore.Log(), orderInfo, orderaudit.SourceUser)
 	})
 	if err != nil {
 		log.Errorw("[Purchase] Database insert error", logger.Field("error", err.Error()), logger.Field("orderInfo", orderInfo))

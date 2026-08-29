@@ -7,6 +7,7 @@ import (
 
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
+	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
@@ -200,8 +201,10 @@ func (s *Service) Renewal(ctx context.Context, req *dto.RenewalOrderRequest) (*d
 				return err
 			}
 		}
-		// insert order
-		return txStore.Order().Insert(ctx, &orderInfo)
+		if err := txStore.Order().Insert(ctx, &orderInfo); err != nil {
+			return err
+		}
+		return orderaudit.InsertCreated(ctx, txStore.Log(), &orderInfo, orderaudit.SourceUser)
 	})
 	if err != nil {
 		log.Errorw("[Renewal] Database insert error", logger.Field("error", err.Error()), logger.Field("order", orderInfo))

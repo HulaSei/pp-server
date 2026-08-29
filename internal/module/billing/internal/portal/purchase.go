@@ -6,6 +6,7 @@ import (
 
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
+	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
 	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/constant"
@@ -150,7 +151,7 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PortalPurchaseRequest) 
 		if err = store.Order().Insert(ctx, orderInfo); err != nil {
 			return err
 		}
-		return nil
+		return orderaudit.InsertCreated(ctx, store.Log(), orderInfo, orderaudit.SourceGuest)
 	})
 	if err != nil {
 		log.Errorw("[Purchase] Database transaction error", logger.Field("error", err.Error()))

@@ -92,6 +92,16 @@ type FilterMobileLogResponse struct {
 	List  []MessageLog `json:"list"`
 }
 
+type FilterOrderLogRequest struct {
+	FilterLogParams
+	UserId int64 `form:"user_id,optional"`
+}
+
+type FilterOrderLogResponse struct {
+	Total int64      `json:"total"`
+	List  []OrderLog `json:"list"`
+}
+
 type FilterRegisterLogRequest struct {
 	FilterLogParams
 	UserId int64 `form:"user_id,optional"`
@@ -198,6 +208,34 @@ type MessageLog struct {
 	IPCity           string      `json:"ip_city,omitempty"`
 	IPASN            uint        `json:"ip_asn,omitempty"`
 	IPASOrganization string      `json:"ip_as_organization,omitempty"`
+}
+
+type OrderLog struct {
+	Id               int64  `json:"id"`
+	UserId           int64  `json:"user_id"`
+	OrderNo          string `json:"order_no"`
+	OrderType        uint8  `json:"order_type"`
+	Quantity         int64  `json:"quantity"`
+	Price            int64  `json:"price"`
+	Amount           int64  `json:"amount"`
+	GiftAmount       int64  `json:"gift_amount"`
+	Discount         int64  `json:"discount"`
+	CouponDiscount   int64  `json:"coupon_discount"`
+	PaymentId        int64  `json:"payment_id"`
+	Method           string `json:"method"`
+	FeeAmount        int64  `json:"fee_amount"`
+	SubscribeId      int64  `json:"subscribe_id,omitempty"`
+	Source           string `json:"source"`
+	Timestamp        int64  `json:"timestamp"`
+	ClientIP         string `json:"client_ip,omitempty"`
+	UserAgent        string `json:"user_agent,omitempty"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 }
 
 type RegisterLog struct {
