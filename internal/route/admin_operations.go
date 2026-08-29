@@ -42,6 +42,7 @@ func registerAdminLogRoutes(router *server.Hertz, deps Dependencies) {
 	group.GET("/login/list", adminLog.FilterLoginLogHandler(deps.Platform))
 	group.GET("/message/list", adminLog.GetMessageLogListHandler(deps.Platform))
 	group.GET("/mobile/list", adminLog.FilterMobileLogHandler(deps.Platform))
+	group.GET("/order/list", adminLog.FilterOrderLogHandler(deps.Platform))
 	group.GET("/register/list", adminLog.FilterRegisterLogHandler(deps.Platform))
 	group.GET("/server/traffic/list", adminLog.FilterServerTrafficLogHandler(deps.Platform))
 	group.GET("/setting", adminLog.GetLogSettingHandler(deps.Platform))

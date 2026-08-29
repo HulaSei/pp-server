@@ -5,8 +5,10 @@ import (
 
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
+	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/orderflow"
+	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
@@ -78,7 +80,12 @@ func (s *Service) Recharge(ctx context.Context, req *dto.RechargeOrderRequest) (
 		IsNew:     isNew,
 	}
 	orderflow.ApplyIdempotency(ctx, &orderInfo)
-	if err := s.deps.Orders.Insert(ctx, &orderInfo); err != nil {
+	if err := s.deps.Store.InBillingTx(ctx, func(txStore repository.BillingStore) error {
+		if err := txStore.Order().Insert(ctx, &orderInfo); err != nil {
+			return err
+		}
+		return orderaudit.InsertCreated(ctx, txStore.Log(), &orderInfo, orderaudit.SourceUser)
+	}); err != nil {
 		log.Errorw("[Recharge] Database insert error", logger.Field("error", err.Error()), logger.Field("order", orderInfo))
 		return nil, errors.Wrapf(err, "insert order error: %v", err.Error())
 	}

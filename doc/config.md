@@ -118,7 +118,7 @@ Administer: # Admin login configuration
   - Required.
 - **`Config`**: Dialect-specific connection parameters.
   - MySQL default: `charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai&interpolateParams=true`.
-  - PostgreSQL default: `sslmode=disable&TimeZone=Asia%2FShanghai&application_name=perfect-panel`.
+  - PostgreSQL default: `sslmode=disable&TimeZone=Asia/Shanghai&application_name=perfect-panel`.
 - **`MaxIdleConns`**: Maximum idle connections.
   - Default: `10`.
 - **`MaxOpenConns`**: Maximum open connections.

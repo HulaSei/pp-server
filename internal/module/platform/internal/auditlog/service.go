@@ -70,6 +70,10 @@ func (s *Service) FilterMobileLog(ctx context.Context, req *dto.FilterLogParams)
 	return newFilterMobileLogLogic(ctx, s.deps).FilterMobileLog(req)
 }
 
+func (s *Service) FilterOrderLog(ctx context.Context, req *dto.FilterOrderLogRequest) (*dto.FilterOrderLogResponse, error) {
+	return newFilterOrderLogLogic(ctx, s.deps).FilterOrderLog(req)
+}
+
 func (s *Service) FilterRegisterLog(ctx context.Context, req *dto.FilterRegisterLogRequest) (*dto.FilterRegisterLogResponse, error) {
 	return newFilterRegisterLogLogic(ctx, s.deps).FilterRegisterLog(req)
 }

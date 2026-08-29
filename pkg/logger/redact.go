@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"regexp"
 	"strings"
+
+	"github.com/perfect-panel/server/pkg/requestmeta"
 )
 
 const RedactedValue = "[REDACTED]"
@@ -58,12 +60,42 @@ func redactText(value string) string {
 }
 
 func redactField(field LogField) LogField {
+	if field.allowRiskMetadata && riskMetadataFieldKey(field.Key) {
+		return field
+	}
 	if sensitiveFieldKey(field.Key) {
 		field.Value = RedactedValue
 		return field
 	}
 	field.Value = redactValue(field.Value)
 	return field
+}
+
+// RiskField is the only supported escape hatch for personal metadata in the
+// process log. It is intentionally limited to the two fields explicitly used
+// by the HTTP risk-control audit; every other sensitive key still follows the
+// global redaction policy.
+func RiskField(key, value string) LogField {
+	if !riskMetadataFieldKey(key) {
+		return Field(key, value)
+	}
+	if normalizedFieldKey(key) == "clientip" {
+		value = requestmeta.Bound(value, requestmeta.MaxClientIPBytes)
+	} else {
+		value = requestmeta.Bound(value, requestmeta.MaxUserAgentBytes)
+	}
+	return LogField{Key: key, Value: value, allowRiskMetadata: true}
+}
+
+func riskMetadataFieldKey(key string) bool {
+	normalized := normalizedFieldKey(key)
+	return normalized == "clientip" || normalized == "useragent"
+}
+
+func normalizedFieldKey(key string) string {
+	normalized := strings.ToLower(strings.TrimSpace(key))
+	normalized = strings.NewReplacer("-", "_", ".", "_", " ", "_").Replace(normalized)
+	return strings.ReplaceAll(normalized, "_", "")
 }
 
 func redactFields(fields []LogField) []LogField {

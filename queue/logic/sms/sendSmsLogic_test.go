@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 )
 
 func TestSMSMessageLogDoesNotPersistRecipientOrCode(t *testing.T) {
@@ -26,5 +27,14 @@ func TestSMSMessageLogDoesNotPersistRecipientOrCode(t *testing.T) {
 	}
 	if redacted, ok := message.Content["redacted"].(bool); !ok || !redacted {
 		t.Fatalf("message content is not marked redacted: %#v", message.Content)
+	}
+}
+
+func TestSMSMessageLogCarriesRequestMetadata(t *testing.T) {
+	message := newSMSMessageLog("provider", 1, requestmeta.Metadata{
+		ClientIP: "203.0.113.7", UserAgent: "RiskClient/1.0", ActorID: 12,
+	})
+	if message.ClientIP != "203.0.113.7" || message.UserAgent != "RiskClient/1.0" || message.ActorID != 12 {
+		t.Fatalf("message metadata = %+v", message.Metadata)
 	}
 }

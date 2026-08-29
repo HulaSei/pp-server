@@ -117,7 +117,7 @@ Administer: # 管理员登录配置
   - 必填。
 - **`Config`**：对应数据库的连接参数。
   - MySQL 默认：`charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai&interpolateParams=true`。
-  - PostgreSQL 默认：`sslmode=disable&TimeZone=Asia%2FShanghai&application_name=perfect-panel`。
+  - PostgreSQL 默认：`sslmode=disable&TimeZone=Asia/Shanghai&application_name=perfect-panel`。
 - **`MaxIdleConns`**：最大空闲连接数。
   - 默认：`10`。
 - **`MaxOpenConns`**：最大打开连接数。

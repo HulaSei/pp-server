@@ -220,11 +220,20 @@ type QueryUserSubscribeNodeListResponse struct {
 }
 
 type ResetSubscribeTrafficLog struct {
-	Id              int64  `json:"id"`
-	Type            uint16 `json:"type"`
-	UserSubscribeId int64  `json:"user_subscribe_id"`
-	OrderNo         string `json:"order_no,omitempty"`
-	Timestamp       int64  `json:"timestamp"`
+	Id               int64  `json:"id"`
+	Type             uint16 `json:"type"`
+	UserSubscribeId  int64  `json:"user_subscribe_id"`
+	OrderNo          string `json:"order_no,omitempty"`
+	Timestamp        int64  `json:"timestamp"`
+	ClientIP         string `json:"client_ip,omitempty"`
+	UserAgent        string `json:"user_agent,omitempty"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 }
 
 type ResetUserSubscribeTokenRequest struct {
@@ -379,13 +388,20 @@ type UserSubscribeInfo struct {
 }
 
 type UserSubscribeLog struct {
-	Id              int64  `json:"id"`
-	UserId          int64  `json:"user_id"`
-	UserSubscribeId int64  `json:"user_subscribe_id"`
-	Token           string `json:"token"`
-	IP              string `json:"ip"`
-	UserAgent       string `json:"user_agent"`
-	Timestamp       int64  `json:"timestamp"`
+	Id               int64  `json:"id"`
+	UserId           int64  `json:"user_id"`
+	UserSubscribeId  int64  `json:"user_subscribe_id"`
+	Token            string `json:"token"`
+	IP               string `json:"ip"`
+	UserAgent        string `json:"user_agent"`
+	Timestamp        int64  `json:"timestamp"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 }
 
 type UserSubscribeNodeInfo struct {

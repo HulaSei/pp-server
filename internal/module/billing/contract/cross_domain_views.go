@@ -10,20 +10,38 @@ import (
 )
 
 type BillingBalanceLogSnapshot struct {
-	Type      uint16 `json:"type"`
-	UserId    int64  `json:"user_id"`
-	Amount    int64  `json:"amount"`
-	OrderNo   string `json:"order_no,omitempty"`
-	Balance   int64  `json:"balance"`
-	Timestamp int64  `json:"timestamp"`
+	Type             uint16 `json:"type"`
+	UserId           int64  `json:"user_id"`
+	Amount           int64  `json:"amount"`
+	OrderNo          string `json:"order_no,omitempty"`
+	Balance          int64  `json:"balance"`
+	Timestamp        int64  `json:"timestamp"`
+	ClientIP         string `json:"client_ip,omitempty"`
+	UserAgent        string `json:"user_agent,omitempty"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 } // @name dto.BalanceLog
 
 type BillingCommissionLogSnapshot struct {
-	Type      uint16 `json:"type"`
-	UserId    int64  `json:"user_id"`
-	Amount    int64  `json:"amount"`
-	OrderNo   string `json:"order_no"`
-	Timestamp int64  `json:"timestamp"`
+	Type             uint16 `json:"type"`
+	UserId           int64  `json:"user_id"`
+	Amount           int64  `json:"amount"`
+	OrderNo          string `json:"order_no"`
+	Timestamp        int64  `json:"timestamp"`
+	ClientIP         string `json:"client_ip,omitempty"`
+	UserAgent        string `json:"user_agent,omitempty"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 } // @name dto.CommissionLog
 
 type CommissionWithdrawRequest struct {

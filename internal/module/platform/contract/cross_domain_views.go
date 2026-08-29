@@ -373,12 +373,19 @@ type SubscribeConfig struct {
 }
 
 type SubscribeLog struct {
-	UserId          int64  `json:"user_id"`
-	Token           string `json:"token"`
-	UserAgent       string `json:"user_agent"`
-	ClientIP        string `json:"client_ip"`
-	UserSubscribeId int64  `json:"user_subscribe_id"`
-	Timestamp       int64  `json:"timestamp"`
+	UserId           int64  `json:"user_id"`
+	Token            string `json:"token"`
+	UserAgent        string `json:"user_agent"`
+	ClientIP         string `json:"client_ip"`
+	UserSubscribeId  int64  `json:"user_subscribe_id"`
+	Timestamp        int64  `json:"timestamp"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 }
 
 type TicketWaitRelpyResponse struct {

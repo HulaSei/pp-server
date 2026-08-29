@@ -11,6 +11,7 @@ import (
 	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 	"github.com/perfect-panel/server/pkg/result"
 	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -31,6 +32,9 @@ func AuthMiddleware(deps AuthDeps) app.HandlerFunc {
 			result.HttpResult(requestCtx, nil, err)
 			requestCtx.Abort()
 			return
+		}
+		if metadata, ok := requestmeta.From(ctx); ok && metadata.ActorID > 0 {
+			requestCtx.Set(requestActorIDKey, metadata.ActorID)
 		}
 		requestCtx.Next(ctx)
 	}
@@ -54,6 +58,9 @@ func OptionalAuthMiddleware(deps AuthDeps) app.HandlerFunc {
 			result.HttpResult(requestCtx, nil, err)
 			requestCtx.Abort()
 			return
+		}
+		if metadata, ok := requestmeta.From(authenticatedCtx); ok && metadata.ActorID > 0 {
+			requestCtx.Set(requestActorIDKey, metadata.ActorID)
 		}
 		requestCtx.Next(authenticatedCtx)
 	}
@@ -114,5 +121,7 @@ func AuthenticateRequest(ctx context.Context, deps AuthDeps, token string, path 
 	ctx = context.WithValue(ctx, constant.LoginType, loginType)
 	ctx = context.WithValue(ctx, constant.CtxKeyUser, userInfo)
 	ctx = context.WithValue(ctx, constant.CtxKeySessionID, sessionId)
+	ctx = requestmeta.WithActor(ctx, userId)
+	ctx = logger.ContextWithFields(ctx, logger.Field("actor_id", userId))
 	return ctx, nil
 }

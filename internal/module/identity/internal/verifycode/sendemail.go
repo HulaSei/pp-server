@@ -14,6 +14,7 @@ import (
 	emailpkg "github.com/perfect-panel/server/pkg/email"
 	"github.com/perfect-panel/server/pkg/limit"
 	"github.com/perfect-panel/server/pkg/random"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
 
@@ -98,6 +99,7 @@ func (l *SendEmailCodeLogic) SendEmailCode(req *dto.SendCodeRequest) (resp *dto.
 	}
 
 	var taskPayload queue.SendEmailPayload
+	taskPayload.Metadata, _ = requestmeta.From(l.ctx)
 	// Generate verification code
 	code := random.Key(6, 0)
 	expireSeconds := l.deps.Config.VerifyCodeExpire

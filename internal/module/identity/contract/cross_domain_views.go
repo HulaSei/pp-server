@@ -32,10 +32,17 @@ type AuthPlatformResponse struct {
 } // @name dto.PlatformResponse
 
 type UserLoginLog struct {
-	Id        int64  `json:"id"`
-	UserId    int64  `json:"user_id"`
-	LoginIP   string `json:"login_ip"`
-	UserAgent string `json:"user_agent"`
-	Success   bool   `json:"success"`
-	Timestamp int64  `json:"timestamp"`
+	Id               int64  `json:"id"`
+	UserId           int64  `json:"user_id"`
+	LoginIP          string `json:"login_ip"`
+	UserAgent        string `json:"user_agent"`
+	Success          bool   `json:"success"`
+	Timestamp        int64  `json:"timestamp"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 }

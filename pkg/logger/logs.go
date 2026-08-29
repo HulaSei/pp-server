@@ -31,8 +31,9 @@ var (
 type (
 	// LogField is a key-value pair that will be added to the log entry.
 	LogField struct {
-		Key   string
-		Value any
+		Key               string
+		Value             any
+		allowRiskMetadata bool
 	}
 
 	// LogOption defines the method to customize the logging.

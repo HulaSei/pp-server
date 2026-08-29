@@ -46,11 +46,20 @@ func (l *FilterCommissionLogLogic) FilterCommissionLog(req *dto.FilterCommission
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt commission log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.CommissionLog{
-			UserId:    datum.ObjectID,
-			Type:      content.Type,
-			Amount:    content.Amount,
-			OrderNo:   content.OrderNo,
-			Timestamp: content.Timestamp,
+			UserId:           datum.ObjectID,
+			Type:             content.Type,
+			Amount:           content.Amount,
+			OrderNo:          content.OrderNo,
+			Timestamp:        content.Timestamp,
+			ClientIP:         content.ClientIP,
+			UserAgent:        content.UserAgent,
+			ActorID:          content.ActorID,
+			IPCountryCode:    content.IPCountryCode,
+			IPCountry:        content.IPCountry,
+			IPRegion:         content.IPRegion,
+			IPCity:           content.IPCity,
+			IPASN:            content.IPASN,
+			IPASOrganization: content.IPASOrganization,
 		})
 	}
 	return &dto.FilterCommissionLogResponse{

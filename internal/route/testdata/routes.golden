@@ -25,6 +25,7 @@ GET /v1/admin/log/gift/list github.com/perfect-panel/server/internal/module/plat
 GET /v1/admin/log/login/list github.com/perfect-panel/server/internal/module/platform/transport/http/admin/log.FilterLoginLogHandler
 GET /v1/admin/log/message/list github.com/perfect-panel/server/internal/module/platform/transport/http/admin/log.GetMessageLogListHandler
 GET /v1/admin/log/mobile/list github.com/perfect-panel/server/internal/module/platform/transport/http/admin/log.FilterMobileLogHandler
+GET /v1/admin/log/order/list github.com/perfect-panel/server/internal/module/platform/transport/http/admin/log.FilterOrderLogHandler
 GET /v1/admin/log/register/list github.com/perfect-panel/server/internal/module/platform/transport/http/admin/log.FilterRegisterLogHandler
 GET /v1/admin/log/server/traffic/list github.com/perfect-panel/server/internal/module/platform/transport/http/admin/log.FilterServerTrafficLogHandler
 GET /v1/admin/log/setting github.com/perfect-panel/server/internal/module/platform/transport/http/admin/log.GetLogSettingHandler

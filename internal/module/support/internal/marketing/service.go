@@ -18,6 +18,7 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -110,7 +111,9 @@ func (s *Service) CreateBatchSendEmailTask(ctx context.Context, req *dto.CreateB
 		}
 	}
 
+	metadata, _ := requestmeta.From(ctx)
 	scopeInfo := task.EmailScope{
+		Metadata:          metadata,
 		Type:              scope.Int8(),
 		RegisterStartTime: req.RegisterStartTime,
 		RegisterEndTime:   req.RegisterEndTime,
@@ -365,7 +368,9 @@ func (s *Service) CreateQuotaTask(ctx context.Context, req *dto.CreateQuotaTaskR
 		return errors.Wrapf(xerr.NewErrMsg("No subscribers found"), "no subscribers found")
 	}
 
+	metadata, _ := requestmeta.From(ctx)
 	scopeInfo := task.QuotaScope{
+		Metadata:    metadata,
 		Subscribers: req.Subscribers,
 		IsActive:    req.IsActive,
 		StartTime:   req.StartTime,

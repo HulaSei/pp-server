@@ -22,7 +22,7 @@ const (
 
 	DefaultMySQLConfig             = "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai&interpolateParams=true"
 	legacyDefaultMySQLConfig       = "charset=utf8mb4&parseTime=true&loc=Asia%2FShanghai"
-	DefaultPostgresConfig          = "sslmode=disable&TimeZone=Asia%2FShanghai&application_name=perfect-panel"
+	DefaultPostgresConfig          = "sslmode=disable&TimeZone=Asia/Shanghai&application_name=perfect-panel"
 	DefaultSlowThresholdMs         = 1000
 	DefaultConnMaxLifetimeSeconds  = 1800
 	DefaultConnMaxIdleTimeSeconds  = 300
@@ -130,9 +130,35 @@ func (m Mysql) postgresDsn() string {
 		if params.Get("application_name") == "" {
 			params.Set("application_name", defaultPostgresApplicationName)
 		}
-		u.RawQuery = params.Encode()
+		u.RawQuery = encodePostgresParams(params)
 	}
 	return u.String()
+}
+
+// encodePostgresParams keeps IANA time-zone separators visible in the final
+// DSN. pgx decodes ordinary URL query values correctly, but GORM's PostgreSQL
+// dialector also extracts TimeZone directly from the raw DSN with a regular
+// expression. Leaving the slash as %2F therefore makes GORM ask both Go and
+// PostgreSQL for a literal zone such as "Asia%2FShanghai".
+//
+// Only the slash in supported time-zone parameters is unescaped; all other
+// parameter values remain URL encoded. This preserves credentials and custom
+// settings while accepting both legacy Asia%2FShanghai configuration and the
+// clearer Asia/Shanghai form.
+func encodePostgresParams(params url.Values) string {
+	query := params.Encode()
+	for _, key := range []string{"TimeZone", "timezone", "time_zone"} {
+		for _, value := range params[key] {
+			encodedKey := url.QueryEscape(key)
+			encodedValue := url.QueryEscape(value)
+			visibleValue := strings.ReplaceAll(encodedValue, "%2F", "/")
+			if visibleValue == encodedValue {
+				continue
+			}
+			query = strings.Replace(query, encodedKey+"="+encodedValue, encodedKey+"="+visibleValue, 1)
+		}
+	}
+	return query
 }
 
 func (m *Mysql) GetSlowThreshold() time.Duration {

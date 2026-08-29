@@ -10,6 +10,7 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/pkg/constant"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 	"github.com/perfect-panel/server/pkg/sms"
 	"github.com/perfect-panel/server/queue/types"
 )
@@ -23,8 +24,13 @@ type SendSmsLogic struct {
 	deps Dependencies
 }
 
-func newSMSMessageLog(platform string, messageType uint8) *log.Message {
+func newSMSMessageLog(platform string, messageType uint8, metadata ...requestmeta.Metadata) *log.Message {
+	var requestMetadata requestmeta.Metadata
+	if len(metadata) > 0 {
+		requestMetadata = metadata[0]
+	}
 	return &log.Message{
+		Metadata: requestMetadata,
 		Platform: platform,
 		To:       logger.RedactedValue,
 		Subject:  constant.ParseVerifyType(messageType).String(),
@@ -46,12 +52,14 @@ func (l *SendSmsLogic) ProcessTask(ctx context.Context, task *asynq.Task) error 
 		)
 		return nil
 	}
+	ctx = requestmeta.With(ctx, payload.Metadata)
+	ctx = logger.ContextWithRequestMetadata(ctx, payload.Metadata)
 	client, err := sms.NewSender(l.deps.Mobile().Platform, l.deps.Mobile().PlatformConfig)
 	if err != nil {
 		logger.WithContext(ctx).Error("[SendSmsLogic] New send sms client failed", logger.Field("error", err.Error()), logger.Field("payload", payload))
 		return err
 	}
-	createSms := newSMSMessageLog(l.deps.Mobile().Platform, payload.Type)
+	createSms := newSMSMessageLog(l.deps.Mobile().Platform, payload.Type, payload.Metadata)
 	content, marshalErr := createSms.Marshal()
 	if marshalErr != nil {
 		return marshalErr
