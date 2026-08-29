@@ -11,6 +11,7 @@ import (
 	"github.com/perfect-panel/server/internal/module/platform/entity/task"
 	emailpkg "github.com/perfect-panel/server/pkg/email"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/tool"
 )
@@ -72,21 +73,22 @@ func (w *Worker) GetID() int64 { return w.id }
 func (w *Worker) Start() error {
 	taskInfo, err := w.tasks.FindOneByType(w.ctx, w.id, task.TypeEmail)
 	if err != nil {
-		logger.Error("Batch Send Email", logger.Field("message", "Failed to find task"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
+		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to find task"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
 		return err
 	}
+	w.restoreRequestMetadata(taskInfo.Scope)
 	if taskInfo.Status == task.StatusCompleted || taskInfo.Status == task.StatusFailed || taskInfo.Status == task.StatusCancelled || taskInfo.Status == task.StatusEnqueueFailed {
-		logger.Info("Batch Send Email", logger.Field("message", "Task is already terminal"), logger.Field("task_id", w.id), logger.Field("status", taskInfo.Status))
+		logger.WithContext(w.ctx).Info("Batch Send Email", logger.Field("message", "Task is already terminal"), logger.Field("task_id", w.id), logger.Field("status", taskInfo.Status))
 		return nil
 	}
 
 	var scope task.EmailScope
 	if err := json.Unmarshal([]byte(taskInfo.Scope), &scope); err != nil {
-		logger.Error("Batch Send Email", logger.Field("message", "Failed to parse task scope"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
+		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to parse task scope"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
 		return w.failTask(taskInfo, fmt.Errorf("parse task scope: %w", err))
 	}
 	if len(scope.Recipients) == 0 && len(scope.Additional) == 0 {
-		logger.Error("Batch Send Email", logger.Field("message", "No recipients or additional emails provided"), logger.Field("task_id", w.id))
+		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "No recipients or additional emails provided"), logger.Field("task_id", w.id))
 		return w.failTask(taskInfo, fmt.Errorf("no recipients provided"))
 	}
 	// Migrate legacy in-scope counters on first resume; current tasks keep these
@@ -102,13 +104,13 @@ func (w *Worker) Start() error {
 
 	var content task.EmailContent
 	if err := json.Unmarshal([]byte(taskInfo.Content), &content); err != nil {
-		logger.Error("Batch Send Email", logger.Field("message", "Failed to parse task content"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
+		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to parse task content"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
 		return w.failTask(taskInfo, fmt.Errorf("parse task content: %w", err))
 	}
 
 	recipients := tool.RemoveDuplicateElements(append(scope.Recipients, scope.Additional...)...)
 	if len(recipients) == 0 {
-		logger.Error("Batch Send Email", logger.Field("message", "No valid recipients found"), logger.Field("task_id", w.id))
+		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "No valid recipients found"), logger.Field("task_id", w.id))
 		return w.failTask(taskInfo, fmt.Errorf("no valid recipients found"))
 	}
 	if taskInfo.Current > uint64(len(recipients)) {
@@ -146,7 +148,7 @@ func (w *Worker) Start() error {
 		}
 		select {
 		case <-w.ctx.Done():
-			logger.Info("Batch Send Email", logger.Field("message", "Worker stopped by context cancellation"), logger.Field("task_id", w.id))
+			logger.WithContext(w.ctx).Info("Batch Send Email", logger.Field("message", "Worker stopped by context cancellation"), logger.Field("task_id", w.id))
 			return w.ctx.Err()
 		default:
 		}
@@ -164,7 +166,7 @@ func (w *Worker) Start() error {
 		}
 		var failure *task.TaskError
 		if sendErr != nil {
-			logger.Error("Batch Send Email", logger.Field("message", "Failed to send email"), logger.Field("error", sendErr.Error()), logger.Field("task_id", w.id))
+			logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to send email"), logger.Field("error", sendErr.Error()), logger.Field("task_id", w.id))
 			occurredAt := timeutil.Now().Unix()
 			failure = &task.TaskError{
 				TaskId: taskInfo.Id, Position: uint64(index), Target: recipient,
@@ -182,7 +184,7 @@ func (w *Worker) Start() error {
 			persistErr = w.persist(taskInfo, &scope)
 		}
 		if persistErr != nil {
-			logger.Error("Batch Send Email", logger.Field("message", "Failed to update task progress"), logger.Field("error", persistErr.Error()), logger.Field("task_id", w.id))
+			logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to update task progress"), logger.Field("error", persistErr.Error()), logger.Field("task_id", w.id))
 			return persistErr
 		}
 		if index+1 < len(recipients) {
@@ -210,19 +212,30 @@ func (w *Worker) Start() error {
 	}
 
 	if err := w.persist(taskInfo, &scope); err != nil {
-		logger.Error("Batch Send Email", logger.Field("message", "Failed to finalize task"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
+		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "Failed to finalize task"), logger.Field("error", err.Error()), logger.Field("task_id", w.id))
 		return err
 	}
-	logger.Info("Batch Send Email", logger.Field("message", "Task completed"), logger.Field("task_id", w.id), logger.Field("total_attempted", taskInfo.Current))
+	logger.WithContext(w.ctx).Info("Batch Send Email", logger.Field("message", "Task completed"), logger.Field("task_id", w.id), logger.Field("total_attempted", taskInfo.Current))
 	return nil
+}
+
+func (w *Worker) restoreRequestMetadata(scopeJSON string) {
+	var metadata requestmeta.Metadata
+	if json.Unmarshal([]byte(scopeJSON), &metadata) != nil {
+		return
+	}
+	w.ctx = requestmeta.With(w.ctx, metadata)
+	w.ctx = logger.ContextWithRequestMetadata(w.ctx, metadata)
 }
 
 func (w *Worker) beginMessage(recipient string) (*logEntity.SystemLog, error) {
 	if w.logs == nil {
 		return nil, nil
 	}
+	metadata, _ := requestmeta.From(w.ctx)
 	message := logEntity.Message{
-		To: logger.RedactedValue, Subject: "custom", Platform: w.platform,
+		Metadata: metadata,
+		To:       logger.RedactedValue, Subject: "custom", Platform: w.platform,
 		Content: map[string]interface{}{"redacted": true, "email_type": "custom", "batch_task_id": w.id},
 		Status:  0,
 	}

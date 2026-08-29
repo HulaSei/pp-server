@@ -51,14 +51,23 @@ func (l *GetMessageLogListLogic) GetMessageLogList(req *dto.GetMessageLogListReq
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt message log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.MessageLog{
-			Id:        datum.Id,
-			Type:      datum.Type,
-			Platform:  content.Platform,
-			To:        content.To,
-			Subject:   content.Subject,
-			Content:   content.Content,
-			Status:    content.Status,
-			CreatedAt: datum.CreatedAt.UnixMilli(),
+			Id:               datum.Id,
+			Type:             datum.Type,
+			Platform:         content.Platform,
+			To:               content.To,
+			Subject:          content.Subject,
+			Content:          content.Content,
+			Status:           content.Status,
+			CreatedAt:        datum.CreatedAt.UnixMilli(),
+			ClientIP:         content.ClientIP,
+			UserAgent:        content.UserAgent,
+			ActorID:          content.ActorID,
+			IPCountryCode:    content.IPCountryCode,
+			IPCountry:        content.IPCountry,
+			IPRegion:         content.IPRegion,
+			IPCity:           content.IPCity,
+			IPASN:            content.IPASN,
+			IPASOrganization: content.IPASOrganization,
 		})
 	}
 

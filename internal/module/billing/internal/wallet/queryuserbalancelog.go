@@ -54,12 +54,21 @@ func (l *QueryUserBalanceLogLogic) QueryUserBalanceLog() (resp *dto.QueryUserBal
 			continue
 		}
 		list = append(list, dto.BillingBalanceLogSnapshot{
-			UserId:    datum.ObjectID,
-			Amount:    content.Amount,
-			Type:      content.Type,
-			OrderNo:   content.OrderNo,
-			Balance:   content.Balance,
-			Timestamp: content.Timestamp,
+			UserId:           datum.ObjectID,
+			Amount:           content.Amount,
+			Type:             content.Type,
+			OrderNo:          content.OrderNo,
+			Balance:          content.Balance,
+			Timestamp:        content.Timestamp,
+			ClientIP:         content.ClientIP,
+			UserAgent:        content.UserAgent,
+			ActorID:          content.ActorID,
+			IPCountryCode:    content.IPCountryCode,
+			IPCountry:        content.IPCountry,
+			IPRegion:         content.IPRegion,
+			IPCity:           content.IPCity,
+			IPASN:            content.IPASN,
+			IPASOrganization: content.IPASOrganization,
 		})
 	}
 

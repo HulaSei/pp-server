@@ -2,14 +2,65 @@ package repo
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"testing"
 	"time"
 
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
+
+func TestInsertAttachesRequestMetadataToAuditContent(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("file:system-log-metadata-%d?mode=memory&cache=shared", time.Now().UnixNano())), &gorm.Config{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AutoMigrate(&logEntity.SystemLog{}); err != nil {
+		t.Fatal(err)
+	}
+
+	ctx := requestmeta.With(context.Background(), requestmeta.Metadata{
+		ClientIP: "203.0.113.9", UserAgent: "RiskClient/1.0", ActorID: 42,
+		IPMetadata: requestmeta.IPMetadata{IPCountryCode: "SG", IPCountry: "Singapore", IPCity: "Singapore", IPASN: 64500, IPASOrganization: "Example Network"},
+	})
+	row := &logEntity.SystemLog{Type: logEntity.TypeBalance.Uint8(), Date: "2026-08-29", Content: `{"amount":100}`}
+	if err := NewLogRepo(db).Insert(ctx, row); err != nil {
+		t.Fatal(err)
+	}
+
+	var stored logEntity.SystemLog
+	if err := db.First(&stored, row.Id).Error; err != nil {
+		t.Fatal(err)
+	}
+	var content map[string]any
+	if err := json.Unmarshal([]byte(stored.Content), &content); err != nil {
+		t.Fatal(err)
+	}
+	if content["client_ip"] != "203.0.113.9" || content["user_agent"] != "RiskClient/1.0" || content["actor_id"] != float64(42) || content["amount"] != float64(100) ||
+		content["ip_country_code"] != "SG" || content["ip_country"] != "Singapore" || content["ip_city"] != "Singapore" || content["ip_asn"] != float64(64500) || content["ip_as_organization"] != "Example Network" {
+		t.Fatalf("stored audit content = %#v", content)
+	}
+}
+
+func TestAttachRequestMetadataPreservesExplicitLoginMetadata(t *testing.T) {
+	ctx := requestmeta.With(context.Background(), requestmeta.New("203.0.113.9", "middleware-agent"))
+	row := &logEntity.SystemLog{Type: logEntity.TypeLogin.Uint8(), Content: `{"login_ip":"192.0.2.1","user_agent":"handler-agent"}`}
+	attachRequestMetadata(ctx, row)
+
+	var content map[string]any
+	if err := json.Unmarshal([]byte(row.Content), &content); err != nil {
+		t.Fatal(err)
+	}
+	if content["login_ip"] != "192.0.2.1" || content["user_agent"] != "handler-agent" {
+		t.Fatalf("explicit login metadata was overwritten: %#v", content)
+	}
+	if _, exists := content["client_ip"]; exists {
+		t.Fatalf("login metadata was duplicated: %#v", content)
+	}
+}
 
 func TestDeleteBeforePreservesFinancialLedgers(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(fmt.Sprintf("file:system-log-retention-%d?mode=memory&cache=shared", time.Now().UnixNano())), &gorm.Config{})

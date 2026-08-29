@@ -3,9 +3,9 @@ package log
 import (
 	"encoding/json"
 	"time"
-	"unicode/utf8"
 
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 )
 
 type Type uint8
@@ -110,6 +110,7 @@ func (SystemLog) TableName() string {
 
 // Message represents a message log entry.
 type Message struct {
+	requestmeta.Metadata
 	To       string                 `json:"to"`
 	Subject  string                 `json:"subject,omitempty"`
 	Content  map[string]interface{} `json:"content"`
@@ -141,6 +142,7 @@ func (m *Message) Unmarshal(data []byte) error {
 }
 
 func sanitizeMessage(message Message) Message {
+	message.Metadata = sanitizeRequestMetadata(message.Metadata)
 	message.To = logger.RedactedValue
 	safeContent := map[string]interface{}{"redacted": true}
 	if emailType, ok := message.Content["email_type"].(string); ok && safeMessageCategory(emailType) {
@@ -196,11 +198,13 @@ func (s *Traffic) Unmarshal(data []byte) error {
 
 // Login represents a login log entry.
 type Login struct {
+	requestmeta.IPMetadata
 	Method    string `json:"method"`
 	LoginIP   string `json:"login_ip"`
 	UserAgent string `json:"user_agent"`
 	Success   bool   `json:"success"`
 	Timestamp int64  `json:"timestamp"`
+	ActorID   int64  `json:"actor_id,omitempty"`
 }
 
 // Marshal implements the json.Marshaler interface for Login.
@@ -209,6 +213,7 @@ func (l *Login) Marshal() ([]byte, error) {
 	safe := Alias(*l)
 	safe.LoginIP = boundedRiskValue(safe.LoginIP, 255)
 	safe.UserAgent = boundedRiskValue(safe.UserAgent, 512)
+	safe.IPMetadata = sanitizeIPMetadata(safe.IPMetadata)
 	return json.Marshal(&struct {
 		*Alias
 	}{
@@ -225,16 +230,19 @@ func (l *Login) Unmarshal(data []byte) error {
 	}
 	l.LoginIP = boundedRiskValue(l.LoginIP, 255)
 	l.UserAgent = boundedRiskValue(l.UserAgent, 512)
+	l.IPMetadata = sanitizeIPMetadata(l.IPMetadata)
 	return nil
 }
 
 // Register represents a registration log entry.
 type Register struct {
+	requestmeta.IPMetadata
 	AuthMethod string `json:"auth_method"`
 	Identifier string `json:"identifier"`
 	RegisterIP string `json:"register_ip"`
 	UserAgent  string `json:"user_agent"`
 	Timestamp  int64  `json:"timestamp"`
+	ActorID    int64  `json:"actor_id,omitempty"`
 }
 
 // Marshal implements the json.Marshaler interface for Register.
@@ -244,6 +252,7 @@ func (r *Register) Marshal() ([]byte, error) {
 	safe.Identifier = logger.RedactedValue
 	safe.RegisterIP = boundedRiskValue(safe.RegisterIP, 255)
 	safe.UserAgent = boundedRiskValue(safe.UserAgent, 512)
+	safe.IPMetadata = sanitizeIPMetadata(safe.IPMetadata)
 	return json.Marshal(&struct {
 		*Alias
 	}{
@@ -262,15 +271,18 @@ func (r *Register) Unmarshal(data []byte) error {
 	r.Identifier = logger.RedactedValue
 	r.RegisterIP = boundedRiskValue(r.RegisterIP, 255)
 	r.UserAgent = boundedRiskValue(r.UserAgent, 512)
+	r.IPMetadata = sanitizeIPMetadata(r.IPMetadata)
 	return nil
 }
 
 // Subscribe represents a subscription log entry.
 type Subscribe struct {
+	requestmeta.IPMetadata
 	Token           string `json:"token"`
 	UserAgent       string `json:"user_agent"`
 	ClientIP        string `json:"client_ip"`
 	UserSubscribeId int64  `json:"user_subscribe_id"`
+	ActorID         int64  `json:"actor_id,omitempty"`
 }
 
 // Marshal implements the json.Marshaler interface for Subscribe.
@@ -280,6 +292,7 @@ func (s *Subscribe) Marshal() ([]byte, error) {
 	safe.Token = logger.RedactedValue
 	safe.UserAgent = boundedRiskValue(safe.UserAgent, 512)
 	safe.ClientIP = boundedRiskValue(safe.ClientIP, 255)
+	safe.IPMetadata = sanitizeIPMetadata(safe.IPMetadata)
 	return json.Marshal(&struct {
 		*Alias
 	}{
@@ -297,6 +310,7 @@ func (s *Subscribe) Unmarshal(data []byte) error {
 	s.Token = logger.RedactedValue
 	s.UserAgent = boundedRiskValue(s.UserAgent, 512)
 	s.ClientIP = boundedRiskValue(s.ClientIP, 255)
+	s.IPMetadata = sanitizeIPMetadata(s.IPMetadata)
 	return nil
 }
 
@@ -304,18 +318,20 @@ func (s *Subscribe) Unmarshal(data []byte) error {
 // preventing attacker-controlled headers from growing an audit row without
 // bound. The limits match the existing user_device storage contract.
 func boundedRiskValue(value string, maxBytes int) string {
-	if maxBytes <= 0 || len(value) <= maxBytes {
-		return value
-	}
-	value = value[:maxBytes]
-	for len(value) > 0 && !utf8.ValidString(value) {
-		value = value[:len(value)-1]
-	}
-	return value
+	return requestmeta.Bound(value, maxBytes)
+}
+
+func sanitizeRequestMetadata(metadata requestmeta.Metadata) requestmeta.Metadata {
+	return requestmeta.Normalize(metadata)
+}
+
+func sanitizeIPMetadata(metadata requestmeta.IPMetadata) requestmeta.IPMetadata {
+	return requestmeta.Normalize(requestmeta.Metadata{IPMetadata: metadata}).IPMetadata
 }
 
 // ResetSubscribe represents a reset subscription log entry.
 type ResetSubscribe struct {
+	requestmeta.Metadata
 	Type      uint16 `json:"type"`
 	UserId    int64  `json:"user_id"`
 	OrderNo   string `json:"order_no,omitempty"`
@@ -325,10 +341,12 @@ type ResetSubscribe struct {
 // Marshal implements the json.Marshaler interface for ResetSubscribe.
 func (r *ResetSubscribe) Marshal() ([]byte, error) {
 	type Alias ResetSubscribe
+	safe := *r
+	safe.Metadata = sanitizeRequestMetadata(safe.Metadata)
 	return json.Marshal(&struct {
 		*Alias
 	}{
-		Alias: (*Alias)(r),
+		Alias: (*Alias)(&safe),
 	})
 }
 
@@ -336,11 +354,16 @@ func (r *ResetSubscribe) Marshal() ([]byte, error) {
 func (r *ResetSubscribe) Unmarshal(data []byte) error {
 	type Alias ResetSubscribe
 	aux := (*Alias)(r)
-	return json.Unmarshal(data, aux)
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	r.Metadata = sanitizeRequestMetadata(r.Metadata)
+	return nil
 }
 
 // Balance represents a balance log entry.
 type Balance struct {
+	requestmeta.Metadata
 	Type      uint16 `json:"type"`
 	Amount    int64  `json:"amount"`
 	OrderNo   string `json:"order_no,omitempty"`
@@ -351,10 +374,12 @@ type Balance struct {
 // Marshal implements the json.Marshaler interface for Balance.
 func (b *Balance) Marshal() ([]byte, error) {
 	type Alias Balance
+	safe := *b
+	safe.Metadata = sanitizeRequestMetadata(safe.Metadata)
 	return json.Marshal(&struct {
 		*Alias
 	}{
-		Alias: (*Alias)(b),
+		Alias: (*Alias)(&safe),
 	})
 }
 
@@ -362,11 +387,16 @@ func (b *Balance) Marshal() ([]byte, error) {
 func (b *Balance) Unmarshal(data []byte) error {
 	type Alias Balance
 	aux := (*Alias)(b)
-	return json.Unmarshal(data, aux)
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	b.Metadata = sanitizeRequestMetadata(b.Metadata)
+	return nil
 }
 
 // Commission represents a commission log entry.
 type Commission struct {
+	requestmeta.Metadata
 	Type      uint16 `json:"type"`
 	Amount    int64  `json:"amount"`
 	OrderNo   string `json:"order_no"`
@@ -376,10 +406,12 @@ type Commission struct {
 // Marshal implements the json.Marshaler interface for Commission.
 func (c *Commission) Marshal() ([]byte, error) {
 	type Alias Commission
+	safe := *c
+	safe.Metadata = sanitizeRequestMetadata(safe.Metadata)
 	return json.Marshal(&struct {
 		*Alias
 	}{
-		Alias: (*Alias)(c),
+		Alias: (*Alias)(&safe),
 	})
 }
 
@@ -387,11 +419,16 @@ func (c *Commission) Marshal() ([]byte, error) {
 func (c *Commission) Unmarshal(data []byte) error {
 	type Alias Commission
 	aux := (*Alias)(c)
-	return json.Unmarshal(data, aux)
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	c.Metadata = sanitizeRequestMetadata(c.Metadata)
+	return nil
 }
 
 // Gift represents a gift log entry.
 type Gift struct {
+	requestmeta.Metadata
 	Type        uint16 `json:"type"`
 	OrderNo     string `json:"order_no"`
 	SubscribeId int64  `json:"subscribe_id"`
@@ -404,10 +441,12 @@ type Gift struct {
 // Marshal implements the json.Marshaler interface for Gift.
 func (g *Gift) Marshal() ([]byte, error) {
 	type Alias Gift
+	safe := *g
+	safe.Metadata = sanitizeRequestMetadata(safe.Metadata)
 	return json.Marshal(&struct {
 		*Alias
 	}{
-		Alias: (*Alias)(g),
+		Alias: (*Alias)(&safe),
 	})
 }
 
@@ -415,11 +454,16 @@ func (g *Gift) Marshal() ([]byte, error) {
 func (g *Gift) Unmarshal(data []byte) error {
 	type Alias Gift
 	aux := (*Alias)(g)
-	return json.Unmarshal(data, aux)
+	if err := json.Unmarshal(data, aux); err != nil {
+		return err
+	}
+	g.Metadata = sanitizeRequestMetadata(g.Metadata)
+	return nil
 }
 
 // UserTraffic represents a user traffic log entry.
 type UserTraffic struct {
+	requestmeta.Metadata
 	SubscribeId int64 `json:"subscribe_id"` // Subscribe ID
 	UserId      int64 `json:"user_id"`      // User ID
 	Upload      int64 `json:"upload"`       // Upload traffic in bytes
@@ -468,6 +512,7 @@ func (u *UserTrafficRank) Unmarshal(data []byte) error {
 
 // ServerTraffic represents a server traffic log entry.
 type ServerTraffic struct {
+	requestmeta.Metadata
 	ServerId int64 `json:"server_id"` // Server ID
 	Upload   int64 `json:"upload"`    // Upload traffic in bytes
 	Download int64 `json:"download"`  // Download traffic in bytes
@@ -515,6 +560,7 @@ func (s *ServerTrafficRank) Unmarshal(data []byte) error {
 
 // TrafficStat represents a daily traffic statistics log entry.
 type TrafficStat struct {
+	requestmeta.Metadata
 	Upload   int64 `json:"upload"`
 	Download int64 `json:"download"`
 	Total    int64 `json:"total"`

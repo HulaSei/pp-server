@@ -1,20 +1,38 @@
 package dto
 
 type BalanceLog struct {
-	Type      uint16 `json:"type"`
-	UserId    int64  `json:"user_id"`
-	Amount    int64  `json:"amount"`
-	OrderNo   string `json:"order_no,omitempty"`
-	Balance   int64  `json:"balance"`
-	Timestamp int64  `json:"timestamp"`
+	Type             uint16 `json:"type"`
+	UserId           int64  `json:"user_id"`
+	Amount           int64  `json:"amount"`
+	OrderNo          string `json:"order_no,omitempty"`
+	Balance          int64  `json:"balance"`
+	Timestamp        int64  `json:"timestamp"`
+	ClientIP         string `json:"client_ip,omitempty"`
+	UserAgent        string `json:"user_agent,omitempty"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 }
 
 type CommissionLog struct {
-	Type      uint16 `json:"type"`
-	UserId    int64  `json:"user_id"`
-	Amount    int64  `json:"amount"`
-	OrderNo   string `json:"order_no"`
-	Timestamp int64  `json:"timestamp"`
+	Type             uint16 `json:"type"`
+	UserId           int64  `json:"user_id"`
+	Amount           int64  `json:"amount"`
+	OrderNo          string `json:"order_no"`
+	Timestamp        int64  `json:"timestamp"`
+	ClientIP         string `json:"client_ip,omitempty"`
+	UserAgent        string `json:"user_agent,omitempty"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 }
 
 type FilterBalanceLogRequest struct {
@@ -118,14 +136,23 @@ type GetMessageLogListResponse struct {
 }
 
 type GiftLog struct {
-	Type        uint16 `json:"type"`
-	UserId      int64  `json:"user_id"`
-	OrderNo     string `json:"order_no"`
-	SubscribeId int64  `json:"subscribe_id"`
-	Amount      int64  `json:"amount"`
-	Balance     int64  `json:"balance"`
-	Remark      string `json:"remark,omitempty"`
-	Timestamp   int64  `json:"timestamp"`
+	Type             uint16 `json:"type"`
+	UserId           int64  `json:"user_id"`
+	OrderNo          string `json:"order_no"`
+	SubscribeId      int64  `json:"subscribe_id"`
+	Amount           int64  `json:"amount"`
+	Balance          int64  `json:"balance"`
+	Remark           string `json:"remark,omitempty"`
+	Timestamp        int64  `json:"timestamp"`
+	ClientIP         string `json:"client_ip,omitempty"`
+	UserAgent        string `json:"user_agent,omitempty"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 }
 
 type LogResponse struct {
@@ -138,38 +165,70 @@ type LogSetting struct {
 }
 
 type LoginLog struct {
-	UserId    int64  `json:"user_id"`
-	Method    string `json:"method"`
-	LoginIP   string `json:"login_ip"`
-	UserAgent string `json:"user_agent"`
-	Success   bool   `json:"success"`
-	Timestamp int64  `json:"timestamp"`
+	UserId           int64  `json:"user_id"`
+	Method           string `json:"method"`
+	LoginIP          string `json:"login_ip"`
+	UserAgent        string `json:"user_agent"`
+	Success          bool   `json:"success"`
+	Timestamp        int64  `json:"timestamp"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 }
 
 type MessageLog struct {
-	Id        int64       `json:"id"`
-	Type      uint8       `json:"type"`
-	Platform  string      `json:"platform"`
-	To        string      `json:"to"`
-	Subject   string      `json:"subject"`
-	Content   interface{} `json:"content"`
-	Status    uint8       `json:"status"`
-	CreatedAt int64       `json:"created_at"`
+	Id               int64       `json:"id"`
+	Type             uint8       `json:"type"`
+	Platform         string      `json:"platform"`
+	To               string      `json:"to"`
+	Subject          string      `json:"subject"`
+	Content          interface{} `json:"content"`
+	Status           uint8       `json:"status"`
+	CreatedAt        int64       `json:"created_at"`
+	ClientIP         string      `json:"client_ip,omitempty"`
+	UserAgent        string      `json:"user_agent,omitempty"`
+	ActorID          int64       `json:"actor_id,omitempty"`
+	IPCountryCode    string      `json:"ip_country_code,omitempty"`
+	IPCountry        string      `json:"ip_country,omitempty"`
+	IPRegion         string      `json:"ip_region,omitempty"`
+	IPCity           string      `json:"ip_city,omitempty"`
+	IPASN            uint        `json:"ip_asn,omitempty"`
+	IPASOrganization string      `json:"ip_as_organization,omitempty"`
 }
 
 type RegisterLog struct {
-	UserId     int64  `json:"user_id"`
-	AuthMethod string `json:"auth_method"`
-	Identifier string `json:"identifier"`
-	RegisterIP string `json:"register_ip"`
-	UserAgent  string `json:"user_agent"`
-	Timestamp  int64  `json:"timestamp"`
+	UserId           int64  `json:"user_id"`
+	AuthMethod       string `json:"auth_method"`
+	Identifier       string `json:"identifier"`
+	RegisterIP       string `json:"register_ip"`
+	UserAgent        string `json:"user_agent"`
+	Timestamp        int64  `json:"timestamp"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 }
 
 type ResetSubscribeLog struct {
-	Type            uint16 `json:"type"`
-	UserId          int64  `json:"user_id"`
-	UserSubscribeId int64  `json:"user_subscribe_id"`
-	OrderNo         string `json:"order_no,omitempty"`
-	Timestamp       int64  `json:"timestamp"`
+	Type             uint16 `json:"type"`
+	UserId           int64  `json:"user_id"`
+	UserSubscribeId  int64  `json:"user_subscribe_id"`
+	OrderNo          string `json:"order_no,omitempty"`
+	Timestamp        int64  `json:"timestamp"`
+	ClientIP         string `json:"client_ip,omitempty"`
+	UserAgent        string `json:"user_agent,omitempty"`
+	ActorID          int64  `json:"actor_id,omitempty"`
+	IPCountryCode    string `json:"ip_country_code,omitempty"`
+	IPCountry        string `json:"ip_country,omitempty"`
+	IPRegion         string `json:"ip_region,omitempty"`
+	IPCity           string `json:"ip_city,omitempty"`
+	IPASN            uint   `json:"ip_asn,omitempty"`
+	IPASOrganization string `json:"ip_as_organization,omitempty"`
 }

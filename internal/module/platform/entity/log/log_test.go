@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 )
 
 func TestSecurityLogMarshalKeepsRiskMetadataAndRedactsSecrets(t *testing.T) {
@@ -14,6 +15,16 @@ func TestSecurityLogMarshalKeepsRiskMetadataAndRedactsSecrets(t *testing.T) {
 		secrets      []string
 		riskMetadata []string
 	}{
+		{
+			name: "balance",
+			marshal: func() ([]byte, error) {
+				return (&Balance{Metadata: requestmeta.Metadata{
+					ClientIP: "192.0.2.13", UserAgent: "private-agent", ActorID: 7,
+					IPMetadata: requestmeta.IPMetadata{IPCountryCode: "SG", IPASN: 64500, IPASOrganization: "Example Network"},
+				}, Amount: 100}).Marshal()
+			},
+			riskMetadata: []string{"192.0.2.13", "private-agent", `"actor_id":7`, `"ip_country_code":"SG"`, `"ip_asn":64500`, `"ip_as_organization":"Example Network"`},
+		},
 		{
 			name: "message",
 			marshal: func() ([]byte, error) {
@@ -30,9 +41,9 @@ func TestSecurityLogMarshalKeepsRiskMetadataAndRedactsSecrets(t *testing.T) {
 		{
 			name: "login",
 			marshal: func() ([]byte, error) {
-				return (&Login{LoginIP: "192.0.2.10", UserAgent: "private-agent", Success: true}).Marshal()
+				return (&Login{IPMetadata: requestmeta.IPMetadata{IPCountry: "Singapore", IPCity: "Singapore"}, LoginIP: "192.0.2.10", UserAgent: "private-agent", Success: true}).Marshal()
 			},
-			riskMetadata: []string{"192.0.2.10", "private-agent"},
+			riskMetadata: []string{"192.0.2.10", "private-agent", `"ip_country":"Singapore"`, `"ip_city":"Singapore"`},
 		},
 		{
 			name: "registration",

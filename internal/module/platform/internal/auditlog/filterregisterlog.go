@@ -49,12 +49,19 @@ func (l *FilterRegisterLogLogic) FilterRegisterLog(req *dto.FilterRegisterLogReq
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt registration log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.RegisterLog{
-			UserId:     datum.ObjectID,
-			AuthMethod: item.AuthMethod,
-			Identifier: item.Identifier,
-			RegisterIP: item.RegisterIP,
-			UserAgent:  item.UserAgent,
-			Timestamp:  datum.CreatedAt.UnixMilli(),
+			UserId:           datum.ObjectID,
+			AuthMethod:       item.AuthMethod,
+			Identifier:       item.Identifier,
+			RegisterIP:       item.RegisterIP,
+			UserAgent:        item.UserAgent,
+			Timestamp:        datum.CreatedAt.UnixMilli(),
+			ActorID:          item.ActorID,
+			IPCountryCode:    item.IPCountryCode,
+			IPCountry:        item.IPCountry,
+			IPRegion:         item.IPRegion,
+			IPCity:           item.IPCity,
+			IPASN:            item.IPASN,
+			IPASOrganization: item.IPASOrganization,
 		})
 	}
 

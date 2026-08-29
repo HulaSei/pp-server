@@ -9,6 +9,7 @@ import (
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/module/platform/entity/task"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 )
 
 type workerTaskStore struct {
@@ -183,6 +184,34 @@ func TestWorkerRecordsRedactedFailedDelivery(t *testing.T) {
 	}
 	if message.Content["redacted"] != true || message.Content["batch_task_id"].(float64) != 7 {
 		t.Fatalf("email log content = %#v", message.Content)
+	}
+}
+
+func TestWorkerRestoresCreatorRequestMetadata(t *testing.T) {
+	data := newEmailTask(t, task.StatusPending, 0, "alice@example.com")
+	var scope task.EmailScope
+	if err := scope.Unmarshal([]byte(data.Scope)); err != nil {
+		t.Fatal(err)
+	}
+	scope.Metadata = requestmeta.Metadata{ClientIP: "203.0.113.8", UserAgent: "AdminClient/1.0", ActorID: 9}
+	encoded, err := scope.Marshal()
+	if err != nil {
+		t.Fatal(err)
+	}
+	data.Scope = string(encoded)
+	store := &workerTaskStore{task: data}
+	logs := &workerLogStore{}
+	worker := NewWorker(context.Background(), 7, store, &workerSender{}, WithMessageLogs(logs, "smtp"))
+
+	if err := worker.Start(); err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	var message logEntity.Message
+	if err := message.Unmarshal([]byte(logs.logs[0].Content)); err != nil {
+		t.Fatal(err)
+	}
+	if message.ClientIP != "203.0.113.8" || message.UserAgent != "AdminClient/1.0" || message.ActorID != 9 {
+		t.Fatalf("message request metadata = %+v", message.Metadata)
 	}
 }
 

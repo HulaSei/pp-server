@@ -12,6 +12,7 @@ import (
 	notificationHTTP "github.com/perfect-panel/server/internal/module/notification/transport/http"
 	"github.com/perfect-panel/server/internal/route"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 )
 
 type Server struct {
@@ -22,6 +23,7 @@ type Dependencies struct {
 	Routes           route.Dependencies
 	Notification     notification.Service
 	TelegramBotToken func() string
+	RequestMetadata  requestmeta.Enricher
 }
 
 func New(deps Dependencies, addr string, tlsConfig *tls.Config) *Server {
@@ -38,7 +40,7 @@ func New(deps Dependencies, addr string, tlsConfig *tls.Config) *Server {
 
 func newServer(deps Dependencies, opts []config.Option) *Server {
 	engine := server.Default(opts...)
-	engine.Use(middleware.TraceMiddleware(), middleware.LoggerMiddleware(), middleware.CorsMiddleware)
+	engine.Use(middleware.TraceMiddleware(), middleware.LoggerMiddleware(deps.RequestMetadata), middleware.CorsMiddleware)
 
 	route.RegisterHandlers(engine, deps.Routes)
 	notificationHTTP.RegisterTelegramHandlers(engine, deps.Notification, deps.TelegramBotToken)

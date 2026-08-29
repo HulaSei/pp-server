@@ -82,6 +82,24 @@ func TestFieldPreservesSafeOperationalKeys(t *testing.T) {
 	}
 }
 
+func TestRiskFieldPreservesOnlyExplicitRequestMetadata(t *testing.T) {
+	for _, tc := range []struct {
+		key   string
+		value string
+		want  string
+	}{
+		{key: "client_ip", value: "203.0.113.1", want: "203.0.113.1"},
+		{key: "user_agent", value: "RiskClient/1.0", want: "RiskClient/1.0"},
+		{key: "email", value: "person@example.com", want: RedactedValue},
+		{key: "authorization", value: "Bearer secret", want: RedactedValue},
+	} {
+		field := redactField(RiskField(tc.key, tc.value))
+		if field.Value != tc.want {
+			t.Fatalf("RiskField(%q) = %#v, want %q", tc.key, field.Value, tc.want)
+		}
+	}
+}
+
 func TestRedactTextRemovesCommonCredentialsAndEmail(t *testing.T) {
 	secrets := []string{
 		"eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.VeryLongSignatureValue",

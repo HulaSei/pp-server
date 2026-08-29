@@ -53,13 +53,20 @@ func (l *GetSubscribeLogLogic) GetSubscribeLog(req *dto.GetSubscribeLogRequest) 
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt subscription log %d: %v", item.Id, err)
 		}
 		list = append(list, dto.UserSubscribeLog{
-			Id:              item.Id,
-			UserId:          item.ObjectID,
-			UserSubscribeId: content.UserSubscribeId,
-			Token:           content.Token,
-			IP:              content.ClientIP,
-			UserAgent:       content.UserAgent,
-			Timestamp:       item.CreatedAt.UnixMilli(),
+			Id:               item.Id,
+			UserId:           item.ObjectID,
+			UserSubscribeId:  content.UserSubscribeId,
+			Token:            content.Token,
+			IP:               content.ClientIP,
+			UserAgent:        content.UserAgent,
+			Timestamp:        item.CreatedAt.UnixMilli(),
+			ActorID:          content.ActorID,
+			IPCountryCode:    content.IPCountryCode,
+			IPCountry:        content.IPCountry,
+			IPRegion:         content.IPRegion,
+			IPCity:           content.IPCity,
+			IPASN:            content.IPASN,
+			IPASOrganization: content.IPASOrganization,
 		})
 	}
 

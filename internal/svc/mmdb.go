@@ -1,8 +1,10 @@
 package svc
 
 import (
+	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -10,13 +12,19 @@ import (
 
 	"github.com/oschwald/geoip2-golang"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 )
 
-const GeoIPDBURL = "https://raw.githubusercontent.com/adysec/IP_database/main/geolite/GeoLite2-City.mmdb"
+const (
+	GeoIPDBURL    = "https://raw.githubusercontent.com/adysec/IP_database/main/geolite/GeoLite2-City.mmdb"
+	GeoIPASNDBURL = "https://raw.githubusercontent.com/adysec/IP_database/main/geolite/GeoLite2-ASN.mmdb"
+)
 
 type IPLocation struct {
-	Path string
-	DB   *geoip2.Reader
+	Path    string
+	DB      *geoip2.Reader
+	ASNPath string
+	ASNDB   *geoip2.Reader
 }
 
 func NewIPLocation(path string) (*IPLocation, error) {
@@ -37,14 +45,76 @@ func NewIPLocation(path string) (*IPLocation, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &IPLocation{
-		Path: path,
-		DB:   db,
-	}, nil
+
+	ipLoc := &IPLocation{Path: path, DB: db}
+	asnPath := filepath.Join(filepath.Dir(path), "GeoLite2-ASN.mmdb")
+	ipLoc.ASNPath = asnPath
+	if _, err := os.Stat(asnPath); os.IsNotExist(err) {
+		logger.Infof("[GeoIP] ASN database not found, downloading from %s", GeoIPASNDBURL)
+		if err := DownloadGeoIPDatabase(GeoIPASNDBURL, asnPath); err != nil {
+			// ASN enrichment is optional. A transient download problem must not
+			// turn logging metadata into an application startup dependency.
+			logger.Errorf("[GeoIP] Failed to download ASN database; network organization will be omitted: %v", err)
+			return ipLoc, nil
+		}
+		logger.Infof("[GeoIP] ASN database downloaded successfully")
+	}
+	if asnDB, err := geoip2.Open(asnPath); err != nil {
+		logger.Errorf("[GeoIP] Failed to open ASN database; network organization will be omitted: %v", err)
+	} else {
+		ipLoc.ASNDB = asnDB
+	}
+	return ipLoc, nil
 }
 
 func (ipLoc *IPLocation) Close() error {
-	return ipLoc.DB.Close()
+	if ipLoc == nil {
+		return nil
+	}
+	var errs []error
+	if ipLoc.DB != nil {
+		errs = append(errs, ipLoc.DB.Close())
+	}
+	if ipLoc.ASNDB != nil {
+		errs = append(errs, ipLoc.ASNDB.Close())
+	}
+	return errors.Join(errs...)
+}
+
+// Enrich performs at most one City and one ASN lookup for a public client IP.
+// MMDB lookup errors are treated as misses so request handling remains
+// independent from optional risk metadata.
+func (ipLoc *IPLocation) Enrich(metadata requestmeta.Metadata) requestmeta.Metadata {
+	ip := net.ParseIP(metadata.ClientIP)
+	if ipLoc == nil || ip == nil || !ip.IsGlobalUnicast() || ip.IsPrivate() {
+		return requestmeta.Normalize(metadata)
+	}
+	if ipLoc.DB != nil {
+		if record, err := ipLoc.DB.City(ip); err == nil && record != nil {
+			metadata.IPCountryCode = record.Country.IsoCode
+			metadata.IPCountry = preferredGeoName(record.Country.Names)
+			if len(record.Subdivisions) > 0 {
+				metadata.IPRegion = preferredGeoName(record.Subdivisions[0].Names)
+			}
+			metadata.IPCity = preferredGeoName(record.City.Names)
+		}
+	}
+	if ipLoc.ASNDB != nil {
+		if record, err := ipLoc.ASNDB.ASN(ip); err == nil && record != nil {
+			metadata.IPASN = record.AutonomousSystemNumber
+			metadata.IPASOrganization = record.AutonomousSystemOrganization
+		}
+	}
+	return requestmeta.Normalize(metadata)
+}
+
+func preferredGeoName(names map[string]string) string {
+	for _, language := range []string{"en", "zh-CN", "zh"} {
+		if name := names[language]; name != "" {
+			return name
+		}
+	}
+	return ""
 }
 
 func DownloadGeoIPDatabase(url, path string) error {

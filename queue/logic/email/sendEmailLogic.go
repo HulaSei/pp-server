@@ -7,6 +7,7 @@ import (
 	"text/template"
 
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 	"github.com/perfect-panel/server/pkg/timeutil"
 
 	"github.com/hibiken/asynq"
@@ -68,6 +69,8 @@ func (l *SendEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) erro
 		)
 		return nil
 	}
+	ctx = requestmeta.With(ctx, payload.Metadata)
+	ctx = logger.ContextWithRequestMetadata(ctx, payload.Metadata)
 	sender, err := email.NewSender(l.deps.Email().Platform, l.deps.Email().PlatformConfig, l.deps.SiteName())
 	if err != nil {
 		logger.WithContext(ctx).Error("[SendEmailLogic] NewSender failed", logger.Field("error", err.Error()))
@@ -120,6 +123,7 @@ func (l *SendEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) erro
 	}
 	subject := resolveSubject(ctx, subjectTemplate, payload.Subject, payload.Content)
 	messageLog := log.Message{
+		Metadata: payload.Metadata,
 		Platform: l.deps.Email().Platform,
 		To:       logger.RedactedValue,
 		// Subjects are operator-controlled templates and may interpolate names,

@@ -7,12 +7,23 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 	"github.com/perfect-panel/server/pkg/result"
 )
 
-func LoggerMiddleware() app.HandlerFunc {
+const requestActorIDKey = "audit_actor_id"
+
+func LoggerMiddleware(enrichers ...requestmeta.Enricher) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		start := time.Now()
+		metadata := requestmeta.New(ctx.ClientIP(), string(ctx.UserAgent()))
+		for _, enrich := range enrichers {
+			if enrich != nil {
+				metadata = enrich(metadata)
+			}
+		}
+		c = requestmeta.With(c, metadata)
+		c = logger.ContextWithRequestMetadata(c, metadata)
 		ctx.Next(c)
 
 		cost := time.Since(start)
@@ -31,6 +42,11 @@ func LoggerMiddleware() app.HandlerFunc {
 			logger.Field("route", route),
 			logger.Field("request_bytes", len(ctx.Request.Body())),
 			logger.Field("response_bytes", len(ctx.Response.Body())),
+			logger.RiskField("client_ip", metadata.ClientIP),
+			logger.RiskField("user_agent", metadata.UserAgent),
+		}
+		if actorID, ok := ctx.Get(requestActorIDKey); ok {
+			logs = append(logs, logger.Field("actor_id", actorID))
 		}
 		if result.ParamErrorFromRequestContext(ctx) != nil {
 			// Parameter errors can echo rejected input values. Preserve the fact

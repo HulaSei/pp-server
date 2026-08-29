@@ -3,6 +3,8 @@ package task
 import (
 	"encoding/json"
 	"time"
+
+	"github.com/perfect-panel/server/pkg/requestmeta"
 )
 
 type Type int8
@@ -81,6 +83,7 @@ func (t ScopeType) Int8() int8 {
 }
 
 type EmailScope struct {
+	requestmeta.Metadata
 	Type              int8     `gorm:"not null;comment:Scope Type"`
 	RegisterStartTime int64    `json:"register_start_time"`
 	RegisterEndTime   int64    `json:"register_end_time"`
@@ -129,6 +132,7 @@ func (c *EmailContent) Unmarshal(data []byte) error {
 }
 
 type QuotaScope struct {
+	requestmeta.Metadata
 	Subscribers []int64 `json:"subscribers"` // Subscribe IDs
 	IsActive    *bool   `json:"is_active"`   // filter by active status
 	StartTime   int64   `json:"start_time"`  // filter by subscription start time

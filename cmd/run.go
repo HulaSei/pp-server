@@ -183,6 +183,7 @@ func getServers() *service.Group {
 				Routes:           routeDeps(),
 				Notification:     ctx.Notification,
 				TelegramBotToken: func() string { return runtimeConfig().Telegram.BotToken },
+				RequestMetadata:  ctx.GeoIP.Enrich,
 			}
 		},
 		SetRestart:             ctx.Runtime.SetRestart,

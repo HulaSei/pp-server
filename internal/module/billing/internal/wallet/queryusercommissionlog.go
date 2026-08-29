@@ -53,11 +53,20 @@ func (l *QueryUserCommissionLogLogic) QueryUserCommissionLog(req *dto.QueryUserC
 			continue
 		}
 		list = append(list, dto.BillingCommissionLogSnapshot{
-			UserId:    datum.ObjectID,
-			Type:      content.Type,
-			Amount:    content.Amount,
-			OrderNo:   content.OrderNo,
-			Timestamp: content.Timestamp,
+			UserId:           datum.ObjectID,
+			Type:             content.Type,
+			Amount:           content.Amount,
+			OrderNo:          content.OrderNo,
+			Timestamp:        content.Timestamp,
+			ClientIP:         content.ClientIP,
+			UserAgent:        content.UserAgent,
+			ActorID:          content.ActorID,
+			IPCountryCode:    content.IPCountryCode,
+			IPCountry:        content.IPCountry,
+			IPRegion:         content.IPRegion,
+			IPCity:           content.IPCity,
+			IPASN:            content.IPASN,
+			IPASOrganization: content.IPASOrganization,
 		})
 	}
 

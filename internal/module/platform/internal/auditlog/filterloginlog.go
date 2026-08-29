@@ -48,12 +48,19 @@ func (l *FilterLoginLogLogic) FilterLoginLog(req *dto.FilterLoginLogRequest) (re
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt login log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.LoginLog{
-			UserId:    datum.ObjectID,
-			Method:    item.Method,
-			LoginIP:   item.LoginIP,
-			UserAgent: item.UserAgent,
-			Success:   item.Success,
-			Timestamp: datum.CreatedAt.UnixMilli(),
+			UserId:           datum.ObjectID,
+			Method:           item.Method,
+			LoginIP:          item.LoginIP,
+			UserAgent:        item.UserAgent,
+			Success:          item.Success,
+			Timestamp:        datum.CreatedAt.UnixMilli(),
+			ActorID:          item.ActorID,
+			IPCountryCode:    item.IPCountryCode,
+			IPCountry:        item.IPCountry,
+			IPRegion:         item.IPRegion,
+			IPCity:           item.IPCity,
+			IPASN:            item.IPASN,
+			IPASOrganization: item.IPASOrganization,
 		})
 	}
 

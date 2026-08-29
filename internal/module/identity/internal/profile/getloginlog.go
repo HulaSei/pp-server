@@ -53,12 +53,19 @@ func (l *GetLoginLogLogic) GetLoginLog(req *dto.GetLoginLogRequest) (resp *dto.G
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "corrupt login log %d: %v", datum.Id, err)
 		}
 		list = append(list, dto.UserLoginLog{
-			Id:        datum.Id,
-			UserId:    datum.ObjectID,
-			LoginIP:   content.LoginIP,
-			UserAgent: content.UserAgent,
-			Success:   content.Success,
-			Timestamp: datum.CreatedAt.UnixMilli(),
+			Id:               datum.Id,
+			UserId:           datum.ObjectID,
+			LoginIP:          content.LoginIP,
+			UserAgent:        content.UserAgent,
+			Success:          content.Success,
+			Timestamp:        datum.CreatedAt.UnixMilli(),
+			ActorID:          content.ActorID,
+			IPCountryCode:    content.IPCountryCode,
+			IPCountry:        content.IPCountry,
+			IPRegion:         content.IPRegion,
+			IPCity:           content.IPCity,
+			IPASN:            content.IPASN,
+			IPASOrganization: content.IPASOrganization,
 		})
 	}
 

@@ -16,6 +16,7 @@ import (
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/phone"
 	"github.com/perfect-panel/server/pkg/random"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 	"github.com/perfect-panel/server/pkg/xerr"
 	queue "github.com/perfect-panel/server/queue/types"
 	"github.com/pkg/errors"
@@ -93,7 +94,9 @@ func (l *SendSmsCodeLogic) SendSmsCode(req *dto.SendSmsCodeRequest) (resp *dto.S
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.UserNotExist), "mobile not bind")
 	}
 
+	metadata, _ := requestmeta.From(l.ctx)
 	taskPayload := queue.SendSmsPayload{
+		Metadata:      metadata,
 		Type:          req.Type,
 		Telephone:     req.Telephone,
 		TelephoneArea: req.TelephoneAreaCode,

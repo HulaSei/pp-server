@@ -11,6 +11,7 @@ import (
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/internal/module/support"
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 )
 
 type fakeTaskRepo struct {
@@ -233,7 +234,8 @@ func TestCreateBatchSendEmailTaskSkipScopeRequiresAdditional(t *testing.T) {
 func TestCreateBatchSendEmailTaskDedupesAndEnqueues(t *testing.T) {
 	svc, fakes := newMarketingService(fakeRecipients{emails: []string{"a@x.com", "a@x.com", "b@x.com"}}, fakeQuotaTargets{})
 
-	err := svc.CreateBatchSendEmailTask(context.Background(), &dto.CreateBatchSendEmailTaskRequest{
+	ctx := requestmeta.With(context.Background(), requestmeta.Metadata{ClientIP: "203.0.113.4", UserAgent: "AdminClient/1.0", ActorID: 6})
+	err := svc.CreateBatchSendEmailTask(ctx, &dto.CreateBatchSendEmailTaskRequest{
 		Subject:    "subject",
 		Content:    "content",
 		Scope:      taskEntity.ScopeAll.Int8(),
@@ -254,6 +256,13 @@ func TestCreateBatchSendEmailTaskDedupesAndEnqueues(t *testing.T) {
 	}
 	if fakes.queue.processAt.IsZero() {
 		t.Fatal("batch email must be scheduled with a processAt time")
+	}
+	var scope taskEntity.EmailScope
+	if err := scope.Unmarshal([]byte(got.Scope)); err != nil {
+		t.Fatal(err)
+	}
+	if scope.ClientIP != "203.0.113.4" || scope.UserAgent != "AdminClient/1.0" || scope.ActorID != 6 {
+		t.Fatalf("email task request metadata = %+v", scope.Metadata)
 	}
 }
 
@@ -284,7 +293,8 @@ func TestCreateQuotaTaskRejectsNoSubscribers(t *testing.T) {
 func TestCreateQuotaTaskEnqueuesWithTargets(t *testing.T) {
 	svc, fakes := newMarketingService(fakeRecipients{}, fakeQuotaTargets{ids: []int64{4, 5, 6}})
 
-	if err := svc.CreateQuotaTask(context.Background(), &dto.CreateQuotaTaskRequest{Days: 7}); err != nil {
+	ctx := requestmeta.With(context.Background(), requestmeta.Metadata{ClientIP: "203.0.113.5", UserAgent: "AdminClient/2.0", ActorID: 7})
+	if err := svc.CreateQuotaTask(ctx, &dto.CreateQuotaTaskRequest{Days: 7}); err != nil {
 		t.Fatalf("CreateQuotaTask: %v", err)
 	}
 	got := fakes.tasks.inserted
@@ -293,6 +303,13 @@ func TestCreateQuotaTaskEnqueuesWithTargets(t *testing.T) {
 	}
 	if fakes.queue.quotaTaskID != 77 {
 		t.Fatalf("enqueued task id = %d, want 77", fakes.queue.quotaTaskID)
+	}
+	var scope taskEntity.QuotaScope
+	if err := scope.Unmarshal([]byte(got.Scope)); err != nil {
+		t.Fatal(err)
+	}
+	if scope.ClientIP != "203.0.113.5" || scope.UserAgent != "AdminClient/2.0" || scope.ActorID != 7 {
+		t.Fatalf("quota task request metadata = %+v", scope.Metadata)
 	}
 }
 

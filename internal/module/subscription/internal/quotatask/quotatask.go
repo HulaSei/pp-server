@@ -23,6 +23,7 @@ import (
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/requestmeta"
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/tool"
 )
@@ -88,6 +89,7 @@ func (l *QuotaTaskLogic) process(ctx context.Context, taskID int64) error {
 	if err != nil {
 		return err
 	}
+	ctx = restoreTaskRequestMetadata(ctx, taskInfo.Scope)
 
 	if taskInfo.Status == task.StatusCompleted || taskInfo.Status == task.StatusCancelled || taskInfo.Status == task.StatusEnqueueFailed ||
 		(taskInfo.Status == task.StatusFailed && taskInfo.Current >= taskInfo.Total) {
@@ -152,6 +154,15 @@ func (l *QuotaTaskLogic) process(ctx context.Context, taskID int64) error {
 	}
 
 	return nil
+}
+
+func restoreTaskRequestMetadata(ctx context.Context, scopeJSON string) context.Context {
+	var metadata requestmeta.Metadata
+	if json.Unmarshal([]byte(scopeJSON), &metadata) != nil {
+		return ctx
+	}
+	ctx = requestmeta.With(ctx, metadata)
+	return logger.ContextWithRequestMetadata(ctx, metadata)
 }
 
 func (l *QuotaTaskLogic) getTaskInfo(ctx context.Context, taskID int64) (*task.Task, error) {
