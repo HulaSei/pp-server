@@ -81,7 +81,6 @@ func registerAdminSystemRoutes(router *server.Hertz, deps Dependencies) {
 	group.GET("/get_node_multiplier", adminSystem.GetNodeMultiplierHandler(deps.Platform))
 	group.GET("/invite_config", adminSystem.GetInviteConfigHandler(deps.Platform))
 	group.PUT("/invite_config", adminSystem.UpdateInviteConfigHandler(deps.Platform))
-	group.GET("/module", adminSystem.GetModuleConfigHandler(deps.Platform))
 	group.GET("/node_config", adminSystem.GetNodeConfigHandler(deps.Platform))
 	group.PUT("/node_config", adminSystem.UpdateNodeConfigHandler(deps.Platform))
 	group.GET("/node_multiplier/preview", adminSystem.PreViewNodeMultiplierHandler(deps.Platform))

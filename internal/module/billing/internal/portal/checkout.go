@@ -61,9 +61,6 @@ type CheckoutConfig struct {
 	SiteName          string
 	CurrencyUnit      string
 	CurrencyAccessKey string
-	// IsGatewayMode reports whether notify URLs must use the gateway prefix;
-	// injected so the module does not read process-global state.
-	IsGatewayMode func() bool
 }
 
 // GuestCheckoutCache provides the one Redis operation needed to validate
@@ -633,9 +630,6 @@ func (l *PurchaseCheckoutLogic) paymentPublicBaseURL(config *payment.Payment) st
 			host = l.deps.Config.Host
 		}
 		baseURL = "https://" + strings.TrimSuffix(host, "/")
-	}
-	if l.deps.Config.IsGatewayMode != nil && l.deps.Config.IsGatewayMode() {
-		baseURL = strings.TrimSuffix(baseURL, "/") + "/api"
 	}
 	return strings.TrimSuffix(baseURL, "/")
 }

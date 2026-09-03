@@ -50,7 +50,6 @@ GET /v1/admin/subscribe/list github.com/perfect-panel/server/internal/module/sub
 GET /v1/admin/system/currency_config github.com/perfect-panel/server/internal/module/platform/transport/http/admin/system.GetCurrencyConfigHandler
 GET /v1/admin/system/get_node_multiplier github.com/perfect-panel/server/internal/module/platform/transport/http/admin/system.GetNodeMultiplierHandler
 GET /v1/admin/system/invite_config github.com/perfect-panel/server/internal/module/platform/transport/http/admin/system.GetInviteConfigHandler
-GET /v1/admin/system/module github.com/perfect-panel/server/internal/module/platform/transport/http/admin/system.GetModuleConfigHandler
 GET /v1/admin/system/node_config github.com/perfect-panel/server/internal/module/platform/transport/http/admin/system.GetNodeConfigHandler
 GET /v1/admin/system/node_multiplier/preview github.com/perfect-panel/server/internal/module/platform/transport/http/admin/system.PreViewNodeMultiplierHandler
 GET /v1/admin/system/privacy github.com/perfect-panel/server/internal/module/platform/transport/http/admin/system.GetPrivacyPolicyConfigHandler

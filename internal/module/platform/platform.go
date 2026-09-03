@@ -45,7 +45,6 @@ type Service interface {
 	// re-initialize the owning subsystem through injected callbacks.
 	GetCurrencyConfig(ctx context.Context) (*dto.CurrencyConfig, error)
 	GetInviteConfig(ctx context.Context) (*dto.InviteConfig, error)
-	GetModuleConfig(ctx context.Context) (*dto.ModuleConfig, error)
 	GetNodeConfig(ctx context.Context) (*dto.NodeConfig, error)
 	GetNodeMultiplier(ctx context.Context) (*dto.GetNodeMultiplierResponse, error)
 	GetPrivacyPolicyConfig(ctx context.Context) (*dto.PrivacyPolicyConfig, error)
@@ -268,10 +267,6 @@ func (s *service) GetCurrencyConfig(ctx context.Context) (*dto.CurrencyConfig, e
 
 func (s *service) GetInviteConfig(ctx context.Context) (*dto.InviteConfig, error) {
 	return s.settings.GetInviteConfig(ctx)
-}
-
-func (s *service) GetModuleConfig(ctx context.Context) (*dto.ModuleConfig, error) {
-	return s.settings.GetModuleConfig(ctx)
 }
 
 func (s *service) GetNodeConfig(ctx context.Context) (*dto.NodeConfig, error) {

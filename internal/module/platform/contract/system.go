@@ -34,12 +34,6 @@ type InviteConfig struct {
 	WithdrawalMethod   string `json:"withdrawal_method"`
 }
 
-type ModuleConfig struct {
-	Secret         string `json:"secret"`          // 通讯密钥
-	ServiceName    string `json:"service_name"`    // 服务名称
-	ServiceVersion string `json:"service_version"` // 服务版本
-}
-
 type PrivacyPolicyConfig struct {
 	PrivacyPolicy string `json:"privacy_policy"`
 }

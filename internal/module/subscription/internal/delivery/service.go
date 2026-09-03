@@ -16,7 +16,6 @@ type Config struct {
 	ProfileUpdateInterval int64
 	ProfileWebPageURL     string
 	UserAgentList         string
-	GatewayMode           bool
 }
 
 type Deps struct {

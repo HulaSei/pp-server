@@ -137,15 +137,15 @@ internal/module/<name>/
    管理端可热更新的配置、Telegram 客户端、节点倍率与生命周期回调由 `internal/appstate.State`
    统一持有：配置以不可变快照原子发布，更新过程串行化，避免 HTTP 与队列读配置时和重初始化并发竞争。
    billing 模块（admin order/payment）已按此模式落地：
-   激活入队、网关模式探测、站点 Host 全部经 Deps 注入，`ActivationEnqueuer` 端口在组装根
+   激活入队、站点 Host 全部经 Deps 注入，`ActivationEnqueuer` 端口在组装根
    适配 asynq。**结账金流已整体迁入 billing**（`internal/module/billing/internal/checkout`）：
    purchase/renewal/resetTraffic/recharge/preCreate/close 六个流程 + 计价助手，端口化了
    订阅域读取（`PlanReader`/`UserSubscriptionReader`，legacy repo 结构化满足）、订单队列
    （激活 + 延迟关单）、单订阅模式与币种配置；`notify.SettleVerifiedPayment` 的结算逻辑
    （CAS 标记已付 + 激活入队）收编为模块内部函数，close 的网关结算（Stripe/EPay）随迁。
    **portal 门店子域也已迁入 billing**（`internal/module/billing/internal/portal`）：
-   访客预下单、网关/余额结账（本就是六边形结构的 `PurchaseCheckoutLogic` 原样收编，
-   `report.IsGatewayMode` 全局改注入）、订单状态轮询 + 会话兑换（jwt/redis 经端口注入）、
+   访客预下单、支付渠道/余额结账（本就是六边形结构的 `PurchaseCheckoutLogic` 原样收编）、
+   订单状态轮询 + 会话兑换（jwt/redis 经端口注入）、
    门店套餐/支付方式列表；`ClientIP` 由 handler 写入请求上下文、模块内解析。
    `v2OrderLogic`（SSE 票据/幂等编排）暂留 legacy 层，四个建单分支、结账、会话兑换
    全部改调 billing 门面；`internal/logic/public/portal` 包已删除，logic 冻结基线的

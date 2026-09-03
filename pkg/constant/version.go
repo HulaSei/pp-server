@@ -21,9 +21,7 @@ var (
 	// Channel names the release channel this binary was built for. Every build
 	// path injects it alongside Version; never infer the channel from the shape
 	// of the version string.
-	Channel     = ChannelDev
-	Repository  = "https://github.com/perfect-panel/server"
-	ServiceName = "ApiService"
+	Channel = ChannelDev
 )
 
 // ChannelLabel returns the suffix shown next to the version for builds that did

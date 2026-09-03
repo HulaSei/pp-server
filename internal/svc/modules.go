@@ -21,7 +21,6 @@ import (
 	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/module/support"
 	ticket "github.com/perfect-panel/server/internal/module/support/entity/ticket"
-	"github.com/perfect-panel/server/internal/report"
 	"github.com/perfect-panel/server/internal/repository"
 	emailworker "github.com/perfect-panel/server/internal/worker/email"
 	"github.com/perfect-panel/server/pkg/asynqx"
@@ -40,19 +39,18 @@ import (
 // asynq client (ADR-001 step 4).
 func newBillingModule(c config.Config, store repository.Store, queue *asynqx.Client, rds *redis.Client, rate *exchangeRate.Cache, srv *Application) billing.Service {
 	return billing.New(billing.Deps{
-		Orders:        store.Order(),
-		Payments:      store.Payment(),
-		Coupons:       store.Coupon(),
-		Withdrawals:   store.UserWithdrawal(),
-		Plans:         store.Subscribe(),
-		UserSubs:      store.UserSubscription(),
-		Store:         store,
-		Tx:            store,
-		Queue:         activationQueue{client: queue},
-		SingleModel:   func() bool { return srv.Runtime.Config().Subscribe.SingleModel },
-		CurrencyUnit:  func() string { return srv.Runtime.Config().Currency.Unit },
-		Host:          c.Host,
-		IsGatewayMode: report.IsGatewayMode,
+		Orders:       store.Order(),
+		Payments:     store.Payment(),
+		Coupons:      store.Coupon(),
+		Withdrawals:  store.UserWithdrawal(),
+		Plans:        store.Subscribe(),
+		UserSubs:     store.UserSubscription(),
+		Store:        store,
+		Tx:           store,
+		Queue:        activationQueue{client: queue},
+		SingleModel:  func() bool { return srv.Runtime.Config().Subscribe.SingleModel },
+		CurrencyUnit: func() string { return srv.Runtime.Config().Currency.Unit },
+		Host:         c.Host,
 
 		Logs:        store.Log(),
 		UserCache:   store.UserCache(),
@@ -78,7 +76,6 @@ func newBillingModule(c config.Config, store repository.Store, queue *asynqx.Cli
 			CurrencyAccessKey: func() string { return srv.Runtime.Config().Currency.AccessKey },
 			JwtSecret:         c.JwtAuth.AccessSecret,
 			JwtExpire:         c.JwtAuth.AccessExpire,
-			IsGatewayMode:     report.IsGatewayMode,
 		},
 	})
 }
@@ -228,7 +225,6 @@ func newSubscriptionModule(store repository.Store, srv *Application) subscriptio
 				ProfileUpdateInterval: current.Subscribe.ProfileUpdateInterval,
 				ProfileWebPageURL:     current.Subscribe.ProfileWebPageURL,
 				UserAgentList:         current.Subscribe.UserAgentList,
-				GatewayMode:           report.IsGatewayMode(),
 			}
 		},
 	})

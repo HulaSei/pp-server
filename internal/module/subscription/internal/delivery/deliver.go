@@ -181,12 +181,7 @@ func (l *SubscribeLogic) Handler(req *dto.SubscribeRequest) (resp *dto.Subscribe
 }
 
 func (l *SubscribeLogic) getSubscribeV2URL() string {
-
 	uri := l.request.RequestURI
-	// is gateway mode, add /sub prefix
-	if l.cfg.GatewayMode {
-		uri = "/sub" + uri
-	}
 	// use custom domain if configured
 	if l.cfg.SubscribeDomain != "" {
 		domains := strings.Split(l.cfg.SubscribeDomain, "\n")

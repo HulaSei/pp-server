@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 
 	dto "github.com/perfect-panel/server/internal/module/platform/contract"
-	"github.com/perfect-panel/server/internal/report"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -50,10 +49,6 @@ func (l *GetGlobalConfigLogic) GetGlobalConfig() (resp *dto.GetGlobalConfigRespo
 	tool.DeepCopy(&resp.Invite, l.deps.Config.Invite)
 	tool.SystemConfigSliceReflectToStruct(currencyCfg, &resp.Currency)
 	tool.SystemConfigSliceReflectToStruct(verifyCodeCfg, &resp.VerifyCode)
-
-	if report.IsGatewayMode() {
-		resp.Subscribe.SubscribePath = "/sub" + l.deps.Config.Subscribe.SubscribePath
-	}
 
 	resp.Verify = dto.VeifyConfig{
 		TurnstileSiteKey:          l.deps.Config.Verify.TurnstileSiteKey,

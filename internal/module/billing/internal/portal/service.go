@@ -58,7 +58,6 @@ type Config struct {
 	CurrencyAccessKey func() string
 	JwtSecret         string
 	JwtExpire         int64
-	IsGatewayMode     func() bool
 }
 
 type Deps struct {
@@ -97,7 +96,6 @@ func (s *Service) Checkout(ctx context.Context, req *dto.CheckoutOrderRequest) (
 			SiteName:          s.deps.Config.SiteName(),
 			CurrencyUnit:      s.deps.Config.CurrencyUnit(),
 			CurrencyAccessKey: s.deps.Config.CurrencyAccessKey(),
-			IsGatewayMode:     s.deps.Config.IsGatewayMode,
 		},
 		ExchangeRateCache: s.deps.ExchangeRate,
 	})
