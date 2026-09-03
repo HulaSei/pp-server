@@ -2,6 +2,7 @@ package order
 
 import (
 	"context"
+	"errors"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/module/billing"
@@ -9,6 +10,7 @@ import (
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/result"
+	"github.com/perfect-panel/server/pkg/xerr"
 )
 
 // CloseOrderHandler documents Close order.
@@ -35,6 +37,11 @@ func CloseOrderHandler(service billing.Service) app.HandlerFunc {
 		}
 
 		err := service.CloseOrder(c, &req)
+		if errors.Is(err, billing.ErrGatewayUnconfirmed) {
+			// Keep the existing response envelope while exposing a retryable
+			// business conflict instead of an opaque internal-server error.
+			err = xerr.NewErrCodeMsg(409, "PAYMENT_STATUS_UNCONFIRMED")
+		}
 		result.HttpResult(ctx, nil, err)
 	}
 }

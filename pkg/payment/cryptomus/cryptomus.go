@@ -35,11 +35,33 @@ const (
 // amount, and locked is a final state in which received funds were frozen by
 // the AML program: both hold money without covering the order.
 const (
-	StatusPaid        = "paid"
-	StatusPaidOver    = "paid_over"
-	StatusWrongAmount = "wrong_amount"
-	StatusLocked      = "locked"
+	StatusPaid               = "paid"
+	StatusPaidOver           = "paid_over"
+	StatusWrongAmount        = "wrong_amount"
+	StatusWrongAmountWaiting = "wrong_amount_waiting"
+	StatusProcess            = "process"
+	StatusConfirmCheck       = "confirm_check"
+	StatusCheck              = "check"
+	StatusFail               = "fail"
+	StatusCancel             = "cancel"
+	StatusSystemFail         = "system_fail"
+	StatusRefundProcess      = "refund_process"
+	StatusRefundFail         = "refund_fail"
+	StatusRefundPaid         = "refund_paid"
+	StatusLocked             = "locked"
 )
+
+// KnownStatus limits acknowledgements to documented payment lifecycle events.
+func KnownStatus(status string) bool {
+	switch status {
+	case StatusPaid, StatusPaidOver, StatusWrongAmount, StatusWrongAmountWaiting,
+		StatusProcess, StatusConfirmCheck, StatusCheck, StatusFail, StatusCancel,
+		StatusSystemFail, StatusRefundProcess, StatusRefundFail, StatusRefundPaid, StatusLocked:
+		return true
+	default:
+		return false
+	}
+}
 
 // PaidStatus reports whether an invoice status represents a completed payment.
 func PaidStatus(status string) bool {
@@ -140,14 +162,21 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("cryptomus API error: http=%d state=%d message=%s", e.HTTPStatus, e.State, e.Message)
 }
 
-// IsNotFound reports that the gateway answered "no such payment". Callers use
-// it to distinguish "invoice never existed" from transport failures.
+// IsNotFound recognizes only the gateway's explicit payment-not-found error.
+// A proxy 404 or another missing resource (merchant, service, notification)
+// does not establish that the invoice does not exist.
 func IsNotFound(err error) bool {
 	var apiErr *APIError
-	if !errors.As(err, &apiErr) {
+	if !errors.As(err, &apiErr) || apiErr.State != 1 {
 		return false
 	}
-	return apiErr.HTTPStatus == http.StatusNotFound || strings.Contains(strings.ToLower(apiErr.Message), "not found")
+	switch apiErr.HTTPStatus {
+	case http.StatusBadRequest, http.StatusNotFound, http.StatusUnprocessableEntity:
+		message := strings.TrimSuffix(strings.TrimSpace(apiErr.Message), ".")
+		return strings.EqualFold(message, "Payment not found")
+	default:
+		return false
+	}
 }
 
 type invoiceRequest struct {
