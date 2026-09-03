@@ -67,6 +67,34 @@ func (s *Service) CryptomusNotify(ctx context.Context, payload []byte) error {
 		l.Error("[CryptomusNotify] Order payment binding failed", logger.Field("orderNo", notification.OrderNo), logger.Field("error", err.Error()))
 		return err
 	}
+	if orderInfo.TradeNo != "" && orderInfo.TradeNo != notification.UUID {
+		return errors.New("order trade number mismatch")
+	}
+	if !cryptomus.PaidStatus(notification.Status) {
+		if err := validatePaymentExpectation(orderInfo, callbackAmount, notification.Currency); err != nil {
+			return err
+		}
+		// A valid lifecycle notification is not a failed payment callback.
+		// Acknowledge it without settling or downgrading the local order, even
+		// when delivery is out of order or a cancelled order is already closed.
+		fields := []logger.LogField{
+			logger.Field("orderNo", notification.OrderNo),
+			logger.Field("tradeNo", notification.UUID),
+			logger.Field("status", notification.Status),
+			logger.Field("order_status", orderInfo.Status),
+			logger.Field("is_final", notification.IsFinal),
+			logger.Field("payment_amount", notification.PaymentAmount),
+			logger.Field("payer_currency", notification.PayerCurrency),
+		}
+		switch notification.Status {
+		case cryptomus.StatusWrongAmount, cryptomus.StatusLocked,
+			cryptomus.StatusRefundProcess, cryptomus.StatusRefundFail, cryptomus.StatusRefundPaid:
+			l.Errorw("[CryptomusNotify] Payment requires manual review", append(fields, logger.Field("requires_manual_review", true))...)
+		default:
+			l.Infow("[CryptomusNotify] Payment status received without settlement", fields...)
+		}
+		return nil
+	}
 	if finished, err := finishedOrderDuplicate(ctx, orderInfo, notification.UUID); err != nil {
 		return err
 	} else if finished {
@@ -110,8 +138,8 @@ func validateCryptomusNotification(notification *cryptomus.Notification) (int64,
 	if err := settle.ValidateTradeNo(notification.UUID); err != nil {
 		return 0, err
 	}
-	if !cryptomus.PaidStatus(notification.Status) {
-		return 0, errors.New("payment status is not paid")
+	if !cryptomus.KnownStatus(notification.Status) {
+		return 0, errors.New("unknown payment status")
 	}
 	amount, err := cryptomus.ParseMoney(notification.Amount)
 	if err != nil {

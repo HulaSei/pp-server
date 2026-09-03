@@ -2,12 +2,14 @@ package adminpayment
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	paymentModel "github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/repository"
+	"github.com/perfect-panel/server/pkg/payment"
 	"gorm.io/gorm"
 )
 
@@ -15,6 +17,59 @@ type updatePaymentRepo struct {
 	repository.PaymentRepo
 	stored  *paymentModel.Payment
 	updated *paymentModel.Payment
+}
+
+func TestCryptomusConfigRequiresBothCredentials(t *testing.T) {
+	tests := []struct {
+		name   string
+		config interface{}
+	}{
+		{"empty object", map[string]interface{}{}},
+		{"missing merchant", map[string]interface{}{"api_key": "test-key"}},
+		{"missing key", map[string]interface{}{"merchant_id": "merchant-1"}},
+		{"blank merchant", map[string]interface{}{"merchant_id": " \n", "api_key": "test-key"}},
+		{"blank key", map[string]interface{}{"merchant_id": "merchant-1", "api_key": " \t"}},
+		{"wrong field type", map[string]interface{}{"merchant_id": 123, "api_key": "test-key"}},
+		{"null", nil},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			enable := true
+			repo := &updatePaymentRepo{stored: &paymentModel.Payment{
+				Id: 1, Platform: "Cryptomus", Config: `{"merchant_id":"merchant-1","api_key":"test-key"}`, Enable: &enable,
+			}}
+			orders := &updatePaymentOrders{}
+			svc := NewService(repo, orders, nil, "", nil)
+			_, err := svc.Create(context.Background(), &dto.CreatePaymentMethodRequest{
+				Name: "Cryptomus", Platform: "Cryptomus", Config: test.config, Enable: &enable,
+			})
+			if err == nil || !strings.Contains(err.Error(), "INVALID_PAYMENT_CONFIG") {
+				t.Fatalf("Create must reject before opening a transaction, got %v", err)
+			}
+			_, err = svc.Update(context.Background(), &dto.UpdatePaymentMethodRequest{
+				Id: 1, Name: "Cryptomus", Platform: "Cryptomus", Config: test.config, Enable: &enable,
+			})
+			if err == nil || !strings.Contains(err.Error(), "INVALID_PAYMENT_CONFIG") {
+				t.Fatalf("Update must reject incomplete credentials, got %v", err)
+			}
+			if repo.updated != nil || orders.pendingCalls != 0 {
+				t.Fatal("invalid config must not reach persistence or the pending-order check")
+			}
+		})
+	}
+}
+
+func TestCryptomusConfigTrimsCredentials(t *testing.T) {
+	encoded := parsePaymentPlatformConfig(context.Background(), payment.Cryptomus, map[string]interface{}{
+		"merchant_id": " merchant-1 \n", "api_key": "\ttest-key ",
+	})
+	var config paymentModel.CryptomusConfig
+	if err := json.Unmarshal([]byte(encoded), &config); err != nil {
+		t.Fatal(err)
+	}
+	if config.MerchantID != "merchant-1" || config.APIKey != "test-key" {
+		t.Fatal("credentials must be trimmed before persisting")
+	}
 }
 
 func (r *updatePaymentRepo) FindOne(_ context.Context, _ int64) (*paymentModel.Payment, error) {

@@ -288,7 +288,20 @@ func parsePaymentPlatformConfig(ctx context.Context, platform payment.Platform, 
 	case payment.EPay:
 		return handleConfig("Epay", &paymentModel.EPayConfig{})
 	case payment.Cryptomus:
-		return handleConfig("Cryptomus", &paymentModel.CryptomusConfig{})
+		var cfg paymentModel.CryptomusConfig
+		if err := cfg.Unmarshal(data); err != nil {
+			return ""
+		}
+		cfg.MerchantID = strings.TrimSpace(cfg.MerchantID)
+		cfg.APIKey = strings.TrimSpace(cfg.APIKey)
+		if cfg.MerchantID == "" || cfg.APIKey == "" {
+			return ""
+		}
+		content, err := cfg.Marshal()
+		if err != nil {
+			return ""
+		}
+		return string(content)
 	default:
 		return ""
 	}

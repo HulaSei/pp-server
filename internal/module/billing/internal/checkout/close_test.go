@@ -122,6 +122,10 @@ func (r *closeOrderRepo) FindOneByOrderNo(_ context.Context, orderNo string) (*o
 	return &copy, nil
 }
 
+func (r *closeOrderRepo) FindOneByOrderNoForUpdate(ctx context.Context, orderNo string) (*orderEntity.Order, error) {
+	return r.FindOneByOrderNo(ctx, orderNo)
+}
+
 func (r *closeOrderRepo) UpdateOrderStatusFrom(_ context.Context, orderNo string, from, to uint8, _ ...*gorm.DB) (bool, error) {
 	r.from, r.to = from, to
 	if orderNo != r.order.OrderNo || !r.transition {

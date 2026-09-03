@@ -225,6 +225,43 @@ func TestGatewayErrorsMapToAPIError(t *testing.T) {
 	}
 }
 
+func TestIsNotFoundRequiresExplicitPaymentError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want bool
+	}{
+		{"payment missing", &APIError{HTTPStatus: 422, State: 1, Message: "Payment not found"}, true},
+		{"payment missing with punctuation", &APIError{HTTPStatus: 422, State: 1, Message: "Payment not found."}, true},
+		{"payment missing 404", &APIError{HTTPStatus: 404, State: 1, Message: "Payment not found"}, true},
+		{"proxy 404", &APIError{HTTPStatus: 404, Message: "non-JSON response"}, false},
+		{"generic 404", &APIError{HTTPStatus: 404, State: 1, Message: "Not found"}, false},
+		{"merchant missing", &APIError{HTTPStatus: 404, State: 1, Message: "Merchant not found"}, false},
+		{"notification missing", &APIError{HTTPStatus: 422, State: 1, Message: "Notification not found"}, false},
+		{"service missing", &APIError{HTTPStatus: 422, State: 1, Message: "Not found service to_currency"}, false},
+		{"unsuccessful server", &APIError{HTTPStatus: 500, State: 1, Message: "Payment not found"}, false},
+		{"invalid API state", &APIError{HTTPStatus: 404, Message: "Payment not found"}, false},
+		{"no error", nil, false},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			if got := IsNotFound(test.err); got != test.want {
+				t.Fatalf("IsNotFound(%v) = %v, want %v", test.err, got, test.want)
+			}
+		})
+	}
+}
+
+func TestNonJSONNotFoundIsNotMissingInvoice(t *testing.T) {
+	server := httptest.NewServer(http.NotFoundHandler())
+	defer server.Close()
+	client := NewClient(Config{MerchantID: "merchant-1", APIKey: "api-key", BaseURL: server.URL})
+	_, err := client.GetInvoice("uuid-1", "")
+	if err == nil || IsNotFound(err) {
+		t.Fatalf("proxy 404 must not mean a missing invoice, got %v", err)
+	}
+}
+
 func TestInvoiceStatePrefersStatusOverPaymentStatus(t *testing.T) {
 	// The create endpoint reports only payment_status; the info endpoint
 	// fills both. State and Paid must work with either shape.

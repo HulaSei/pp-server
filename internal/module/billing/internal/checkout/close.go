@@ -28,8 +28,8 @@ import (
 
 const orderTypeSubscribe uint8 = 1
 
-// ErrGatewayUnconfirmed reports that an EPay order could not be confirmed as
-// paid, so the close was refused and the order intentionally stays pending.
+// ErrGatewayUnconfirmed reports that a gateway order could not be confirmed
+// safe to close, so the order intentionally stays pending.
 // Schedulers treat it as an expected outcome, not a per-order failure.
 var ErrGatewayUnconfirmed = stderrors.New("gateway could not confirm the order as paid")
 
@@ -81,6 +81,22 @@ func (s *Service) Close(ctx context.Context, req *dto.CloseOrderRequest) error {
 
 	var closed bool
 	err = s.deps.Store.InBillingTx(ctx, func(txStore repository.BillingStore) error {
+		if paymentPlatform.ParsePlatform(orderInfo.Method) == paymentPlatform.Cryptomus {
+			// Checkout persists its payment expectation before creating an
+			// invoice. Serialize this recheck with that write so a "checkout
+			// never started" snapshot cannot close an in-flight invoice.
+			current, err := txStore.Order().FindOneByOrderNoForUpdate(ctx, req.OrderNo)
+			if err != nil {
+				return err
+			}
+			if current.Status != 1 {
+				return nil
+			}
+			if current.PaymentCurrency != orderInfo.PaymentCurrency || current.PaymentAmount != orderInfo.PaymentAmount ||
+				current.TradeNo != orderInfo.TradeNo || current.PaymentId != orderInfo.PaymentId || current.Method != orderInfo.Method {
+				return fmt.Errorf("Cryptomus checkout changed during cancellation: %w", ErrGatewayUnconfirmed)
+			}
+		}
 		// Only the still-pending order may be closed.  A payment callback can
 		// race this task, so an unconditional status write would otherwise turn
 		// a paid order back into a closed order.
@@ -189,8 +205,8 @@ func (s *Service) restoreReservedInventory(ctx context.Context, orderInfo *order
 
 // settleOrCancelGatewayOrder ensures that closing locally cannot leave an
 // active provider checkout able to charge the user after stock and coupons
-// have been released. userInitiated marks a cancellation the order's owner
-// explicitly requested, which consents to forfeiting an unconfirmed payment.
+// have been released. userInitiated selects the legacy owner-cancellation
+// policy for EPay/Alipay; Cryptomus requires confirmation for every caller.
 func (s *Service) settleOrCancelGatewayOrder(ctx context.Context, orderInfo *order.Order, userInitiated bool) (bool, error) {
 	switch paymentPlatform.ParsePlatform(orderInfo.Method) {
 	case paymentPlatform.Stripe:
@@ -200,7 +216,7 @@ func (s *Service) settleOrCancelGatewayOrder(ctx context.Context, orderInfo *ord
 	case paymentPlatform.AlipayF2F:
 		return s.settleAlipayOrder(ctx, orderInfo, userInitiated)
 	case paymentPlatform.Cryptomus:
-		return s.settleCryptomusOrder(ctx, orderInfo, userInitiated)
+		return s.settleCryptomusOrder(ctx, orderInfo)
 	default:
 		return false, nil
 	}
@@ -262,12 +278,11 @@ func (s *Service) settleOrCancelStripeOrder(ctx context.Context, orderInfo *orde
 // Cryptomus invoices cannot be cancelled through the API, but they expire on
 // their own after the checkout lifetime and report a final state. Closing is
 // safe only when the gateway confirms no money was collected: a paid invoice
-// is settled instead, a still-active invoice keeps the order pending unless
-// the owner explicitly forfeits it, and an underpaid (wrong_amount) invoice
-// stays pending for manual resolution because funds were received without
-// covering the order.
-func (s *Service) settleCryptomusOrder(ctx context.Context, orderInfo *order.Order, userInitiated bool) (bool, error) {
-	if orderInfo.PaymentCurrency == "" {
+// is settled instead. Active, underpaid, AML-frozen and refund invoices stay
+// pending for reconciliation or manual resolution. A user's cancellation
+// request cannot invalidate the gateway invoice or forfeit received funds.
+func (s *Service) settleCryptomusOrder(ctx context.Context, orderInfo *order.Order) (bool, error) {
+	if orderInfo.PaymentCurrency == "" && orderInfo.TradeNo == "" {
 		return false, nil // checkout was never started; safe to close.
 	}
 	paymentConfig, err := s.deps.Payments.FindOne(ctx, orderInfo.PaymentId)
@@ -284,36 +299,30 @@ func (s *Service) settleCryptomusOrder(ctx context.Context, orderInfo *order.Ord
 	// finds the invoice the gateway holds for this order.
 	invoice, err := client.GetInvoice(orderInfo.TradeNo, orderInfo.OrderNo)
 	if err != nil {
-		if cryptomus.IsNotFound(err) {
-			return false, nil // no invoice was ever issued; safe to close.
-		}
-		if userInitiated {
-			logger.WithContext(ctx).Infow("[CloseOrder] user-requested close of Cryptomus order without gateway confirmation",
-				logger.Field("orderNo", orderInfo.OrderNo),
-				logger.Field("queryError", err.Error()),
-			)
-			return false, nil
-		}
+		// Even an explicit payment-not-found answer cannot close a started
+		// checkout: invoice creation may still be in flight after a timeout,
+		// before its UUID was persisted locally.
 		return false, fmt.Errorf("cannot safely expire Cryptomus order %s: %v: %w", orderInfo.OrderNo, err, ErrGatewayUnconfirmed)
 	}
+	// Validate identity and the immutable amount before trusting any state,
+	// including a cancellation that would release stock and wallet deductions.
+	amount, err := cryptomus.ParseMoney(invoice.Amount)
+	if err != nil || invoice.OrderNo != orderInfo.OrderNo ||
+		(orderInfo.TradeNo != "" && invoice.UUID != orderInfo.TradeNo) ||
+		amount != orderInfo.PaymentAmount || !strings.EqualFold(invoice.Currency, orderInfo.PaymentCurrency) {
+		return false, fmt.Errorf("Cryptomus order %s query does not match payment expectation: %w", orderInfo.OrderNo, ErrGatewayUnconfirmed)
+	}
 	if invoice.Paid() {
-		amount, err := cryptomus.ParseMoney(invoice.Amount)
-		if err != nil || invoice.OrderNo != orderInfo.OrderNo || amount != orderInfo.PaymentAmount || !strings.EqualFold(invoice.Currency, orderInfo.PaymentCurrency) {
-			return false, fmt.Errorf("Cryptomus order %s query does not match payment expectation", orderInfo.OrderNo)
-		}
 		if err := s.settleVerifiedPayment(ctx, orderInfo, invoice.UUID); err != nil {
 			return false, err
 		}
 		return true, nil
 	}
-	// wrong_amount and locked are final states that still hold customer money
-	// (an underpayment or AML-frozen funds); they stay pending for manual
-	// resolution instead of silently releasing the reservation.
-	if state := invoice.State(); invoice.IsFinal && state != cryptomus.StatusWrongAmount && state != cryptomus.StatusLocked {
-		return false, nil // invoice ended without payment; safe to close.
-	}
-	if userInitiated {
-		return false, nil // the owner explicitly forfeits the unconfirmed invoice.
+	// is_final alone does not mean unpaid (e.g. refund_fail). Only an
+	// explicitly cancelled invoice with zero received funds is safe to close.
+	paidAmount, amountErr := cryptomus.ParseMoney(invoice.PaymentAmount)
+	if invoice.IsFinal && invoice.State() == cryptomus.StatusCancel && amountErr == nil && paidAmount == 0 {
+		return false, nil
 	}
 	return false, fmt.Errorf("cannot safely expire Cryptomus order %s with invoice status %q: %w", orderInfo.OrderNo, invoice.State(), ErrGatewayUnconfirmed)
 }
