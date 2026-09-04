@@ -8,9 +8,9 @@ VERSION=unknown version
 endif
 CHANNEL?=dev
 BUILDTIME=$(shell date -u)
-GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/perfect-panel/server/pkg/constant.Version=$(VERSION)" \
-		-X "github.com/perfect-panel/server/pkg/constant.BuildTime=$(BUILDTIME)" \
-		-X "github.com/perfect-panel/server/pkg/constant.Channel=$(CHANNEL)" \
+GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags '-X "github.com/perfect-panel/server/internal/constant.Version=$(VERSION)" \
+		-X "github.com/perfect-panel/server/internal/constant.BuildTime=$(BUILDTIME)" \
+		-X "github.com/perfect-panel/server/internal/constant.Channel=$(CHANNEL)" \
 		-w -s -buildid='
 
 PLATFORM_LIST = \

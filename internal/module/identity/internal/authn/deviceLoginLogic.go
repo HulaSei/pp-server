@@ -2,20 +2,17 @@ package auth
 
 import (
 	"context"
-	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -39,6 +36,9 @@ func NewDeviceLoginLogic(ctx context.Context, deps DeviceLoginDependencies) *Dev
 }
 
 func (l *DeviceLoginLogic) DeviceLogin(req *dto.DeviceLoginRequest) (resp *dto.LoginResponse, err error) {
+	if req.Identifier == "" || len(req.Identifier) > 255 || strings.TrimSpace(req.Identifier) != req.Identifier {
+		return nil, xerr.NewErrCode(xerr.InvalidParams)
+	}
 	if !l.deps.Config.Enabled {
 		return nil, xerr.NewErrMsg("Device login is disabled")
 	}
@@ -90,6 +90,10 @@ func (l *DeviceLoginLogic) DeviceLogin(req *dto.DeviceLoginRequest) (resp *dto.L
 			if err != nil {
 				return nil, err
 			}
+			deviceInfo, err = l.deps.Store.UserDevice().FindOneDeviceByIdentifier(l.ctx, req.Identifier)
+			if err != nil {
+				return nil, err
+			}
 		} else {
 			l.Errorw("query device failed",
 				logger.Field("identifier", req.Identifier),
@@ -114,41 +118,28 @@ func (l *DeviceLoginLogic) DeviceLogin(req *dto.DeviceLoginRequest) (resp *dto.L
 	if userInfo.Enable == nil || !*userInfo.Enable {
 		return nil, errors.Wrap(xerr.NewErrCode(xerr.UserDisabled), "user account is disabled")
 	}
-
-	// Generate session id
-	sessionId := uuidx.NewUUID().String()
-
-	// Generate token
-	token, err := jwt.NewJwtToken(
-		l.deps.Config.JWTAccessSecret,
-		timeutil.Now().Unix(),
-		l.deps.Config.JWTAccessExpire,
-		jwt.WithOption("UserId", userInfo.Id),
-		jwt.WithOption("SessionId", sessionId),
-		jwt.WithOption("LoginType", "device"),
-	)
+	// Read authoritative device state rather than trusting a cached binding.
+	deviceInfo, err = l.deps.Store.UserDevice().FindDeviceForAuth(l.ctx, deviceInfo.Id)
 	if err != nil {
-		l.Errorw("token generate error",
-			logger.Field("user_id", userInfo.Id),
-			logger.Field("error", err.Error()),
-		)
-		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "token generate error: %v", err.Error())
+		return nil, err
 	}
-
-	// Store session id in redis
-	sessionIdCacheKey := fmt.Sprintf("%v:%v", config.SessionIdKey, sessionId)
-	if err = l.deps.Redis.Set(l.ctx, sessionIdCacheKey, userInfo.Id, time.Duration(l.deps.Config.JWTAccessExpire)*time.Second).Err(); err != nil {
-		l.Errorw("set session id error",
-			logger.Field("user_id", userInfo.Id),
-			logger.Field("error", err.Error()),
-		)
-		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "set session id error: %v", err.Error())
+	if !deviceInfo.Enabled || deviceInfo.UserId != userInfo.Id {
+		return nil, errors.Wrap(xerr.NewErrCode(xerr.InvalidAccess), "device is disabled or binding changed")
+	}
+	touched, err := l.deps.Store.UserDevice().TouchDevice(l.ctx, deviceInfo.Id, userInfo.Id, req.IP, truncateUserAgent(req.UserAgent))
+	if err != nil {
+		return nil, err
+	}
+	if !touched {
+		return nil, errors.Wrap(xerr.NewErrCode(xerr.InvalidAccess), "device binding changed")
+	}
+	resp, err = issueLoginSession(l.ctx, l.deps.Redis, l.deps.Config.JWTAccessSecret, l.deps.Config.JWTAccessExpire, userInfo.Id, "device", deviceInfo)
+	if err != nil {
+		return nil, err
 	}
 
 	loginStatus = true
-	return &dto.LoginResponse{
-		Token: token,
-	}, nil
+	return resp, nil
 }
 
 func (l *DeviceLoginLogic) registerUserAndDevice(req *dto.DeviceLoginRequest) (*user.User, error) {
@@ -196,7 +187,7 @@ func (l *DeviceLoginLogic) registerUserAndDevice(req *dto.DeviceLoginRequest) (*
 		}
 
 		// Update refer code
-		userInfo.ReferCode = uuidx.UserInviteCode(userInfo.Id)
+		userInfo.ReferCode = user.GenerateInviteCode(userInfo.Id)
 		if err := store.User().Update(l.ctx, userInfo); err != nil {
 			l.Errorw("failed to update refer code",
 				logger.Field("user_id", userInfo.Id),
@@ -225,7 +216,7 @@ func (l *DeviceLoginLogic) registerUserAndDevice(req *dto.DeviceLoginRequest) (*
 		deviceInfo := &user.Device{
 			Ip:         req.IP,
 			UserId:     userInfo.Id,
-			UserAgent:  req.UserAgent,
+			UserAgent:  truncateUserAgent(req.UserAgent),
 			Identifier: req.Identifier,
 			Enabled:    true,
 			Online:     false,

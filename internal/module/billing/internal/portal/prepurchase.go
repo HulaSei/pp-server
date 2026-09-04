@@ -3,10 +3,11 @@ package portal
 import (
 	"context"
 	"encoding/json"
+	"slices"
 
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -46,9 +47,9 @@ func (s *Service) PrePurchase(ctx context.Context, req *dto.PrePurchaseOrderRequ
 		if couponInfo.Count != 0 && couponInfo.Count <= couponInfo.UsedCount {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.CouponInsufficientUsage), "coupon used")
 		}
-		subs := tool.StringToInt64Slice(couponInfo.Subscribe)
+		subs := slicesx.StringToInt64Slice(couponInfo.Subscribe)
 
-		if len(subs) > 0 && !tool.Contains(subs, req.SubscribeId) {
+		if len(subs) > 0 && !slices.Contains(subs, req.SubscribeId) {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.CouponNotApplicable), "coupon not match")
 		}
 

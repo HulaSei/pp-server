@@ -8,20 +8,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/perfect-panel/server/internal/auth/challenge"
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	"github.com/perfect-panel/server/internal/auth/ratelimit"
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/authmethod"
-	"github.com/perfect-panel/server/pkg/limit"
-	"github.com/perfect-panel/server/pkg/turnstile"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
 )
 
 const (
-	MethodEmail  = authmethod.Email
-	MethodMobile = authmethod.Mobile
-	MethodDevice = authmethod.Device
+	MethodEmail  = identifier.Email
+	MethodMobile = identifier.Mobile
+	MethodDevice = identifier.Device
 )
 
 // Snapshot is the per-request view of the runtime-mutable policy settings.
@@ -102,7 +102,7 @@ func (p ServicePolicy) VerifyHuman(ctx context.Context, token, ip string) error 
 	if strings.TrimSpace(token) == "" || strings.TrimSpace(cfg.TurnstileSecret) == "" {
 		return errors.Wrap(xerr.NewErrCode(xerr.TooManyRequests), "registration verification failed")
 	}
-	verifier := turnstile.New(turnstile.Config{
+	verifier := challenge.New(challenge.Config{
 		Secret:  cfg.TurnstileSecret,
 		Timeout: 3 * time.Second,
 	})
@@ -135,7 +135,7 @@ func (p ServicePolicy) TakeIPPermit(ctx context.Context, ip string) error {
 	if cfg.IpRegisterLimit > maxInt || cfg.IpRegisterLimitDuration > maxInt/60 {
 		return errors.Wrap(xerr.NewErrCode(xerr.ERROR), "IP registration limit configuration is too large")
 	}
-	limiter := limit.NewPeriodLimit(
+	limiter := ratelimit.NewPeriodLimit(
 		int(cfg.IpRegisterLimitDuration*60),
 		int(cfg.IpRegisterLimit),
 		p.deps.Redis,

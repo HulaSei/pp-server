@@ -7,6 +7,7 @@ import (
 	"github.com/pkg/errors"
 
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
+	"github.com/perfect-panel/server/internal/module/identity/internal/devicestate"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 
@@ -26,9 +27,12 @@ func newDeleteUserDeviceLogic(ctx context.Context, deps Deps) *DeleteUserDeviceL
 }
 
 func (l *DeleteUserDeviceLogic) DeleteUserDevice(req *dto.DeleteUserDeivceRequest) error {
-	err := l.deps.Devices.DeleteDevice(l.ctx, req.Id)
+	device, err := devicestate.Delete(l.ctx, l.deps.Store, l.deps.Redis, req.Id, 0)
 	if err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseDeletedError), "delete user error: %v", err.Error())
+	}
+	if device != nil {
+		l.deps.kickDevice(device.UserId, device.Identifier)
 	}
 	return nil
 }

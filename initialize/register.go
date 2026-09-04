@@ -3,10 +3,8 @@ package initialize
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/logger"
-
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/logger"
 )
 
 func Register(ctx *Dependencies) {
@@ -17,6 +15,6 @@ func Register(ctx *Dependencies) {
 		return
 	}
 	var registerConfig config.RegisterConfig
-	tool.SystemConfigSliceReflectToStruct(configs, &registerConfig)
+	config.SystemConfigSliceReflectToStruct(configs, &registerConfig)
 	ctx.updateConfig(func(current *config.Config) { current.Register = registerConfig })
 }

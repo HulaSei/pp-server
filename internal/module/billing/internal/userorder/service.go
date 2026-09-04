@@ -6,13 +6,13 @@ package userorder
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	subscribeEntity "github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -53,7 +53,7 @@ func (s *Service) attachPlan(ctx context.Context, detail *dto.OrderDetail, cache
 		cache[detail.SubscribeId] = plan
 	}
 	if plan != nil {
-		tool.DeepCopy(&detail.Subscribe, plan)
+		mapping.DeepCopy(&detail.Subscribe, plan)
 	}
 }
 
@@ -73,7 +73,7 @@ func (s *Service) QueryDetail(ctx context.Context, req *dto.QueryOrderDetailRequ
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "order does not belong to the current user")
 	}
 	resp := &dto.OrderDetail{}
-	tool.DeepCopy(resp, orderInfo)
+	mapping.DeepCopy(resp, orderInfo)
 	s.attachPlan(ctx, resp, map[int64]*subscribeEntity.Subscribe{})
 	// Prevent commission amount leakage
 	resp.Commission = 0
@@ -98,7 +98,7 @@ func (s *Service) QueryList(ctx context.Context, req *dto.QueryOrderListRequest)
 	planCache := map[int64]*subscribeEntity.Subscribe{}
 	for _, item := range data {
 		var orderInfo dto.OrderDetail
-		tool.DeepCopy(&orderInfo, item)
+		mapping.DeepCopy(&orderInfo, item)
 		s.attachPlan(ctx, &orderInfo, planCache)
 		// Prevent commission amount leakage
 		orderInfo.Commission = 0

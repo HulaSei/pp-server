@@ -3,10 +3,10 @@ package adminserver
 import (
 	"encoding/json"
 	"strings"
+	"uuid"
 
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
+	"github.com/perfect-panel/server/internal/protocolkey"
 )
 
 const generatedServerKeyLength = 32
@@ -109,7 +109,7 @@ func ensureGeneratedProtocolKey(protocol *node.Protocol, existing map[string]str
 		protocol.ServerKey = key
 		return
 	}
-	protocol.ServerKey = tool.GenerateCipher(uuidx.NewUUID().String(), generatedServerKeyLength)
+	protocol.ServerKey = protocolkey.GenerateCipher(uuid.NewV7().String(), generatedServerKeyLength)
 }
 
 func ensureShadowsocks2022ServerKey(protocol *node.Protocol, existing map[string]string) {
@@ -127,7 +127,7 @@ func ensureShadowsocks2022ServerKey(protocol *node.Protocol, existing map[string
 		}
 	}
 	if len(protocol.ServerKey) != length {
-		protocol.ServerKey = tool.GenerateCipher(protocol.ServerKey, length)
+		protocol.ServerKey = protocolkey.GenerateCipher(protocol.ServerKey, length)
 	}
 }
 
@@ -169,13 +169,13 @@ func ensureRealityProtocolKey(protocol *node.Protocol, existing map[string]reali
 		protocol.RealityShortId = oldKey.shortID
 		return nil
 	}
-	public, private, err := tool.Curve25519Genkey(false, "")
+	public, private, err := protocolkey.Curve25519Genkey(false, "")
 	if err != nil {
 		return err
 	}
 	protocol.RealityPublicKey = public
 	protocol.RealityPrivateKey = private
-	protocol.RealityShortId = tool.GenerateShortID(private)
+	protocol.RealityShortId = protocolkey.GenerateShortID(private)
 	return nil
 }
 

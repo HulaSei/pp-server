@@ -3,23 +3,21 @@ package selfsub
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
+	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
+	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
+	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
-
-	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
-
-	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
-	"github.com/perfect-panel/server/pkg/logger"
 )
 
 type UnsubscribeLogic struct {
@@ -73,7 +71,7 @@ func (l *UnsubscribeLogic) Unsubscribe(req *dto.UnsubscribeRequest) error {
 	cancelable := []uint8{usersub.SubscribeStatusPending, usersub.SubscribeStatusActive, usersub.SubscribeStatusFinished}
 	subKey := strconv.FormatInt(req.Id, 10)
 
-	if !tool.Contains(cancelable, userSub.Status) {
+	if !slices.Contains(cancelable, userSub.Status) {
 		resumable, resumeErr := l.hasUnsettledRefund(userSub.Status, subKey)
 		if resumeErr != nil {
 			return resumeErr
@@ -100,7 +98,7 @@ func (l *UnsubscribeLogic) Unsubscribe(req *dto.UnsubscribeRequest) error {
 			if lockedSub.UserId != u.Id {
 				return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "user subscribe does not belong to current user")
 			}
-			if !tool.Contains(cancelable, lockedSub.Status) {
+			if !slices.Contains(cancelable, lockedSub.Status) {
 				return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "Subscription status invalid for cancellation")
 			}
 			lockedSub.Status = usersub.SubscribeStatusDeducted

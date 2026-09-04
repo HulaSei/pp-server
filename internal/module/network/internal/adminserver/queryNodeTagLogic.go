@@ -6,7 +6,7 @@ import (
 
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -39,6 +39,6 @@ func (l *QueryNodeTagLogic) QueryNodeTag() (resp *dto.QueryNodeTagResponse, err 
 	}
 
 	return &dto.QueryNodeTagResponse{
-		Tags: tool.RemoveDuplicateElements(tags...),
+		Tags: slicesx.RemoveDuplicateElements(tags...),
 	}, nil
 }

@@ -3,9 +3,9 @@ package adminuser
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -30,7 +30,7 @@ func (l *GetUserDetailLogic) GetUserDetail(req *dto.GetDetailRequest) (*dto.User
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "get user detail error: %v", err.Error())
 	}
-	tool.DeepCopy(&resp, userInfo)
+	mapping.DeepCopy(&resp, userInfo)
 	// Wallet values come from the billing-owned table. A read failure must
 	// fail the request: this response populates the admin edit form, and a
 	// silently zeroed balance would round-trip into a real adjustment.

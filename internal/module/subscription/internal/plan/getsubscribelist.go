@@ -5,10 +5,11 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -46,14 +47,14 @@ func (l *GetSubscribeListLogic) GetSubscribeList(req *dto.GetSubscribeListReques
 	for _, item := range list {
 		subscribeIdList = append(subscribeIdList, item.Id)
 		var sub dto.SubscribeItem
-		tool.DeepCopy(&sub, item)
+		mapping.DeepCopy(&sub, item)
 		if item.Discount != "" {
 			err = json.Unmarshal([]byte(item.Discount), &sub.Discount)
 			if err != nil {
 				l.Logger.Error("[GetSubscribeListLogic] JSON unmarshal failed: ", logger.Field("error", err.Error()), logger.Field("discount", item.Discount))
 			}
 		}
-		sub.Nodes = dto.StringInt64Slice(tool.StringToInt64Slice(item.Nodes))
+		sub.Nodes = dto.StringInt64Slice(slicesx.StringToInt64Slice(item.Nodes))
 		sub.NodeTags = strings.Split(item.NodeTags, ",")
 		resultList = append(resultList, sub)
 	}

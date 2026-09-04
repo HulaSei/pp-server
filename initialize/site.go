@@ -3,10 +3,8 @@ package initialize
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/logger"
-
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/logger"
 )
 
 func Site(ctx *Dependencies) {
@@ -16,6 +14,6 @@ func Site(ctx *Dependencies) {
 		panic(err)
 	}
 	var siteConfig config.SiteConfig
-	tool.SystemConfigSliceReflectToStruct(configs, &siteConfig)
+	config.SystemConfigSliceReflectToStruct(configs, &siteConfig)
 	ctx.updateConfig(func(current *config.Config) { current.Site = siteConfig })
 }

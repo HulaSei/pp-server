@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/platform/contract"
-	"github.com/perfect-panel/server/internal/report"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -41,19 +41,15 @@ func (l *GetGlobalConfigLogic) GetGlobalConfig() (resp *dto.GetGlobalConfigRespo
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "GetVerifyCodeConfig error: %v", err.Error())
 	}
 
-	tool.DeepCopy(&resp.Site, l.deps.Config.Site)
-	tool.DeepCopy(&resp.Subscribe, l.deps.Config.Subscribe)
-	tool.DeepCopy(&resp.Auth.Email, l.deps.Config.Email)
-	tool.DeepCopy(&resp.Auth.Mobile, l.deps.Config.Mobile)
-	tool.DeepCopy(&resp.Auth.Register, l.deps.Config.Register)
-	tool.DeepCopy(&resp.Verify, l.deps.Config.Verify)
-	tool.DeepCopy(&resp.Invite, l.deps.Config.Invite)
-	tool.SystemConfigSliceReflectToStruct(currencyCfg, &resp.Currency)
-	tool.SystemConfigSliceReflectToStruct(verifyCodeCfg, &resp.VerifyCode)
-
-	if report.IsGatewayMode() {
-		resp.Subscribe.SubscribePath = "/sub" + l.deps.Config.Subscribe.SubscribePath
-	}
+	mapping.DeepCopy(&resp.Site, l.deps.Config.Site)
+	mapping.DeepCopy(&resp.Subscribe, l.deps.Config.Subscribe)
+	mapping.DeepCopy(&resp.Auth.Email, l.deps.Config.Email)
+	mapping.DeepCopy(&resp.Auth.Mobile, l.deps.Config.Mobile)
+	mapping.DeepCopy(&resp.Auth.Register, l.deps.Config.Register)
+	mapping.DeepCopy(&resp.Verify, l.deps.Config.Verify)
+	mapping.DeepCopy(&resp.Invite, l.deps.Config.Invite)
+	config.SystemConfigSliceReflectToStruct(currencyCfg, &resp.Currency)
+	config.SystemConfigSliceReflectToStruct(verifyCodeCfg, &resp.VerifyCode)
 
 	resp.Verify = dto.VeifyConfig{
 		TurnstileSiteKey:          l.deps.Config.Verify.TurnstileSiteKey,

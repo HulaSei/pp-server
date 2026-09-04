@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
+	identifier2 "github.com/perfect-panel/server/internal/auth/identifier"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/pkg/authmethod"
 	"gorm.io/gorm"
 )
 
@@ -20,7 +20,7 @@ func findUserAuthMethodByIdentifier(conn *gorm.DB, authType, identifier string) 
 
 	var data user.AuthMethods
 	err = queryAuthMethodsByExactIdentifier(conn, authType, canonicalIdentifier).First(&data).Error
-	if authType != authmethod.Email || err == nil {
+	if authType != identifier2.Email || err == nil {
 		return &data, err
 	}
 	if !errors.Is(err, gorm.ErrRecordNotFound) {
@@ -35,8 +35,8 @@ func findUserAuthMethodByIdentifier(conn *gorm.DB, authType, identifier string) 
 }
 
 func canonicalAuthIdentifier(authType, identifier string) (string, error) {
-	canonicalIdentifier := authmethod.CanonicalIdentifier(authType, identifier)
-	if authType == authmethod.Email && canonicalIdentifier == "" {
+	canonicalIdentifier := identifier2.CanonicalIdentifier(authType, identifier)
+	if authType == identifier2.Email && canonicalIdentifier == "" {
 		return "", ErrInvalidEmailIdentity
 	}
 	return canonicalIdentifier, nil
@@ -48,14 +48,14 @@ func queryAuthMethodsByExactIdentifier(conn *gorm.DB, authType, identifier strin
 
 func queryFoldedEmailAuthMethods(conn *gorm.DB, canonicalEmail string) *gorm.DB {
 	return conn.Model(&user.AuthMethods{}).
-		Where("auth_type = ? AND LOWER(TRIM(auth_identifier)) = ?", authmethod.Email, canonicalEmail).
+		Where("auth_type = ? AND LOWER(TRIM(auth_identifier)) = ?", identifier2.Email, canonicalEmail).
 		Limit(2)
 }
 
 func emailIdentityCollisionQuery(conn *gorm.DB) *gorm.DB {
 	return conn.Model(&user.AuthMethods{}).
 		Select("LOWER(TRIM(auth_identifier)) AS auth_identifier").
-		Where("auth_type = ?", authmethod.Email).
+		Where("auth_type = ?", identifier2.Email).
 		Group("LOWER(TRIM(auth_identifier))").
 		Having("COUNT(*) > 1").
 		Limit(1)
@@ -79,7 +79,7 @@ func hasConflictingEmailIdentity(currentID int64, methods []user.AuthMethods) bo
 }
 
 func guardEmailIdentityWrite(conn *gorm.DB, authMethod *user.AuthMethods) error {
-	if authMethod.AuthType != authmethod.Email {
+	if authMethod.AuthType != identifier2.Email {
 		return nil
 	}
 

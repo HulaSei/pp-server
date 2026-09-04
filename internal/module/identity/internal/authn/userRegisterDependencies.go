@@ -3,6 +3,7 @@ package auth
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/redis/go-redis/v9"
 )
@@ -29,7 +30,7 @@ type UserRegisterStore interface {
 
 // DeviceBinder attaches a device identifier to a newly registered user.
 type DeviceBinder interface {
-	BindDeviceToUser(identifier, ip, userAgent string, currentUserID int64) error
+	BindDeviceToUser(identifier, ip, userAgent string, currentUserID int64) (*user.Device, error)
 }
 
 // UserRegisterConfig is the configuration snapshot consumed by email

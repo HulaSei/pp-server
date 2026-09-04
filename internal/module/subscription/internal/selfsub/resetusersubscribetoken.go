@@ -2,19 +2,16 @@ package selfsub
 
 import (
 	"context"
+	"uuid"
 
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/mapping"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
-
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/timeutil"
-
-	"github.com/google/uuid"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
+	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -63,10 +60,10 @@ func (l *ResetUserSubscribeTokenLogic) ResetUserSubscribeToken(req *dto.ResetUse
 		orderDetails = &order.Details{}
 	}
 
-	userSub.Token = uuidx.SubscribeToken(orderDetails.OrderNo + timeutil.Now().Format("20060102150405.000"))
-	userSub.UUID = uuid.New().String()
+	userSub.Token = usersub.TokenFromOrder(orderDetails.OrderNo + timeutil.Now().Format("20060102150405.000"))
+	userSub.UUID = uuid.NewV4().String()
 	var newSub usersub.Subscribe
-	tool.DeepCopy(&newSub, userSub)
+	mapping.DeepCopy(&newSub, userSub)
 
 	err = l.deps.UserSubs.UpdateSubscribe(l.ctx, &newSub)
 	if err != nil {

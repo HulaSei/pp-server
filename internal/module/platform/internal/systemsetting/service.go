@@ -85,10 +85,6 @@ func (s *Service) GetInviteConfig(ctx context.Context) (*dto.InviteConfig, error
 	return newGetInviteConfigLogic(ctx, s.deps).GetInviteConfig()
 }
 
-func (s *Service) GetModuleConfig(ctx context.Context) (*dto.ModuleConfig, error) {
-	return newGetModuleConfigLogic(ctx, s.deps).GetModuleConfig()
-}
-
 func (s *Service) GetNodeConfig(ctx context.Context) (*dto.NodeConfig, error) {
 	return newGetNodeConfigLogic(ctx, s.deps).GetNodeConfig()
 }

@@ -3,7 +3,7 @@ package svc
 import (
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/pkg/asynqx"
+	"github.com/perfect-panel/server/internal/taskqueue"
 )
 
 func redisOpt(c config.Config) asynq.RedisClientOpt {
@@ -14,8 +14,8 @@ func redisOpt(c config.Config) asynq.RedisClientOpt {
 // caller's trace context onto the task for the worker-side middleware to
 // resume. Pass task options to EnqueueContext, not NewTask — wrapping
 // rebuilds the task.
-func NewAsynqClient(c config.Config) *asynqx.Client {
-	return asynqx.NewClient(asynq.NewClient(redisOpt(c)))
+func NewAsynqClient(c config.Config) *taskqueue.Client {
+	return taskqueue.NewClient(asynq.NewClient(redisOpt(c)))
 }
 
 func NewAsynqInspector(c config.Config) *asynq.Inspector {

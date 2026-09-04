@@ -2,11 +2,11 @@ package tool
 
 import (
 	"context"
-	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/module/platform"
-	"github.com/perfect-panel/server/pkg/result"
+	dto "github.com/perfect-panel/server/internal/module/platform/contract"
+	"github.com/perfect-panel/server/pkg/httpx"
 )
 
 var _ dto.VersionResponse
@@ -17,12 +17,12 @@ var _ dto.VersionResponse
 // @Tags admin
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.VersionResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.VersionResponse}
 // @Router /v1/admin/tool/version [get]
 func GetVersionHandler(service platform.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 
 		resp, err := service.GetVersion(ctx)
-		result.HttpResult(c, resp, err)
+		httpx.HttpResult(c, resp, err)
 	}
 }

@@ -3,13 +3,12 @@ package selfsub
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/constant"
-
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/mapping"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -49,7 +48,7 @@ func (l *UpdateUserSubscribeNoteLogic) UpdateUserSubscribeNote(req *dto.UpdateUs
 
 	userSub.Note = req.Note
 	var newSub usersub.Subscribe
-	tool.DeepCopy(&newSub, userSub)
+	mapping.DeepCopy(&newSub, userSub)
 
 	err = l.deps.UserSubs.UpdateSubscribe(l.ctx, &newSub)
 	if err != nil {

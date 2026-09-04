@@ -9,9 +9,8 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/billing"
-
-	"github.com/perfect-panel/server/pkg/constant"
 )
 
 func TestPaymentNotifyHandler_writesErrorEnvelope_whenPlatformIsMissing(t *testing.T) {

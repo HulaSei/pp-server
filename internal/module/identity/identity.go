@@ -192,6 +192,7 @@ func New(deps Deps) Service {
 			Logs:       deps.Logs,
 			Store:      deps.Store,
 			KickDevice: deps.KickDevice,
+			Redis:      deps.Redis,
 		}),
 		methods: authmethodadmin.NewService(authmethodadmin.Deps{
 			Auths:        deps.Auths,
@@ -220,6 +221,7 @@ func New(deps Deps) Service {
 			SiteHost:        func() string { return deps.AuthConfig().SiteHost },
 			TelegramBotName: deps.TelegramBotName,
 			NotifyUnbind:    deps.NotifyTelegramUnbind,
+			KickDevice:      deps.KickDevice,
 		}),
 	}
 }

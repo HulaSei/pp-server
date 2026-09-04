@@ -3,10 +3,10 @@ package application
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	"github.com/perfect-panel/server/internal/module/platform/entity/client"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -33,7 +33,7 @@ func (l *UpdateSubscribeApplicationLogic) UpdateSubscribeApplication(req *dto.Up
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "Failed to find subscribe application with ID %d", req.Id)
 	}
 	var link client.DownloadLink
-	tool.DeepCopy(&link, req.DownloadLink)
+	mapping.DeepCopy(&link, req.DownloadLink)
 	linkData, err := link.Marshal()
 	if err != nil {
 		l.Errorf("Failed to marshal download link: %v", err)
@@ -56,7 +56,7 @@ func (l *UpdateSubscribeApplicationLogic) UpdateSubscribeApplication(req *dto.Up
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseUpdateError), "Failed to update subscribe application with ID %d", req.Id)
 	}
 	resp = &dto.SubscribeApplication{}
-	tool.DeepCopy(&resp, data)
+	mapping.DeepCopy(&resp, data)
 	resp.DownloadLink = req.DownloadLink
 	return
 }

@@ -2,11 +2,11 @@ package document
 
 import (
 	"context"
-	dto "github.com/perfect-panel/server/internal/module/support/contract"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/module/support"
-	"github.com/perfect-panel/server/pkg/result"
+	dto "github.com/perfect-panel/server/internal/module/support/contract"
+	"github.com/perfect-panel/server/pkg/httpx"
 )
 
 var _ dto.QueryDocumentListResponse
@@ -17,12 +17,12 @@ var _ dto.QueryDocumentListResponse
 // @Tags user
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.QueryDocumentListResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.QueryDocumentListResponse}
 // @Router /v1/public/document/list [get]
 func QueryDocumentListHandler(service support.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 
 		resp, err := service.QueryDocumentList(c)
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }

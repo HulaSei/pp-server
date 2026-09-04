@@ -5,14 +5,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"uuid"
 
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
+	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 )
 
@@ -39,11 +40,12 @@ func (l *GetServerUserListLogic) ResponseMeta() ResponseMeta {
 	return l.response
 }
 
-func placeholderServerUser(serverID int64, protocol, secret string) dto.ServerUser {
-	name := fmt.Sprintf("ppanel:server-user-placeholder:%d:%s:%s", serverID, strings.TrimSpace(protocol), secret)
+// The placeholder is generated only while rebuilding an empty user list.
+// Cache hits reuse the serialized UUID and ETag until the list expires/changes.
+func placeholderServerUser() dto.ServerUser {
 	return dto.ServerUser{
 		Id:   1,
-		UUID: uuidx.NewDeterministicUUID(name).String(),
+		UUID: uuid.NewV7().String(),
 	}
 }
 
@@ -55,7 +57,7 @@ func (l *GetServerUserListLogic) GetServerUserList(req *dto.GetServerUserListReq
 	cacheKey := fmt.Sprintf("%s%d:%s", node.ServerUserListCacheKey, req.ServerId, req.Protocol)
 	cache, err := l.deps.Redis.Get(l.ctx, cacheKey).Result()
 	if cache != "" {
-		etag := tool.GenerateETag([]byte(cache))
+		etag := httpx.GenerateETag([]byte(cache))
 		resp = &dto.GetServerUserListResponse{}
 		//  Check If-None-Match header
 		if match := l.request.IfNoneMatch; match == etag {
@@ -102,7 +104,7 @@ func (l *GetServerUserListLogic) GetServerUserList(req *dto.GetServerUserListReq
 	}
 	if len(subs) == 0 {
 		resp = &dto.GetServerUserListResponse{
-			Users: []dto.ServerUser{placeholderServerUser(req.ServerId, req.Protocol, l.deps.Config().Node.NodeSecret)},
+			Users: []dto.ServerUser{placeholderServerUser()},
 		}
 		return l.storeUserListResponse(req.ServerId, generation, cacheKey, resp)
 	}
@@ -133,7 +135,7 @@ func (l *GetServerUserListLogic) GetServerUserList(req *dto.GetServerUserListReq
 	for _, item := range candidates {
 		userIDs = append(userIDs, item.userSub.UserId)
 	}
-	enabledIDs, err := l.deps.Store.User().FindEnabledUserIDs(l.ctx, tool.RemoveDuplicateElements(userIDs...))
+	enabledIDs, err := l.deps.Store.User().FindEnabledUserIDs(l.ctx, slicesx.RemoveDuplicateElements(userIDs...))
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +154,7 @@ func (l *GetServerUserListLogic) GetServerUserList(req *dto.GetServerUserListReq
 		})
 	}
 	if len(users) == 0 {
-		users = append(users, placeholderServerUser(req.ServerId, req.Protocol, l.deps.Config().Node.NodeSecret))
+		users = append(users, placeholderServerUser())
 	}
 	resp = &dto.GetServerUserListResponse{
 		Users: users,
@@ -162,7 +164,7 @@ func (l *GetServerUserListLogic) GetServerUserList(req *dto.GetServerUserListReq
 
 func (l *GetServerUserListLogic) storeUserListResponse(serverID, generation int64, cacheKey string, resp *dto.GetServerUserListResponse) (*dto.GetServerUserListResponse, error) {
 	val, _ := json.Marshal(resp)
-	etag := tool.GenerateETag(val)
+	etag := httpx.GenerateETag(val)
 	l.response.SetHeader("ETag", etag)
 	if err := l.deps.Store.Node().SetServerCache(l.ctx, serverID, cacheKey, string(val), generation); err != nil {
 		l.Errorw("[ServerUserListCacheKey] cache set error", logger.Field("error", err.Error()))

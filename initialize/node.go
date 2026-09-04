@@ -4,12 +4,11 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/perfect-panel/server/pkg/logger"
-
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/module/network"
 	"github.com/perfect-panel/server/internal/module/platform/entity/system"
-	"github.com/perfect-panel/server/pkg/nodeMultiplier"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/slicesx"
 )
 
 func Node(ctx *Dependencies) {
@@ -19,7 +18,7 @@ func Node(ctx *Dependencies) {
 		panic(err)
 	}
 	var nodeConfig config.NodeDBConfig
-	tool.SystemConfigSliceReflectToStruct(configs, &nodeConfig)
+	config.SystemConfigSliceReflectToStruct(configs, &nodeConfig)
 	c := config.NodeConfig{
 		NodeSecret:             nodeConfig.NodeSecret,
 		NodePullInterval:       nodeConfig.NodePullInterval,
@@ -39,7 +38,7 @@ func Node(ctx *Dependencies) {
 	if nodeConfig.Block != "" {
 		var block []string
 		_ = json.Unmarshal([]byte(nodeConfig.Block), &block)
-		c.Block = tool.RemoveDuplicateElements(block...)
+		c.Block = slicesx.RemoveDuplicateElements(block...)
 	}
 	if nodeConfig.Outbound != "" {
 		var outbound []config.NodeOutbound
@@ -73,11 +72,11 @@ func Node(ctx *Dependencies) {
 		return
 	}
 
-	var periods []nodeMultiplier.TimePeriod
+	var periods []network.MultiplierPeriod
 	if err := json.Unmarshal([]byte(nodeMultiplierData.Value), &periods); err != nil {
 		logger.Error("Unmarshal Node Multiplier Config Error: ", logger.Field("error", err.Error()), logger.Field("value", nodeMultiplierData.Value))
 	}
 	if ctx.SetNodeMultiplierManager != nil {
-		ctx.SetNodeMultiplierManager(nodeMultiplier.NewNodeMultiplierManager(periods))
+		ctx.SetNodeMultiplierManager(network.NewMultiplierManager(periods))
 	}
 }

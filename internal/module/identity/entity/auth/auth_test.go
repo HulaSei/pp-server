@@ -3,7 +3,7 @@ package auth
 import (
 	"testing"
 
-	"github.com/perfect-panel/server/pkg/email"
+	"github.com/perfect-panel/server/internal/mail"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -15,14 +15,14 @@ func TestEmailAuthConfigMarshalFillsAllDefaults(t *testing.T) {
 	roundTripped := new(EmailAuthConfig)
 	roundTripped.Unmarshal(cfg.Marshal())
 
-	assert.Equal(t, email.DefaultEmailVerifyTemplate, roundTripped.VerifyEmailTemplate)
-	assert.Equal(t, email.DefaultExpirationEmailTemplate, roundTripped.ExpirationEmailTemplate)
-	assert.Equal(t, email.DefaultMaintenanceEmailTemplate, roundTripped.MaintenanceEmailTemplate)
-	assert.Equal(t, email.DefaultTrafficExceedEmailTemplate, roundTripped.TrafficExceedEmailTemplate)
-	assert.Equal(t, email.DefaultEmailVerifySubject, roundTripped.VerifyEmailSubject)
-	assert.Equal(t, email.DefaultExpirationEmailSubject, roundTripped.ExpirationEmailSubject)
-	assert.Equal(t, email.DefaultMaintenanceEmailSubject, roundTripped.MaintenanceEmailSubject)
-	assert.Equal(t, email.DefaultTrafficExceedEmailSubject, roundTripped.TrafficExceedEmailSubject)
+	assert.Equal(t, mail.DefaultEmailVerifyTemplate, roundTripped.VerifyEmailTemplate)
+	assert.Equal(t, mail.DefaultExpirationEmailTemplate, roundTripped.ExpirationEmailTemplate)
+	assert.Equal(t, mail.DefaultMaintenanceEmailTemplate, roundTripped.MaintenanceEmailTemplate)
+	assert.Equal(t, mail.DefaultTrafficExceedEmailTemplate, roundTripped.TrafficExceedEmailTemplate)
+	assert.Equal(t, mail.DefaultEmailVerifySubject, roundTripped.VerifyEmailSubject)
+	assert.Equal(t, mail.DefaultExpirationEmailSubject, roundTripped.ExpirationEmailSubject)
+	assert.Equal(t, mail.DefaultMaintenanceEmailSubject, roundTripped.MaintenanceEmailSubject)
+	assert.Equal(t, mail.DefaultTrafficExceedEmailSubject, roundTripped.TrafficExceedEmailSubject)
 }
 
 func TestEmailAuthConfigMarshalKeepsCustomizedValues(t *testing.T) {

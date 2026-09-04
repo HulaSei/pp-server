@@ -6,11 +6,11 @@ import (
 	"context"
 	"time"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	entity "github.com/perfect-panel/server/internal/module/support/entity/ads"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -45,7 +45,7 @@ func (s *Service) Update(ctx context.Context, req *dto.UpdateAdsRequest) error {
 		logger.WithContext(ctx).Errorw("find ads error", logger.Field("error", err.Error()), logger.Field("id", req.Id))
 		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find ads error: %v", err.Error())
 	}
-	tool.DeepCopy(data, req)
+	mapping.DeepCopy(data, req)
 	data.StartTime = time.UnixMilli(req.StartTime)
 	data.EndTime = time.UnixMilli(req.EndTime)
 	if err := s.repo.Update(ctx, data); err != nil {
@@ -70,7 +70,7 @@ func (s *Service) GetDetail(ctx context.Context, req *dto.GetAdsDetailRequest) (
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find ads error: %v", err.Error())
 	}
 	resp := new(dto.Ads)
-	tool.DeepCopy(resp, data)
+	mapping.DeepCopy(resp, data)
 	return resp, nil
 }
 
@@ -87,6 +87,6 @@ func (s *Service) List(ctx context.Context, req *dto.GetAdsListRequest) (*dto.Ge
 		Total: total,
 		List:  make([]dto.Ads, len(data)),
 	}
-	tool.DeepCopy(&resp.List, data)
+	mapping.DeepCopy(&resp.List, data)
 	return resp, nil
 }

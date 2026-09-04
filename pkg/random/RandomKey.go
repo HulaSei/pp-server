@@ -9,9 +9,6 @@ import (
 const (
 	chars62 = "E7gLp4jWS6kPv5DzxaY1o9sNcFmBAlUut0ZOhKVM38bqHRJfCwdrTni2QIeXGy"
 	base62  = int64(len(chars62))
-
-	chars36 = "6W1HLYPUSJ745ZAKMBQEN9DF8OVGITX320RC"
-	base36  = int64(len(chars36))
 )
 
 func EncodeBase62(id int64) string {
@@ -27,34 +24,6 @@ func EncodeBase62(id int64) string {
 	}
 
 	index := len(chars62) - 1
-	for len(encoded) < 6 {
-		encoded = string(chars62[index]) + encoded
-		index -= 3
-		if index < 0 {
-			index = len(chars62) - 1
-		}
-	}
-	// if len(encoded) > 7 {
-	// 	encoded = encoded[:7]
-	// }
-
-	return encoded
-}
-
-// EncodeBase36 ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789
-func EncodeBase36(id int64) string {
-	if id == 0 {
-		return string(chars36[0])
-	}
-
-	encoded := ""
-	for id > 0 {
-		remainder := id % base36
-		encoded = string(chars36[remainder]) + encoded
-		id /= base36
-	}
-
-	index := len(chars36) - 1
 	for len(encoded) < 6 {
 		encoded = string(chars62[index]) + encoded
 		index -= 3

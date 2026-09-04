@@ -8,7 +8,6 @@ import (
 	"github.com/perfect-panel/server/internal/module/identity"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // AppleLoginCallbackHandler documents Apple Login Callback.
@@ -31,7 +30,7 @@ func AppleLoginCallbackHandler(service identity.Service) app.HandlerFunc {
 		}
 		redirect, err := service.AppleLoginCallback(c, &req)
 		if err != nil {
-			result.HttpResult(ctx, nil, err)
+			httpx.HttpResult(ctx, nil, err)
 			return
 		}
 		ctx.Redirect(redirect.StatusCode, []byte(redirect.Location))

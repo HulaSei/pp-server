@@ -4,9 +4,9 @@ import (
 	"context"
 	"testing"
 
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	usermodel "github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/pkg/constant"
 )
 
 type fakeBindOAuthMethodPolicy struct {

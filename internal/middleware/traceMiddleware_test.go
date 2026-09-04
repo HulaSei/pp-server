@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/perfect-panel/server/pkg/result"
+	"github.com/perfect-panel/server/pkg/httpx"
 )
 
 func TestRequestError_returnsParameterError_whenNativeContextHasRecordedParameterError(t *testing.T) {
 	// Given
 	ctx := app.NewContext(0)
-	result.ParamErrorResult(ctx, errors.New("missing token"))
+	httpx.ParamErrorResult(ctx, errors.New("missing token"))
 
 	// When
 	got := requestError(ctx)

@@ -4,10 +4,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
@@ -45,7 +45,7 @@ func (l *FilterServerListLogic) FilterServerList(req *dto.FilterServerListReques
 
 	for _, datum := range data {
 		var server dto.Server
-		tool.DeepCopy(&server, datum)
+		mapping.DeepCopy(&server, datum)
 
 		// handler protocols
 		var protocols []dto.Protocol
@@ -54,7 +54,7 @@ func (l *FilterServerListLogic) FilterServerList(req *dto.FilterServerListReques
 			l.Errorf("[FilterServerList] UnmarshalProtocols Error: %s", err.Error())
 			continue
 		}
-		tool.DeepCopy(&protocols, dst)
+		mapping.DeepCopy(&protocols, dst)
 		server.Protocols = protocols
 
 		nodeStatus, err := nodeStore.StatusCache(l.ctx, datum.Id)

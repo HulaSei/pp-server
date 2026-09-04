@@ -4,11 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/perfect-panel/server/pkg/logger"
-
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/mapping"
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/logger"
 )
 
 func Mobile(ctx *Dependencies) {
@@ -20,7 +19,7 @@ func Mobile(ctx *Dependencies) {
 	var cfg config.MobileConfig
 	var mobileConfig auth.MobileAuthConfig
 	mobileConfig.Unmarshal(method.Config)
-	tool.DeepCopy(&cfg, mobileConfig)
+	mapping.DeepCopy(&cfg, mobileConfig)
 	cfg.Enable = *method.Enabled
 	value, _ := json.Marshal(mobileConfig.PlatformConfig)
 	cfg.PlatformConfig = string(value)

@@ -3,22 +3,22 @@ package auth
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/auth/password"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 func upgradePasswordAfterLogin(ctx context.Context, users repository.UserRepo, log logger.Logger, userInfo *user.User, plainPassword string) {
 	if userInfo == nil || userInfo.Id == 0 || plainPassword == "" {
 		return
 	}
-	if !tool.PasswordNeedsRehash(userInfo.Algo, userInfo.Password) {
+	if !password.PasswordNeedsRehash(userInfo.Algo, userInfo.Password) {
 		return
 	}
 
-	nextHash := tool.EncodePassWord(plainPassword)
-	updated, err := users.UpgradePasswordHash(ctx, userInfo.Id, userInfo.Password, nextHash, tool.PasswordAlgoArgon2id, "")
+	nextHash := password.EncodePassWord(plainPassword)
+	updated, err := users.UpgradePasswordHash(ctx, userInfo.Id, userInfo.Password, nextHash, password.PasswordAlgoArgon2id, "")
 	if err != nil {
 		log.Errorw("failed to upgrade password hash",
 			logger.Field("user_id", userInfo.Id),
@@ -30,6 +30,6 @@ func upgradePasswordAfterLogin(ctx context.Context, users repository.UserRepo, l
 		return
 	}
 	userInfo.Password = nextHash
-	userInfo.Algo = tool.PasswordAlgoArgon2id
+	userInfo.Algo = password.PasswordAlgoArgon2id
 	userInfo.Salt = ""
 }

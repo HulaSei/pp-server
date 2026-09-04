@@ -1,5 +1,5 @@
 # Use a smaller base image for the build stage
-FROM golang:alpine AS builder
+FROM golang:1.27.1-alpine AS builder
 
 LABEL stage=gobuilder
 
@@ -22,7 +22,7 @@ COPY . .
 
 # Build the binary with version and build time
 RUN BUILD_TIME=$(date -u +"%Y-%m-%d %H:%M:%S") && \
-    go build -ldflags="-s -w -X 'github.com/perfect-panel/server/pkg/constant.Version=${VERSION}' -X 'github.com/perfect-panel/server/pkg/constant.BuildTime=${BUILD_TIME}' -X 'github.com/perfect-panel/server/pkg/constant.Channel=${CHANNEL}'" -o /app/ppanel main.go
+    go build -ldflags="-s -w -X 'github.com/perfect-panel/server/internal/constant.Version=${VERSION}' -X 'github.com/perfect-panel/server/internal/constant.BuildTime=${BUILD_TIME}' -X 'github.com/perfect-panel/server/internal/constant.Channel=${CHANNEL}'" -o /app/ppanel main.go
 
 # Final minimal image
 FROM scratch

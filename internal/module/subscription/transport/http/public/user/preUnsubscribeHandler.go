@@ -8,7 +8,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // PreUnsubscribeHandler documents Pre Unsubscribe.
@@ -19,22 +18,22 @@ import (
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.PreUnsubscribeRequest true "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.PreUnsubscribeResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.PreUnsubscribeResponse}
 // @Router /v1/public/user/unsubscribe/pre [post]
 func PreUnsubscribeHandler(service subscription.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.PreUnsubscribeRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		validateErr := validation.Validate(&req)
 		if validateErr != nil {
-			result.ParamErrorResult(ctx, validateErr)
+			httpx.ParamErrorResult(ctx, validateErr)
 			return
 		}
 
 		resp, err := service.PreUnsubscribe(c, &req)
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }

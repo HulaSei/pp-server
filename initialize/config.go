@@ -9,19 +9,17 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"uuid"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	hertzconfig "github.com/cloudwego/hertz/pkg/common/config"
 	"github.com/cloudwego/hertz/pkg/common/utils"
-	"github.com/google/uuid"
 	"github.com/perfect-panel/server/initialize/migrate"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/report"
 	"github.com/perfect-panel/server/pkg/conf"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/orm"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
@@ -35,28 +33,7 @@ var configPath string
 func Config(path string) (chan bool, *server.Hertz) {
 	// Set the configuration file path
 	configPath = path
-	// get server port
-	port := 8080
-	host := "127.0.0.1"
-
-	// check gateway mode
-	if report.IsGatewayMode() {
-		// get free port
-		freePort, err := report.ModulePort()
-		if err != nil {
-			logger.Errorf("get module port error: %s", err.Error())
-			panic(err)
-		}
-		port = freePort
-		// register module
-		err = report.RegisterModule(port)
-		if err != nil {
-			logger.Errorf("register module error: %s", err.Error())
-			panic(err)
-		}
-		logger.Infof("module registered on port %d", port)
-	}
-	engine := newConfigServer(server.WithHostPorts(fmt.Sprintf("%s:%d", host, port)))
+	engine := newConfigServer(server.WithHostPorts("127.0.0.1:8080"))
 
 	go func() {
 		// Start the server
@@ -117,7 +94,7 @@ func handleInitConfig(_ context.Context, ctx *app.RequestContext) {
 	}
 	cfg.Debug = false
 	// jwt secret
-	cfg.JwtAuth.AccessSecret = uuid.New().String()
+	cfg.JwtAuth.AccessSecret = uuid.NewV4().String()
 	// database
 	dbConfig, err := buildDatabaseConfig(request.DatabaseDriver, request.MysqlHost, request.MysqlPort, request.MysqlDatabase, request.MysqlUser, request.MysqlPassword)
 	if err != nil {
@@ -320,7 +297,7 @@ func HandleRedisTest(_ context.Context, ctx *app.RequestContext) {
 		ctx.Abort()
 		return
 	}
-	if err := tool.RedisPing(fmt.Sprintf("%s:%s", request.Host, request.Port), request.Password, 0); err != nil {
+	if err := config.RedisPing(fmt.Sprintf("%s:%s", request.Host, request.Port), request.Password, 0); err != nil {
 		ctx.JSON(http.StatusOK, utils.H{
 			"code":   200,
 			"msg":    nil,

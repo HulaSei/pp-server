@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	token2 "github.com/perfect-panel/server/internal/auth/token"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/checkout"
@@ -23,8 +25,6 @@ import (
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
@@ -343,11 +343,11 @@ func (l *V2OrderLogic) mintEventTicket(orderInfo *orderEntity.Order, checkoutTok
 	if seconds < 1 {
 		seconds = 1
 	}
-	ticket, err := jwt.NewJwtToken(l.deps.JwtSecret, time.Now().Unix(), seconds,
-		jwt.WithOption("OrderNo", orderInfo.OrderNo),
-		jwt.WithOption("Scope", v2EventScope),
-		jwt.WithOption("UserId", orderInfo.UserId),
-		jwt.WithOption("GuestCheckoutHash", orderInfo.GuestCheckoutTokenHash),
+	ticket, err := token2.NewJwtToken(l.deps.JwtSecret, time.Now().Unix(), seconds,
+		token2.WithOption("OrderNo", orderInfo.OrderNo),
+		token2.WithOption("Scope", v2EventScope),
+		token2.WithOption("UserId", orderInfo.UserId),
+		token2.WithOption("GuestCheckoutHash", orderInfo.GuestCheckoutTokenHash),
 	)
 	if err != nil {
 		return "", 0, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "create event ticket")
@@ -359,7 +359,7 @@ func (l *V2OrderLogic) mintEventTicket(orderInfo *orderEntity.Order, checkoutTok
 // the current order row. It deliberately does not require a long-lived bearer
 // token in the EventSource URL.
 func (l *V2OrderLogic) AuthorizeEventTicket(orderNo, ticket string) (*orderEntity.Order, error) {
-	claims, err := jwt.ParseJwtToken(ticket, l.deps.JwtSecret)
+	claims, err := token2.ParseJwtToken(ticket, l.deps.JwtSecret)
 	if err != nil || claimString(claims, "OrderNo") != orderNo || claimString(claims, "Scope") != v2EventScope {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "event ticket is invalid")
 	}
@@ -377,7 +377,7 @@ func (l *V2OrderLogic) AuthorizeEventTicket(orderNo, ticket string) (*orderEntit
 }
 
 func (l *V2OrderLogic) EventTicketExpiresAt(ticket string) (time.Time, error) {
-	claims, err := jwt.ParseJwtToken(ticket, l.deps.JwtSecret)
+	claims, err := token2.ParseJwtToken(ticket, l.deps.JwtSecret)
 	if err != nil {
 		return time.Time{}, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "event ticket is invalid")
 	}

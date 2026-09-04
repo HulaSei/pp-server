@@ -9,11 +9,11 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/perfect-panel/server/internal/auth/deviceauth"
 	appconfig "github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/repository"
-	pkgaes "github.com/perfect-panel/server/pkg/aes"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/xerr"
 )
 
@@ -41,15 +41,15 @@ func TestAuthMiddleware_abortsWithTokenEnvelope_whenAuthorizationMissing(t *test
 func TestDeviceMiddleware_decryptsRequestAndEncryptsResponse_whenDeviceLogin(t *testing.T) {
 	// Given
 	const secret = "device-secret"
-	queryData, queryTime, err := pkgaes.Encrypt([]byte(`{"page":2}`), secret)
+	queryData, queryTime, err := deviceauth.Encrypt([]byte(`{"page":2}`), secret)
 	if err != nil {
 		t.Fatalf("encrypt query: %v", err)
 	}
-	bodyData, bodyTime, err := pkgaes.Encrypt([]byte(`{"name":"device"}`), secret)
+	bodyData, bodyTime, err := deviceauth.Encrypt([]byte(`{"name":"device"}`), secret)
 	if err != nil {
 		t.Fatalf("encrypt body: %v", err)
 	}
-	requestBody, err := json.Marshal(map[string]string{"data": bodyData, "time": bodyTime})
+	requestBody, err := json.Marshal(map[string]string{"data": bodyData, "time": bodyTime, "sign": deviceauth.Sign(secret, "POST", "/device", "body", bodyData, bodyTime)})
 	if err != nil {
 		t.Fatalf("marshal request body: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestDeviceMiddleware_decryptsRequestAndEncryptsResponse_whenDeviceLogin(t *
 	engine := server.Default()
 	engine.POST("/device", DeviceMiddleware(func() appconfig.DeviceConfig {
 		return appconfig.DeviceConfig{Enable: true, EnableSecurity: true, SecuritySecret: secret}
-	}), func(requestCtx context.Context, ctx *app.RequestContext) {
+	}, deviceReplayClient(t)), func(requestCtx context.Context, ctx *app.RequestContext) {
 		if loginType, _ := requestCtx.Value(constant.LoginType).(string); loginType != "device" {
 			t.Errorf("expected derived request context login type %q, got %q", "device", loginType)
 		}
@@ -74,7 +74,7 @@ func TestDeviceMiddleware_decryptsRequestAndEncryptsResponse_whenDeviceLogin(t *
 		ctx.JSON(http.StatusCreated, map[string]map[string]string{"data": {"status": "ok"}})
 	})
 
-	values := url.Values{"data": {queryData}, "time": {queryTime}}
+	values := url.Values{"data": {queryData}, "time": {queryTime}, "sign": {deviceauth.Sign(secret, "POST", "/device", "query", queryData, queryTime)}}
 	ctx := requestContext(engine, http.MethodPost, "/device?"+values.Encode())
 	ctx.Request.Header.Set("Login-Type", "device")
 	ctx.Request.SetBody(requestBody)
@@ -98,7 +98,7 @@ func TestDeviceMiddleware_decryptsRequestAndEncryptsResponse_whenDeviceLogin(t *
 	if err := json.Unmarshal(ctx.Response.Body(), &response); err != nil {
 		t.Fatalf("unmarshal encrypted response: %v", err)
 	}
-	plainText, err := pkgaes.Decrypt(response.Data.Data, secret, response.Data.Time)
+	plainText, err := deviceauth.Decrypt(response.Data.Data, secret, response.Data.Time)
 	if err != nil {
 		t.Fatalf("decrypt response: %v", err)
 	}
@@ -113,7 +113,7 @@ func TestDeviceMiddleware_rejectsPlaintextDeviceLoginRoute_withoutLoginTypeHeade
 	downstreamRan := false
 	engine.POST("/v1/auth/login/device", DeviceMiddleware(func() appconfig.DeviceConfig {
 		return appconfig.DeviceConfig{Enable: true, EnableSecurity: true, SecuritySecret: secret}
-	}), func(_ context.Context, ctx *app.RequestContext) {
+	}, deviceReplayClient(t)), func(_ context.Context, ctx *app.RequestContext) {
 		downstreamRan = true
 		ctx.String(http.StatusOK, "unreachable")
 	})
@@ -132,7 +132,7 @@ func TestDeviceMiddleware_allowsUnrelatedPlaintextRoute_whenSecurityEnabled(t *t
 	engine := server.Default()
 	engine.POST("/v1/auth/login", DeviceMiddleware(func() appconfig.DeviceConfig {
 		return appconfig.DeviceConfig{Enable: true, EnableSecurity: true, SecuritySecret: "device-secret"}
-	}), func(_ context.Context, ctx *app.RequestContext) {
+	}, deviceReplayClient(t)), func(_ context.Context, ctx *app.RequestContext) {
 		ctx.String(http.StatusOK, string(ctx.Request.Body()))
 	})
 	ctx := requestContext(engine, http.MethodPost, "/v1/auth/login")
@@ -151,20 +151,22 @@ func TestDeviceMiddleware_allowsUnrelatedPlaintextRoute_whenSecurityEnabled(t *t
 func TestDevicePayloadHelpers_roundTripRequestAndResponse_whenPayloadIsEncrypted(t *testing.T) {
 	// Given
 	const secret = "device-secret"
-	ciphertext, iv, err := pkgaes.Encrypt([]byte(`{"name":"device"}`), secret)
+	ciphertext, iv, err := deviceauth.Encrypt([]byte(`{"name":"device"}`), secret)
 	if err != nil {
 		t.Fatalf("encrypt device request: %v", err)
 	}
-	requestBody, err := json.Marshal(map[string]string{"data": ciphertext, "time": iv})
+	requestBody, err := json.Marshal(map[string]string{"data": ciphertext, "time": iv, "sign": deviceauth.Sign(secret, "POST", "/device", "body", ciphertext, iv)})
 	if err != nil {
 		t.Fatalf("marshal encrypted request: %v", err)
 	}
 	requestCtx := app.NewContext(0)
+	requestCtx.Request.Header.SetMethod("POST")
+	requestCtx.Request.SetRequestURI("/device")
 	requestCtx.Request.SetBody(requestBody)
 
 	// When
-	if !DecryptDeviceRequest(requestCtx, secret) {
-		t.Fatal("expected encrypted request to decrypt")
+	if err := DecryptDeviceRequest(context.Background(), requestCtx, secret, deviceReplayClient(t)); err != nil {
+		t.Fatalf("expected encrypted request to decrypt: %v", err)
 	}
 	requestCtx.Response.SetBodyString(`{"data":{"status":"ok"}}`)
 	EncryptDeviceResponse(requestCtx, secret)
@@ -182,7 +184,7 @@ func TestDevicePayloadHelpers_roundTripRequestAndResponse_whenPayloadIsEncrypted
 	if err := json.Unmarshal(requestCtx.Response.Body(), &response); err != nil {
 		t.Fatalf("unmarshal encrypted response: %v", err)
 	}
-	plainText, err := pkgaes.Decrypt(response.Data.Data, secret, response.Data.Time)
+	plainText, err := deviceauth.Decrypt(response.Data.Data, secret, response.Data.Time)
 	if err != nil {
 		t.Fatalf("decrypt response data: %v", err)
 	}

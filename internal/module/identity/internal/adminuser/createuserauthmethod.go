@@ -2,6 +2,7 @@ package adminuser
 
 import (
 	"context"
+	"strings"
 
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
@@ -28,6 +29,9 @@ func newCreateUserAuthMethodLogic(ctx context.Context, deps Deps) *CreateUserAut
 }
 
 func (l *CreateUserAuthMethodLogic) CreateUserAuthMethod(req *dto.CreateUserAuthMethodRequest) error {
+	if strings.EqualFold(strings.TrimSpace(req.AuthType), "device") {
+		return errors.Wrap(xerr.NewErrCode(xerr.InvalidParams), "use device management for device identities")
+	}
 	err := l.deps.Store.InIdentityTx(l.ctx, func(store repository.IdentityStore) error {
 		return store.UserAuth().UpsertUserAuthMethod(l.ctx, &user.AuthMethods{
 			UserId:         req.UserId,

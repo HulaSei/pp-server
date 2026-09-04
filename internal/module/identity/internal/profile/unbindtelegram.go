@@ -4,8 +4,7 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/perfect-panel/server/pkg/constant"
-
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"

@@ -6,7 +6,7 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -29,7 +29,7 @@ func newCreateNodeLogic(ctx context.Context, deps Deps) *CreateNodeLogic {
 func (l *CreateNodeLogic) CreateNode(req *dto.CreateNodeRequest) error {
 	data := node.Node{
 		Name:     req.Name,
-		Tags:     tool.StringSliceToString(req.Tags),
+		Tags:     slicesx.StringSliceToString(req.Tags),
 		Enabled:  req.Enabled,
 		Port:     req.Port,
 		Address:  req.Address,

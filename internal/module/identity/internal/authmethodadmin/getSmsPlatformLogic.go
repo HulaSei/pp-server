@@ -3,9 +3,8 @@ package authmethodadmin
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/sms"
-
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
+	"github.com/perfect-panel/server/internal/sms"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 

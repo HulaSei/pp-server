@@ -8,6 +8,7 @@ import (
 
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/repository"
+	"github.com/redis/go-redis/v9"
 )
 
 type Deps struct {
@@ -26,6 +27,7 @@ type Deps struct {
 	// columns (ADR-001 step 5).
 	Wallet repository.WalletRepo
 	Store  repository.Store
+	Redis  *redis.Client
 	// KickDevice force-disconnects a bound device.
 	KickDevice func(userID int64, identifier string)
 }

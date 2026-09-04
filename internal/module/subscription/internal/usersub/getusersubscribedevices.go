@@ -3,12 +3,11 @@ package usersub
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/xerr"
-	"github.com/pkg/errors"
-
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/xerr"
+	"github.com/pkg/errors"
 )
 
 type GetUserSubscribeDevicesLogic struct {
@@ -32,7 +31,7 @@ func (l *GetUserSubscribeDevicesLogic) GetUserSubscribeDevices(req *dto.GetUserS
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "GetUserSubscribeDevices failed: %v", err.Error())
 	}
 	userRespList := make([]dto.SubscriptionUserDeviceSnapshot, 0)
-	tool.DeepCopy(&userRespList, list)
+	mapping.DeepCopy(&userRespList, list)
 	return &dto.GetUserSubscribeDevicesResponse{
 		Total: total,
 		List:  userRespList,

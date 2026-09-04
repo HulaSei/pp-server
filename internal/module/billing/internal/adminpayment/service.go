@@ -8,14 +8,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	paymentModel "github.com/perfect-panel/server/internal/module/billing/entity/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/stripe"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/payment"
-	"github.com/perfect-panel/server/pkg/payment/stripe"
 	"github.com/perfect-panel/server/pkg/random"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -26,15 +26,14 @@ type Transactor interface {
 }
 
 type Service struct {
-	payments      repository.PaymentRepo
-	orders        repository.OrderRepo
-	tx            Transactor
-	host          string
-	isGatewayMode func() bool
+	payments repository.PaymentRepo
+	orders   repository.OrderRepo
+	tx       Transactor
+	host     string
 }
 
-func NewService(payments repository.PaymentRepo, orders repository.OrderRepo, tx Transactor, host string, isGatewayMode func() bool) *Service {
-	return &Service{payments: payments, orders: orders, tx: tx, host: host, isGatewayMode: isGatewayMode}
+func NewService(payments repository.PaymentRepo, orders repository.OrderRepo, tx Transactor, host string) *Service {
+	return &Service{payments: payments, orders: orders, tx: tx, host: host}
 }
 
 func (s *Service) Create(ctx context.Context, req *dto.CreatePaymentMethodRequest) (*dto.PaymentConfig, error) {
@@ -101,7 +100,7 @@ func (s *Service) Create(ctx context.Context, req *dto.CreatePaymentMethodReques
 	}
 
 	resp := &dto.PaymentConfig{}
-	tool.DeepCopy(resp, paymentMethod)
+	mapping.DeepCopy(resp, paymentMethod)
 	var configMap map[string]interface{}
 	_ = json.Unmarshal([]byte(paymentMethod.Config), &configMap)
 	resp.Config = configMap
@@ -147,14 +146,14 @@ func (s *Service) Update(ctx context.Context, req *dto.UpdatePaymentMethodReques
 			}
 		}
 	}
-	tool.DeepCopy(method, req)
+	mapping.DeepCopy(method, req)
 	method.Config = config
 	if err := s.payments.Update(ctx, method); err != nil {
 		log.Errorw("update payment method error", logger.Field("id", req.Id), logger.Field("error", err.Error()))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseUpdateError), "update payment method error: %s", err.Error())
 	}
 	resp := &dto.PaymentConfig{}
-	tool.DeepCopy(resp, method)
+	mapping.DeepCopy(resp, method)
 	var configMap map[string]interface{}
 	_ = json.Unmarshal([]byte(method.Config), &configMap)
 	resp.Config = configMap
@@ -201,8 +200,6 @@ func (s *Service) List(ctx context.Context, req *dto.GetPaymentMethodListRequest
 		List:  make([]dto.PaymentMethodDetail, len(list)),
 	}
 
-	isGatewayMod := s.isGatewayMode != nil && s.isGatewayMode()
-
 	for i, v := range list {
 		config := make(map[string]interface{})
 		_ = json.Unmarshal([]byte(v.Config), &config)
@@ -210,21 +207,10 @@ func (s *Service) List(ctx context.Context, req *dto.GetPaymentMethodListRequest
 
 		if payment.ParsePlatform(v.Platform) != payment.Balance {
 			notifyUrl = v.Domain
-			if v.Domain != "" {
-				notifyUrl = strings.TrimSuffix(notifyUrl, "/")
-				if isGatewayMod {
-					notifyUrl += "/api/v1/notify/" + v.Platform + "/" + v.Token
-				} else {
-					notifyUrl += "/v1/notify/" + v.Platform + "/" + v.Token
-				}
-			} else {
-				notifyUrl += "https://" + s.host
-				if isGatewayMod {
-					notifyUrl = strings.TrimSuffix(notifyUrl, "/") + "/api/v1/notify/" + v.Platform + "/" + v.Token
-				} else {
-					notifyUrl = strings.TrimSuffix(notifyUrl, "/") + "/v1/notify/" + v.Platform + "/" + v.Token
-				}
+			if notifyUrl == "" {
+				notifyUrl = "https://" + s.host
 			}
+			notifyUrl = strings.TrimSuffix(notifyUrl, "/") + "/v1/notify/" + v.Platform + "/" + v.Token
 		}
 		resp.List[i] = dto.PaymentMethodDetail{
 			Id:          v.Id,

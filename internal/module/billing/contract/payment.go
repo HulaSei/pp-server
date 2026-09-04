@@ -1,6 +1,8 @@
 package dto
 
-import "github.com/perfect-panel/server/pkg/platform"
+import (
+	"github.com/perfect-panel/server/internal/integration"
+)
 
 type CreatePaymentMethodRequest struct {
 	Name        string      `json:"name" validate:"required"`
@@ -95,7 +97,7 @@ type PaymentMethodDetail struct {
 
 // PlatformInfo is kept as a DTO alias for API compatibility. Provider metadata
 // belongs to the infrastructure-neutral platform package.
-type PaymentPlatformInfoSnapshot = platform.Info // @name dto.PlatformInfo
+type PaymentPlatformInfoSnapshot = integration.Info // @name dto.PlatformInfo
 
 type PaymentPlatformResponse struct {
 	List []PaymentPlatformInfoSnapshot `json:"list"`

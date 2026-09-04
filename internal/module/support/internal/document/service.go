@@ -7,13 +7,14 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/mapping"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	entity "github.com/perfect-panel/server/internal/module/support/entity/document"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -97,7 +98,7 @@ func (s *Service) GetDetail(ctx context.Context, req *dto.GetDocumentDetailReque
 	return &dto.Document{
 		Id:        data.Id,
 		Title:     data.Title,
-		Tags:      tool.StringMergeAndRemoveDuplicates(data.Tags),
+		Tags:      slicesx.StringMergeAndRemoveDuplicates(data.Tags),
 		Content:   data.Content,
 		CreatedAt: data.CreatedAt.UnixMilli(),
 		UpdatedAt: data.UpdatedAt.UnixMilli(),
@@ -118,7 +119,7 @@ func (s *Service) List(ctx context.Context, req *dto.GetDocumentListRequest) (*d
 		resp.List = append(resp.List, dto.Document{
 			Id:        v.Id,
 			Title:     v.Title,
-			Tags:      tool.StringMergeAndRemoveDuplicates(v.Tags),
+			Tags:      slicesx.StringMergeAndRemoveDuplicates(v.Tags),
 			Content:   v.Content,
 			Show:      *v.Show,
 			CreatedAt: v.CreatedAt.UnixMilli(),
@@ -135,7 +136,7 @@ func (s *Service) QueryDetail(ctx context.Context, req *dto.QueryDocumentDetailR
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "FindOne error: %s", err.Error())
 	}
 	resp := &dto.Document{}
-	tool.DeepCopy(resp, data)
+	mapping.DeepCopy(resp, data)
 	resp.Content = s.renderConditional(ctx, resp.Content)
 	return resp, nil
 }
@@ -183,7 +184,7 @@ func (s *Service) QueryList(ctx context.Context) (*dto.QueryDocumentListResponse
 		resp.List = append(resp.List, dto.Document{
 			Id:        item.Id,
 			Title:     item.Title,
-			Tags:      tool.StringMergeAndRemoveDuplicates(item.Tags),
+			Tags:      slicesx.StringMergeAndRemoveDuplicates(item.Tags),
 			UpdatedAt: item.UpdatedAt.UnixMilli(),
 		})
 	}

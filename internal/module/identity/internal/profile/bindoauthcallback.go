@@ -6,21 +6,20 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/timeutil"
-
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/apple"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/facebook"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/github"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/google"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/telegram"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthstate"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/oauth/apple"
-	facebookoauth "github.com/perfect-panel/server/pkg/oauth/facebook"
-	githuboauth "github.com/perfect-panel/server/pkg/oauth/github"
-	"github.com/perfect-panel/server/pkg/oauth/google"
-	"github.com/perfect-panel/server/pkg/oauth/telegram"
-	"github.com/perfect-panel/server/pkg/oauthstate"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -101,7 +100,7 @@ func (l *BindOAuthCallbackLogic) google(req *dto.BindOAuthCallbackRequest) error
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
 	}
 	var request googleRequest
-	err := tool.CloneMapToStruct(req.Callback.(map[string]interface{}), &request)
+	err := mapping.CloneMapToStruct(req.Callback.(map[string]interface{}), &request)
 	if err != nil {
 		l.Errorw("error CloneMapToStruct: %v", logger.Field("error", err.Error()))
 		return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "CloneMapToStruct failed")
@@ -253,7 +252,7 @@ func (l *BindOAuthCallbackLogic) facebook(req *dto.BindOAuthCallbackRequest) err
 	}
 
 	var request googleRequest
-	err := tool.CloneMapToStruct(req.Callback.(map[string]interface{}), &request)
+	err := mapping.CloneMapToStruct(req.Callback.(map[string]interface{}), &request)
 	if err != nil {
 		l.Errorw("error CloneMapToStruct: %v", logger.Field("error", err.Error()))
 		return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "CloneMapToStruct failed")
@@ -280,7 +279,7 @@ func (l *BindOAuthCallbackLogic) facebook(req *dto.BindOAuthCallbackRequest) err
 		return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "unmarshal facebook config failed")
 	}
 
-	client := facebookoauth.New(&facebookoauth.Config{
+	client := facebook.New(&facebook.Config{
 		ClientID:     cfg.ClientId,
 		ClientSecret: cfg.ClientSecret,
 		RedirectURL:  redirect,
@@ -439,7 +438,7 @@ func (l *BindOAuthCallbackLogic) github(req *dto.BindOAuthCallbackRequest) error
 	}
 
 	var request googleRequest
-	err := tool.CloneMapToStruct(req.Callback.(map[string]interface{}), &request)
+	err := mapping.CloneMapToStruct(req.Callback.(map[string]interface{}), &request)
 	if err != nil {
 		l.Errorw("error CloneMapToStruct: %v", logger.Field("error", err.Error()))
 		return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "CloneMapToStruct failed")
@@ -466,7 +465,7 @@ func (l *BindOAuthCallbackLogic) github(req *dto.BindOAuthCallbackRequest) error
 		return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "unmarshal github config failed")
 	}
 
-	client := githuboauth.New(&githuboauth.Config{
+	client := github.New(&github.Config{
 		ClientID:     cfg.ClientId,
 		ClientSecret: cfg.ClientSecret,
 		RedirectURL:  redirect,

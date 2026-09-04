@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/perfect-panel/server/pkg/timex"
-	"github.com/perfect-panel/server/pkg/tracectx"
+	oteltrace "go.opentelemetry.io/otel/trace"
 )
 
 // WithCallerSkip returns a Logger with given caller skip.
@@ -30,7 +29,7 @@ func WithContext(ctx context.Context) Logger {
 // WithDuration returns a Logger with given duration.
 func WithDuration(d time.Duration) Logger {
 	return &richLogger{
-		fields: []LogField{Field(durationKey, timex.ReprOfDuration(d))},
+		fields: []LogField{Field(durationKey, reprLogDuration(d))},
 	}
 }
 
@@ -161,7 +160,7 @@ func (l *richLogger) WithContext(ctx context.Context) Logger {
 }
 
 func (l *richLogger) WithDuration(duration time.Duration) Logger {
-	fields := append(l.fields, Field(durationKey, timex.ReprOfDuration(duration)))
+	fields := append(l.fields, Field(durationKey, reprLogDuration(duration)))
 
 	return &richLogger{
 		ctx:        l.ctx,
@@ -192,14 +191,13 @@ func (l *richLogger) buildFields(fields ...LogField) []LogField {
 		return fields
 	}
 
-	traceID := tracectx.TraceIDFromContext(l.ctx)
-	if len(traceID) > 0 {
-		fields = append(fields, Field(traceKey, traceID))
+	spanContext := oteltrace.SpanContextFromContext(l.ctx)
+	if spanContext.HasTraceID() {
+		fields = append(fields, Field(traceKey, spanContext.TraceID().String()))
 	}
 
-	spanID := tracectx.SpanIDFromContext(l.ctx)
-	if len(spanID) > 0 {
-		fields = append(fields, Field(spanKey, spanID))
+	if spanContext.HasSpanID() {
+		fields = append(fields, Field(spanKey, spanContext.SpanID().String()))
 	}
 
 	val := l.ctx.Value(fieldsContextKey)

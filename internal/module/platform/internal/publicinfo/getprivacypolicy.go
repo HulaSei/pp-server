@@ -3,9 +3,9 @@ package publicinfo
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/config"
 	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -34,6 +34,6 @@ func (l *GetPrivacyPolicyLogic) GetPrivacyPolicy() (resp *dto.PrivacyPolicyConfi
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "GetTosConfig error: %v", err.Error())
 	}
 	// reflect to response
-	tool.SystemConfigSliceReflectToStruct(configs, resp)
+	config.SystemConfigSliceReflectToStruct(configs, resp)
 	return
 }

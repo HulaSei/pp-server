@@ -7,7 +7,6 @@ import (
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/random"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 // LegacyDefaultNodeSecret is the node secret the original seed data shipped. The
@@ -38,7 +37,7 @@ func NodeSecret(svcCtx *Dependencies) {
 			return err
 		}
 		var nodeConfig config.NodeDBConfig
-		tool.SystemConfigSliceReflectToStruct(configs, &nodeConfig)
+		config.SystemConfigSliceReflectToStruct(configs, &nodeConfig)
 
 		switch nodeConfig.NodeSecret {
 		case "":

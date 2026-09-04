@@ -4,7 +4,7 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/coupon"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
-	paymentPlatform "github.com/perfect-panel/server/pkg/payment"
+	payment2 "github.com/perfect-panel/server/internal/module/billing/internal/payment"
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
@@ -22,7 +22,7 @@ func getDiscount(discounts []dto.BillingSubscribeDiscount, inputMonths int64) fl
 }
 
 func ensurePaymentAvailable(paymentInfo *payment.Payment) error {
-	if paymentInfo == nil || paymentInfo.Enable == nil || !*paymentInfo.Enable || paymentPlatform.ParsePlatform(paymentInfo.Platform) == paymentPlatform.UNSUPPORTED {
+	if paymentInfo == nil || paymentInfo.Enable == nil || !*paymentInfo.Enable || payment2.ParsePlatform(paymentInfo.Platform) == payment2.UNSUPPORTED {
 		return errors.Wrapf(xerr.NewErrCode(xerr.PaymentMethodNotFound), "payment method is unavailable")
 	}
 	return nil

@@ -3,15 +3,14 @@ package checkout
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -69,7 +68,7 @@ func (s *Service) Recharge(ctx context.Context, req *dto.RechargeOrderRequest) (
 	}
 	orderInfo := order.Order{
 		UserId:    u.Id,
-		OrderNo:   tool.GenerateTradeNo(),
+		OrderNo:   order.GenerateTradeNo(),
 		Type:      4,
 		Price:     req.Amount,
 		Amount:    totalAmount,

@@ -5,14 +5,13 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/google/uuid"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
+	"uuid"
 )
 
 type CreateUserSubscribeLogic struct {
@@ -64,8 +63,8 @@ func (l *CreateUserSubscribeLogic) CreateUserSubscribe(req *dto.CreateUserSubscr
 		Traffic:     req.Traffic,
 		Download:    0,
 		Upload:      0,
-		Token:       uuidx.SubscribeToken(fmt.Sprintf("adminCreate:%d", timeutil.Now().UnixMilli())),
-		UUID:        uuid.New().String(),
+		Token:       usersub.TokenFromOrder(fmt.Sprintf("adminCreate:%d", timeutil.Now().UnixMilli())),
+		UUID:        uuid.NewV4().String(),
 		Status:      usersub.SubscribeStatusActive,
 	}
 	if err = l.deps.UserSubs.InsertSubscribe(l.ctx, &userSub); err != nil {

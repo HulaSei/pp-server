@@ -5,7 +5,6 @@ import (
 
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 func Invite(ctx *Dependencies) {
@@ -17,6 +16,6 @@ func Invite(ctx *Dependencies) {
 		return
 	}
 	var inviteConfig config.InviteConfig
-	tool.SystemConfigSliceReflectToStruct(configs, &inviteConfig)
+	config.SystemConfigSliceReflectToStruct(configs, &inviteConfig)
 	ctx.updateConfig(func(current *config.Config) { current.Invite = inviteConfig })
 }

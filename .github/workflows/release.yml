@@ -108,7 +108,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version-file: go.mod
 
       - name: Install GoReleaser
         run: |
@@ -160,8 +160,8 @@ jobs:
           goos: ${{ matrix.goos }}
           goarch: ${{ matrix.goarch }}
           asset_name: "ppanel-server-${{ matrix.goos }}-${{ matrix.goarch }}"
-          goversion: "https://dl.google.com/go/go1.23.3.linux-amd64.tar.gz"
+          goversion: "https://dl.google.com/go/go1.27.1.linux-amd64.tar.gz"
           project_path: "."
           binary_name: "ppanel-server"
           extra_files: LICENSE etc
-          ldflags: -s -w -buildid= -X "github.com/perfect-panel/server/pkg/constant.Version=${{env.VERSION}}" -X "github.com/perfect-panel/server/pkg/constant.BuildTime=${{env.BUILD_TIME}}" -X "github.com/perfect-panel/server/pkg/constant.Channel=${{env.CHANNEL}}"
+          ldflags: -s -w -buildid= -X "github.com/perfect-panel/server/internal/constant.Version=${{env.VERSION}}" -X "github.com/perfect-panel/server/internal/constant.BuildTime=${{env.BUILD_TIME}}" -X "github.com/perfect-panel/server/internal/constant.Channel=${{env.CHANNEL}}"

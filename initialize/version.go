@@ -5,14 +5,12 @@ import (
 	"errors"
 	"time"
 
+	"github.com/perfect-panel/server/initialize/migrate"
+	"github.com/perfect-panel/server/internal/auth/password"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
-
-	"github.com/perfect-panel/server/initialize/migrate"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/orm"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
 )
 
 func Migrate(ctx *Dependencies) {
@@ -40,10 +38,10 @@ func Migrate(ctx *Dependencies) {
 		if count == 0 {
 			enable := true
 			admin := &user.User{
-				Password:  tool.EncodePassWord(current.Administrator.Password),
-				Algo:      tool.PasswordAlgoArgon2id,
+				Password:  password.EncodePassWord(current.Administrator.Password),
+				Algo:      password.PasswordAlgoArgon2id,
 				IsAdmin:   &enable,
-				ReferCode: uuidx.UserInviteCode(time.Now().Unix()),
+				ReferCode: user.GenerateInviteCode(time.Now().Unix()),
 			}
 			if err := store.User().Insert(context.Background(), admin); err != nil {
 				logger.Errorf("[Migrate] CreateAdminUser error: %v", err.Error())

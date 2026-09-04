@@ -4,9 +4,9 @@ import (
 	"context"
 
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/pkg/exchangeRate"
+	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/module/billing"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 type RateLogic struct {
@@ -30,7 +30,7 @@ func (l *RateLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
 		CurrencySymbol string
 		AccessKey      string
 	}{}
-	tool.SystemConfigSliceReflectToStruct(currency, &configs)
+	config.SystemConfigSliceReflectToStruct(currency, &configs)
 
 	// Skip conversion if no exchange rate API key configured
 	if configs.AccessKey == "" {
@@ -38,7 +38,7 @@ func (l *RateLogic) ProcessTask(ctx context.Context, _ *asynq.Task) error {
 		return nil
 	}
 	// Update exchange rates
-	result, err := exchangeRate.GetExchangeRete(configs.CurrencyUnit, "CNY", configs.AccessKey, 1)
+	result, err := billing.ConvertCurrency(configs.CurrencyUnit, "CNY", configs.AccessKey, 1)
 	if err != nil {
 		logger.Errorw("[RateLogic] GetExchangeRete error", logger.Field("error", err.Error()))
 		return err

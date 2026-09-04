@@ -206,8 +206,6 @@ type Deps struct {
 	CurrencyUnit func() string
 	// Host is the site host used to derive default payment notify URLs.
 	Host string
-	// IsGatewayMode reports whether notify URLs must use the gateway prefix.
-	IsGatewayMode func() bool
 
 	// InvitePolicy snapshots the runtime-mutable site-wide referral
 	// fallback for the commission stage; UserProfiles resolves referral
@@ -279,7 +277,7 @@ func New(deps Deps) Service {
 	})
 	return &service{
 		orders:     adminorder.NewService(deps.Orders, deps.Payments, deps.Tx, deps.Queue, deps.Plans),
-		payments:   adminpayment.NewService(deps.Payments, deps.Orders, deps.Tx, deps.Host, deps.IsGatewayMode),
+		payments:   adminpayment.NewService(deps.Payments, deps.Orders, deps.Tx, deps.Host),
 		coupons:    coupon.NewService(deps.Coupons),
 		userOrders: userorder.NewService(deps.Orders, deps.Plans),
 		callbacks:  callbacks.NewService(deps.Orders, deps.Queue),

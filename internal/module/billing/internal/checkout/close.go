@@ -8,20 +8,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
+	payment2 "github.com/perfect-panel/server/internal/module/billing/internal/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/alipay"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/cryptomus"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/epay"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/stripe"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
-	paymentPlatform "github.com/perfect-panel/server/pkg/payment"
-	"github.com/perfect-panel/server/pkg/payment/alipay"
-	"github.com/perfect-panel/server/pkg/payment/cryptomus"
-	"github.com/perfect-panel/server/pkg/payment/epay"
-	"github.com/perfect-panel/server/pkg/payment/stripe"
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/pkg/errors"
 )
@@ -81,7 +81,7 @@ func (s *Service) Close(ctx context.Context, req *dto.CloseOrderRequest) error {
 
 	var closed bool
 	err = s.deps.Store.InBillingTx(ctx, func(txStore repository.BillingStore) error {
-		if paymentPlatform.ParsePlatform(orderInfo.Method) == paymentPlatform.Cryptomus {
+		if payment2.ParsePlatform(orderInfo.Method) == payment2.Cryptomus {
 			// Checkout persists its payment expectation before creating an
 			// invoice. Serialize this recheck with that write so a "checkout
 			// never started" snapshot cannot close an in-flight invoice.
@@ -208,14 +208,14 @@ func (s *Service) restoreReservedInventory(ctx context.Context, orderInfo *order
 // have been released. userInitiated selects the legacy owner-cancellation
 // policy for EPay/Alipay; Cryptomus requires confirmation for every caller.
 func (s *Service) settleOrCancelGatewayOrder(ctx context.Context, orderInfo *order.Order, userInitiated bool) (bool, error) {
-	switch paymentPlatform.ParsePlatform(orderInfo.Method) {
-	case paymentPlatform.Stripe:
+	switch payment2.ParsePlatform(orderInfo.Method) {
+	case payment2.Stripe:
 		return s.settleOrCancelStripeOrder(ctx, orderInfo)
-	case paymentPlatform.EPay:
+	case payment2.EPay:
 		return s.settleEPayOrder(ctx, orderInfo, userInitiated)
-	case paymentPlatform.AlipayF2F:
+	case payment2.AlipayF2F:
 		return s.settleAlipayOrder(ctx, orderInfo, userInitiated)
-	case paymentPlatform.Cryptomus:
+	case payment2.Cryptomus:
 		return s.settleCryptomusOrder(ctx, orderInfo)
 	default:
 		return false, nil

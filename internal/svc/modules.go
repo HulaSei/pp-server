@@ -11,7 +11,10 @@ import (
 	"github.com/hibiken/asynq"
 	"github.com/oschwald/geoip2-golang"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/device"
 	"github.com/perfect-panel/server/internal/eventbus"
+	"github.com/perfect-panel/server/internal/mail"
+	"github.com/perfect-panel/server/internal/mapping"
 	"github.com/perfect-panel/server/internal/module/billing"
 	"github.com/perfect-panel/server/internal/module/identity"
 	"github.com/perfect-panel/server/internal/module/network"
@@ -21,15 +24,10 @@ import (
 	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/module/support"
 	ticket "github.com/perfect-panel/server/internal/module/support/entity/ticket"
-	"github.com/perfect-panel/server/internal/report"
 	"github.com/perfect-panel/server/internal/repository"
+	"github.com/perfect-panel/server/internal/taskqueue"
 	emailworker "github.com/perfect-panel/server/internal/worker/email"
-	"github.com/perfect-panel/server/pkg/asynqx"
-	"github.com/perfect-panel/server/pkg/device"
-	emailpkg "github.com/perfect-panel/server/pkg/email"
-	"github.com/perfect-panel/server/pkg/exchangeRate"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	queuetypes "github.com/perfect-panel/server/queue/types"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/otel"
@@ -38,21 +36,20 @@ import (
 
 // newBillingModule wires the billing module against the legacy store and the
 // asynq client (ADR-001 step 4).
-func newBillingModule(c config.Config, store repository.Store, queue *asynqx.Client, rds *redis.Client, rate *exchangeRate.Cache, srv *Application) billing.Service {
+func newBillingModule(c config.Config, store repository.Store, queue *taskqueue.Client, rds *redis.Client, rate *billing.CurrencyRateCache, srv *Application) billing.Service {
 	return billing.New(billing.Deps{
-		Orders:        store.Order(),
-		Payments:      store.Payment(),
-		Coupons:       store.Coupon(),
-		Withdrawals:   store.UserWithdrawal(),
-		Plans:         store.Subscribe(),
-		UserSubs:      store.UserSubscription(),
-		Store:         store,
-		Tx:            store,
-		Queue:         activationQueue{client: queue},
-		SingleModel:   func() bool { return srv.Runtime.Config().Subscribe.SingleModel },
-		CurrencyUnit:  func() string { return srv.Runtime.Config().Currency.Unit },
-		Host:          c.Host,
-		IsGatewayMode: report.IsGatewayMode,
+		Orders:       store.Order(),
+		Payments:     store.Payment(),
+		Coupons:      store.Coupon(),
+		Withdrawals:  store.UserWithdrawal(),
+		Plans:        store.Subscribe(),
+		UserSubs:     store.UserSubscription(),
+		Store:        store,
+		Tx:           store,
+		Queue:        activationQueue{client: queue},
+		SingleModel:  func() bool { return srv.Runtime.Config().Subscribe.SingleModel },
+		CurrencyUnit: func() string { return srv.Runtime.Config().Currency.Unit },
+		Host:         c.Host,
 
 		Logs:        store.Log(),
 		UserCache:   store.UserCache(),
@@ -78,7 +75,6 @@ func newBillingModule(c config.Config, store repository.Store, queue *asynqx.Cli
 			CurrencyAccessKey: func() string { return srv.Runtime.Config().Currency.AccessKey },
 			JwtSecret:         c.JwtAuth.AccessSecret,
 			JwtExpire:         c.JwtAuth.AccessExpire,
-			IsGatewayMode:     report.IsGatewayMode,
 		},
 	})
 }
@@ -87,7 +83,7 @@ func newBillingModule(c config.Config, store repository.Store, queue *asynqx.Cli
 // port. A task-id conflict means a delivery already exists for the order,
 // which is success, not an error.
 type activationQueue struct {
-	client *asynqx.Client
+	client *taskqueue.Client
 }
 
 func (q activationQueue) EnqueueActivation(ctx context.Context, orderNo string) error {
@@ -145,7 +141,7 @@ func newPlatformModule(store repository.Store, srv *Application) platform.Servic
 		},
 		ApplyVerifyConfig: func(req *dto.VerifyConfig) {
 			srv.Runtime.UpdateConfig(func(current *config.Config) {
-				tool.DeepCopy(&current.Verify, req)
+				mapping.DeepCopy(&current.Verify, req)
 			})
 		},
 		Multiplier: func(at time.Time) float32 {
@@ -228,7 +224,6 @@ func newSubscriptionModule(store repository.Store, srv *Application) subscriptio
 				ProfileUpdateInterval: current.Subscribe.ProfileUpdateInterval,
 				ProfileWebPageURL:     current.Subscribe.ProfileWebPageURL,
 				UserAgentList:         current.Subscribe.UserAgentList,
-				GatewayMode:           report.IsGatewayMode(),
 			}
 		},
 	})
@@ -263,7 +258,7 @@ func (n lifecycleNotifier) NotifySubscriptionExpired(ctx context.Context, email 
 	n.enqueue(ctx, queuetypes.SendEmailPayload{
 		Type:    queuetypes.EmailTypeExpiration,
 		Email:   email,
-		Subject: emailpkg.DefaultExpirationEmailSubject,
+		Subject: mail.DefaultExpirationEmailSubject,
 		Content: map[string]interface{}{
 			"SiteLogo":   current.Site.SiteLogo,
 			"SiteName":   current.Site.SiteName,
@@ -277,7 +272,7 @@ func (n lifecycleNotifier) NotifyTrafficExceeded(ctx context.Context, email stri
 	n.enqueue(ctx, queuetypes.SendEmailPayload{
 		Type:    queuetypes.EmailTypeTrafficExceed,
 		Email:   email,
-		Subject: emailpkg.DefaultTrafficExceedEmailSubject,
+		Subject: mail.DefaultTrafficExceedEmailSubject,
 		Content: map[string]interface{}{
 			"SiteLogo": current.Site.SiteLogo,
 			"SiteName": current.Site.SiteName,
@@ -431,7 +426,7 @@ func newNetworkModule(store repository.Store, srv *Application) network.Service 
 // not an error; the retention window keeps the id claimed briefly after the
 // delivery completes to widen that dedup.
 type asynqEventPublisher struct {
-	client *asynqx.Client
+	client *taskqueue.Client
 }
 
 func (p asynqEventPublisher) Publish(ctx context.Context, event eventbus.Event) error {
@@ -446,7 +441,7 @@ func (p asynqEventPublisher) Publish(ctx context.Context, event eventbus.Event) 
 	// outbox row), not the publish pump's, so the wrap happens here with
 	// the resumed origin context and the enqueue below goes through the
 	// raw client to avoid re-stamping the pump's own span.
-	task = asynqx.Wrap(originContext(ctx, event.TraceCarrier), task)
+	task = taskqueue.Wrap(originContext(ctx, event.TraceCarrier), task)
 	_, err = p.client.Client.EnqueueContext(ctx, task,
 		asynq.TaskID(queuetypes.EventTaskID(event.ID)),
 		asynq.Retention(time.Hour))
@@ -512,7 +507,7 @@ func newNotificationModule(store repository.Store, srv *Application) notificatio
 // newSupportModule wires the support module against the legacy store. The
 // adapters below satisfy the module's ports until the owning modules exist
 // (ADR-001).
-func newSupportModule(store repository.Store, queue *asynqx.Client, srv *Application) support.Service {
+func newSupportModule(store repository.Store, queue *taskqueue.Client, srv *Application) support.Service {
 	return support.New(support.Deps{
 		Announcements: store.Announcement(),
 		Ads:           store.Ads(),
@@ -575,7 +570,7 @@ func (n ticketTopicNotifier) TicketStatusChanged(ctx context.Context, ticketID i
 // marketingQueue adapts the asynq client to the support module's
 // MarketingQueue port, keeping queue task types out of the module.
 type marketingQueue struct {
-	client *asynqx.Client
+	client *taskqueue.Client
 }
 
 func (q marketingQueue) EnqueueBatchEmail(ctx context.Context, taskID int64, processAt time.Time) (string, error) {

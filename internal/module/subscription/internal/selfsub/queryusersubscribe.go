@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/timeutil"
-
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/mapping"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
+	"github.com/perfect-panel/server/internal/protocolkey"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -50,7 +50,7 @@ func (l *QueryUserSubscribeLogic) QueryUserSubscribe() (resp *dto.QueryUserSubsc
 
 	for _, item := range data {
 		var sub dto.UserSubscribe
-		tool.DeepCopy(&sub, item)
+		mapping.DeepCopy(&sub, item)
 
 		// 解析Discount字段 避免在续订时只能续订一个月
 		if item.Subscribe != nil && item.Subscribe.Discount != "" {
@@ -60,7 +60,7 @@ func (l *QueryUserSubscribeLogic) QueryUserSubscribe() (resp *dto.QueryUserSubsc
 			}
 		}
 
-		short, _ := tool.FixedUniqueString(item.Token, 8, "")
+		short, _ := protocolkey.FixedUniqueString(item.Token, 8, "")
 		sub.Short = short
 		sub.ResetTime = calculateNextResetTime(&sub)
 		resp.List = append(resp.List, sub)

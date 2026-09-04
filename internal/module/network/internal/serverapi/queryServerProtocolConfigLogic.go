@@ -3,11 +3,11 @@ package serverapi
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	"github.com/perfect-panel/server/internal/module/network/internal/nodeconfig"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 type QueryServerProtocolConfigLogic struct {
@@ -41,7 +41,7 @@ func (l *QueryServerProtocolConfigLogic) QueryServerProtocolConfig(req *dto.Quer
 		return nil, err
 	}
 	dst = node.SanitizeProtocolsForNodeDistribution(dst)
-	tool.DeepCopy(&protocols, dst)
+	mapping.DeepCopy(&protocols, dst)
 
 	// only return enabled protocols for node distribution
 	var enabledProtocols []dto.Protocol

@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
+	password2 "github.com/perfect-panel/server/internal/auth/password"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/logger/logtest"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 type passwordUpgradeUserRepo struct {
@@ -43,7 +43,7 @@ func TestUpgradePasswordAfterLoginRehashesLegacyHash(t *testing.T) {
 	if repo.calls != 1 {
 		t.Fatalf("UpgradePasswordHash calls = %d, want 1", repo.calls)
 	}
-	if repo.algo != tool.PasswordAlgoArgon2id || repo.salt != "" {
+	if repo.algo != password2.PasswordAlgoArgon2id || repo.salt != "" {
 		t.Fatalf("updated algo/salt = %q/%q", repo.algo, repo.salt)
 	}
 	if repo.currentHash != legacyHash {
@@ -52,15 +52,15 @@ func TestUpgradePasswordAfterLoginRehashesLegacyHash(t *testing.T) {
 	if !strings.HasPrefix(repo.password, "$argon2id$") {
 		t.Fatalf("updated password is not argon2id PHC: %q", repo.password)
 	}
-	if !tool.MultiPasswordVerify(tool.PasswordAlgoArgon2id, "", "password", userInfo.Password) {
+	if !password2.MultiPasswordVerify(password2.PasswordAlgoArgon2id, "", "password", userInfo.Password) {
 		t.Fatal("upgraded user password should verify")
 	}
 }
 
 func TestUpgradePasswordAfterLoginSkipsCurrentHash(t *testing.T) {
 	logtest.Discard(t)
-	hash := tool.EncodePassWord("password")
-	userInfo := &user.User{Id: 1, Password: hash, Algo: tool.PasswordAlgoArgon2id}
+	hash := password2.EncodePassWord("password")
+	userInfo := &user.User{Id: 1, Password: hash, Algo: password2.PasswordAlgoArgon2id}
 	repo := &passwordUpgradeUserRepo{updated: true}
 	ctx := context.Background()
 

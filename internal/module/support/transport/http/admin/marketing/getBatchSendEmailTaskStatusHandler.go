@@ -8,7 +8,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // GetBatchSendEmailTaskStatusHandler documents Get batch send email task status.
@@ -19,22 +18,22 @@ import (
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.GetBatchSendEmailTaskStatusRequest true "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.GetBatchSendEmailTaskStatusResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.GetBatchSendEmailTaskStatusResponse}
 // @Router /v1/admin/marketing/email/batch/status [post]
 func GetBatchSendEmailTaskStatusHandler(service support.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.GetBatchSendEmailTaskStatusRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		validateErr := validation.Validate(&req)
 		if validateErr != nil {
-			result.ParamErrorResult(ctx, validateErr)
+			httpx.ParamErrorResult(ctx, validateErr)
 			return
 		}
 
 		resp, err := service.GetBatchSendEmailTaskStatus(c, &req)
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }

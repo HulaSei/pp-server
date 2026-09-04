@@ -2,13 +2,11 @@ package profile
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
+	"github.com/perfect-panel/server/internal/module/identity/internal/devicestate"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
@@ -31,7 +29,7 @@ func newUnbindDeviceLogic(ctx context.Context, deps Deps) *UnbindDeviceLogic {
 
 func (l *UnbindDeviceLogic) UnbindDevice(req *dto.UnbindDeviceRequest) error {
 	userInfo := l.ctx.Value(constant.CtxKeyUser).(*user.User)
-	device, err := l.deps.Devices.FindOneDevice(l.ctx, req.Id)
+	device, err := l.deps.Devices.FindDeviceForAuth(l.ctx, req.Id)
 	if err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.DeviceNotExist), "find device")
 	}
@@ -40,17 +38,12 @@ func (l *UnbindDeviceLogic) UnbindDevice(req *dto.UnbindDeviceRequest) error {
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidParams), "device not belong to user")
 	}
 
-	return l.deps.Store.InIdentityTx(l.ctx, func(store repository.IdentityStore) error {
-		if err = store.UserDevice().DeleteDevice(l.ctx, req.Id); err != nil {
-			return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseDeletedError), "delete device err: %v", err)
-		}
-
-		if err = store.UserAuth().DeleteUserAuthMethodByIdentifier(l.ctx, "device", device.Identifier); err != nil {
-			return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find device online record err: %v", err)
-		}
-		sessionId := l.ctx.Value(constant.CtxKeySessionID)
-		sessionIdCacheKey := fmt.Sprintf("%v:%v", config.SessionIdKey, sessionId)
-		l.deps.Redis.Del(l.ctx, sessionIdCacheKey)
-		return nil
-	})
+	removed, err := devicestate.Delete(l.ctx, l.deps.Store, l.deps.Redis, req.Id, userInfo.Id)
+	if err != nil {
+		return err
+	}
+	if removed != nil && l.deps.KickDevice != nil {
+		l.deps.KickDevice(removed.UserId, removed.Identifier)
+	}
+	return nil
 }

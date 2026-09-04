@@ -6,13 +6,12 @@ import (
 	"encoding/json"
 	"text/template"
 
+	"github.com/hibiken/asynq"
+	"github.com/perfect-panel/server/internal/mail"
+	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/requestmeta"
 	"github.com/perfect-panel/server/pkg/timeutil"
-
-	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/module/platform/entity/log"
-	"github.com/perfect-panel/server/pkg/email"
 	"github.com/perfect-panel/server/queue/types"
 )
 
@@ -71,7 +70,7 @@ func (l *SendEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) erro
 	}
 	ctx = requestmeta.With(ctx, payload.Metadata)
 	ctx = logger.ContextWithRequestMetadata(ctx, payload.Metadata)
-	sender, err := email.NewSender(l.deps.Email().Platform, l.deps.Email().PlatformConfig, l.deps.SiteName())
+	sender, err := mail.NewSender(l.deps.Email().Platform, l.deps.Email().PlatformConfig, l.deps.SiteName())
 	if err != nil {
 		logger.WithContext(ctx).Error("[SendEmailLogic] NewSender failed", logger.Field("error", err.Error()))
 		return nil

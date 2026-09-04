@@ -102,8 +102,13 @@ type UserSubscriptionRepo interface {
 type UserDeviceRepo interface {
 	InsertDevice(ctx context.Context, data *user.Device, tx ...*gorm.DB) error
 	FindOneDevice(ctx context.Context, id int64) (*user.Device, error)
+	// FindDeviceForAuth always reads current state, bypassing cached projections.
+	FindDeviceForAuth(ctx context.Context, id int64) (*user.Device, error)
+	// TouchDevice only updates access metadata for the same enabled owner.
+	TouchDevice(ctx context.Context, id, userID int64, ip, userAgent string) (bool, error)
 	FindOneDeviceByIdentifier(ctx context.Context, id string) (*user.Device, error)
-	UpdateDevice(ctx context.Context, data *user.Device, tx ...*gorm.DB) error
+	SetDeviceEnabled(ctx context.Context, id int64, enabled bool) error
+	SetDeviceOnline(ctx context.Context, id int64, online bool) error
 	DeleteDevice(ctx context.Context, id int64, tx ...*gorm.DB) error
 	QueryDeviceList(ctx context.Context, userid int64) ([]*user.Device, int64, error)
 	QueryDevicePageList(ctx context.Context, userid, subscribeId int64, page, size int) ([]*user.Device, int64, error)

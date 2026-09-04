@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	identifier2 "github.com/perfect-panel/server/internal/auth/identifier"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/pkg/authmethod"
 	"gorm.io/driver/mysql"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -41,7 +41,7 @@ func TestQueryAuthMethodsByExactIdentifierEmailUsesCanonicalInput(t *testing.T) 
 			}
 
 			var methods []user.AuthMethods
-			stmt := queryAuthMethodsByExactIdentifier(db, authmethod.Email, "alice@example.com").Find(&methods).Statement
+			stmt := queryAuthMethodsByExactIdentifier(db, identifier2.Email, "alice@example.com").Find(&methods).Statement
 			sql := stmt.SQL.String()
 			if !strings.Contains(sql, "auth_identifier =") || strings.Contains(sql, "LOWER(") || strings.Contains(sql, "TRIM(") {
 				t.Fatalf("email exact query must remain indexed:\n%s", sql)
@@ -152,7 +152,7 @@ func TestEmailIdentityCollisionQuery(t *testing.T) {
 }
 
 func TestCanonicalAuthIdentifierRejectsEmptyEmail(t *testing.T) {
-	identifier, err := canonicalAuthIdentifier(authmethod.Email, " \t ")
+	identifier, err := canonicalAuthIdentifier(identifier2.Email, " \t ")
 	if !errors.Is(err, ErrInvalidEmailIdentity) {
 		t.Fatalf("empty email error = %v, want %v", err, ErrInvalidEmailIdentity)
 	}

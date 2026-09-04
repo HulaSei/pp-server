@@ -11,7 +11,7 @@ import (
 	"github.com/hibiken/asynq"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/asynqx"
+	"github.com/perfect-panel/server/internal/taskqueue"
 	"github.com/perfect-panel/server/queue/types"
 )
 
@@ -44,7 +44,7 @@ func newReconcileTestContext(t *testing.T, orders []*orderEntity.Order) (Depende
 	t.Helper()
 	redisServer := miniredis.RunT(t)
 	redisOpt := asynq.RedisClientOpt{Addr: redisServer.Addr()}
-	queue := asynqx.NewClient(asynq.NewClient(redisOpt))
+	queue := taskqueue.NewClient(asynq.NewClient(redisOpt))
 	t.Cleanup(func() { _ = queue.Close() })
 	inspector := asynq.NewInspector(redisOpt)
 	t.Cleanup(func() { _ = inspector.Close() })

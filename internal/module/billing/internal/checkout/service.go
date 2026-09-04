@@ -10,11 +10,11 @@ import (
 	"github.com/perfect-panel/server/internal/module/billing/entity/coupon"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	paymentEntity "github.com/perfect-panel/server/internal/module/billing/entity/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment"
 	"github.com/perfect-panel/server/internal/module/billing/internal/settle"
 	subscribeEntity "github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/internal/repository"
-	paymentPlatform "github.com/perfect-panel/server/pkg/payment"
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
@@ -119,7 +119,7 @@ func ensureCouponEnabled(couponInfo *coupon.Coupon) error {
 }
 
 func ensurePaymentAvailable(paymentInfo *paymentEntity.Payment) error {
-	if paymentInfo == nil || paymentInfo.Enable == nil || !*paymentInfo.Enable || paymentPlatform.ParsePlatform(paymentInfo.Platform) == paymentPlatform.UNSUPPORTED {
+	if paymentInfo == nil || paymentInfo.Enable == nil || !*paymentInfo.Enable || payment.ParsePlatform(paymentInfo.Platform) == payment.UNSUPPORTED {
 		return errors.Wrapf(xerr.NewErrCode(xerr.PaymentMethodNotFound), "payment method is unavailable")
 	}
 	return nil

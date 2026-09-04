@@ -5,17 +5,14 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/perfect-panel/server/initialize"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/report"
+	"github.com/perfect-panel/server/internal/lifecycle"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/internal/transport/httpserver"
 	"github.com/perfect-panel/server/pkg/logger"
-
-	"github.com/perfect-panel/server/pkg/proc"
 	"github.com/perfect-panel/server/pkg/trace"
 )
 
@@ -63,30 +60,8 @@ func (m *Service) Start() {
 		panic("config file path is nil")
 	}
 
-	// get server port
 	runtimeConfig := m.deps.Config()
-	port := runtimeConfig.Port
-	host := runtimeConfig.Host
-	// check gateway mode
-	if report.IsGatewayMode() {
-		// get free port
-		freePort, err := report.ModulePort()
-		if err != nil {
-			logger.Errorf("get module port error: %s", err.Error())
-			panic(err)
-		}
-		port = freePort
-		host = "127.0.0.1"
-		// register module
-		err = report.RegisterModule(port)
-		if err != nil {
-			logger.Errorf("register module error: %s", err.Error())
-			os.Exit(1)
-		}
-		logger.Infof("module registered on port %d", port)
-	}
-
-	serverAddr := fmt.Sprintf("%v:%d", host, port)
+	serverAddr := fmt.Sprintf("%v:%d", runtimeConfig.Host, runtimeConfig.Port)
 	initialize.StartInitSystemConfig(m.deps.Initialize)
 	if err := m.deps.Store.UserAuth().ValidateEmailIdentityUniqueness(context.Background()); err != nil {
 		panic(err.Error())
@@ -100,7 +75,7 @@ func (m *Service) Start() {
 		traceConfig.Name = trace.TraceName
 	}
 	trace.StartAgent(traceConfig)
-	proc.AddShutdownListener(func() {
+	lifecycle.AddShutdownListener(func() {
 		trace.StopAgent()
 	})
 	if m.deps.SetRestart != nil {

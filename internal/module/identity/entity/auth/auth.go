@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/perfect-panel/server/pkg/email"
+	"github.com/perfect-panel/server/internal/mail"
 )
 
 type Auth struct {
@@ -146,28 +146,28 @@ type EmailAuthConfig struct {
 
 func (l *EmailAuthConfig) Marshal() string {
 	if l.ExpirationEmailTemplate == "" {
-		l.ExpirationEmailTemplate = email.DefaultExpirationEmailTemplate
+		l.ExpirationEmailTemplate = mail.DefaultExpirationEmailTemplate
 	}
 	if l.MaintenanceEmailTemplate == "" {
-		l.MaintenanceEmailTemplate = email.DefaultMaintenanceEmailTemplate
+		l.MaintenanceEmailTemplate = mail.DefaultMaintenanceEmailTemplate
 	}
 	if l.TrafficExceedEmailTemplate == "" {
-		l.TrafficExceedEmailTemplate = email.DefaultTrafficExceedEmailTemplate
+		l.TrafficExceedEmailTemplate = mail.DefaultTrafficExceedEmailTemplate
 	}
 	if l.VerifyEmailTemplate == "" {
-		l.VerifyEmailTemplate = email.DefaultEmailVerifyTemplate
+		l.VerifyEmailTemplate = mail.DefaultEmailVerifyTemplate
 	}
 	if l.VerifyEmailSubject == "" {
-		l.VerifyEmailSubject = email.DefaultEmailVerifySubject
+		l.VerifyEmailSubject = mail.DefaultEmailVerifySubject
 	}
 	if l.ExpirationEmailSubject == "" {
-		l.ExpirationEmailSubject = email.DefaultExpirationEmailSubject
+		l.ExpirationEmailSubject = mail.DefaultExpirationEmailSubject
 	}
 	if l.MaintenanceEmailSubject == "" {
-		l.MaintenanceEmailSubject = email.DefaultMaintenanceEmailSubject
+		l.MaintenanceEmailSubject = mail.DefaultMaintenanceEmailSubject
 	}
 	if l.TrafficExceedEmailSubject == "" {
-		l.TrafficExceedEmailSubject = email.DefaultTrafficExceedEmailSubject
+		l.TrafficExceedEmailSubject = mail.DefaultTrafficExceedEmailSubject
 	}
 	bytes, err := json.Marshal(l)
 	if err != nil {
@@ -178,14 +178,14 @@ func (l *EmailAuthConfig) Marshal() string {
 			EnableNotify:               true,
 			EnableDomainSuffix:         false,
 			DomainSuffixList:           "",
-			VerifyEmailTemplate:        email.DefaultEmailVerifyTemplate,
-			ExpirationEmailTemplate:    email.DefaultExpirationEmailTemplate,
-			MaintenanceEmailTemplate:   email.DefaultMaintenanceEmailTemplate,
-			TrafficExceedEmailTemplate: email.DefaultTrafficExceedEmailTemplate,
-			VerifyEmailSubject:         email.DefaultEmailVerifySubject,
-			ExpirationEmailSubject:     email.DefaultExpirationEmailSubject,
-			MaintenanceEmailSubject:    email.DefaultMaintenanceEmailSubject,
-			TrafficExceedEmailSubject:  email.DefaultTrafficExceedEmailSubject,
+			VerifyEmailTemplate:        mail.DefaultEmailVerifyTemplate,
+			ExpirationEmailTemplate:    mail.DefaultExpirationEmailTemplate,
+			MaintenanceEmailTemplate:   mail.DefaultMaintenanceEmailTemplate,
+			TrafficExceedEmailTemplate: mail.DefaultTrafficExceedEmailTemplate,
+			VerifyEmailSubject:         mail.DefaultEmailVerifySubject,
+			ExpirationEmailSubject:     mail.DefaultExpirationEmailSubject,
+			MaintenanceEmailSubject:    mail.DefaultMaintenanceEmailSubject,
+			TrafficExceedEmailSubject:  mail.DefaultTrafficExceedEmailSubject,
 		}
 
 		bytes, _ = json.Marshal(config)
@@ -203,14 +203,14 @@ func (l *EmailAuthConfig) Unmarshal(data string) {
 			EnableNotify:               true,
 			EnableDomainSuffix:         false,
 			DomainSuffixList:           "",
-			VerifyEmailTemplate:        email.DefaultEmailVerifyTemplate,
-			ExpirationEmailTemplate:    email.DefaultExpirationEmailTemplate,
-			MaintenanceEmailTemplate:   email.DefaultMaintenanceEmailTemplate,
-			TrafficExceedEmailTemplate: email.DefaultTrafficExceedEmailTemplate,
-			VerifyEmailSubject:         email.DefaultEmailVerifySubject,
-			ExpirationEmailSubject:     email.DefaultExpirationEmailSubject,
-			MaintenanceEmailSubject:    email.DefaultMaintenanceEmailSubject,
-			TrafficExceedEmailSubject:  email.DefaultTrafficExceedEmailSubject,
+			VerifyEmailTemplate:        mail.DefaultEmailVerifyTemplate,
+			ExpirationEmailTemplate:    mail.DefaultExpirationEmailTemplate,
+			MaintenanceEmailTemplate:   mail.DefaultMaintenanceEmailTemplate,
+			TrafficExceedEmailTemplate: mail.DefaultTrafficExceedEmailTemplate,
+			VerifyEmailSubject:         mail.DefaultEmailVerifySubject,
+			ExpirationEmailSubject:     mail.DefaultExpirationEmailSubject,
+			MaintenanceEmailSubject:    mail.DefaultMaintenanceEmailSubject,
+			TrafficExceedEmailSubject:  mail.DefaultTrafficExceedEmailSubject,
 		}
 		_ = json.Unmarshal([]byte(config.Marshal()), &l)
 	}
@@ -349,7 +349,9 @@ func (l *TwilioConfig) Unmarshal(data string) error {
 }
 
 type DeviceConfig struct {
-	ShowAds        bool   `json:"show_ads"`
+	ShowAds bool `json:"show_ads"`
+	// OnlyRealDevice is the legacy flag requiring authenticated device transport.
+	// It is not hardware or application attestation.
 	OnlyRealDevice bool   `json:"only_real_device"`
 	EnableSecurity bool   `json:"enable_security"`
 	SecuritySecret string `json:"security_secret"`

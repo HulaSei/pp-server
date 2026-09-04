@@ -4,15 +4,14 @@ import (
 	"context"
 	"sort"
 
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/xerr"
-	"github.com/pkg/errors"
-
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/phone"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/xerr"
+	"github.com/pkg/errors"
 )
 
 type QueryUserInfoLogic struct {
@@ -37,7 +36,7 @@ func (l *QueryUserInfoLogic) QueryUserInfo() (resp *dto.User, err error) {
 		logger.Error("current user is not found in context")
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
 	}
-	tool.DeepCopy(resp, u)
+	mapping.DeepCopy(resp, u)
 	// Wallet values come from the billing-owned table; a read failure fails
 	// the request rather than rendering zero balances (ADR-001 step 5).
 	w, werr := l.deps.Wallet.FindWallet(l.ctx, u.Id)
@@ -53,11 +52,11 @@ func (l *QueryUserInfoLogic) QueryUserInfo() (resp *dto.User, err error) {
 	var userMethods []dto.UserAuthMethod
 	for _, method := range resp.AuthMethods {
 		var item dto.UserAuthMethod
-		tool.DeepCopy(&item, method)
+		mapping.DeepCopy(&item, method)
 
 		switch method.AuthType {
 		case "mobile":
-			item.AuthIdentifier = phone.MaskPhoneNumber(method.AuthIdentifier)
+			item.AuthIdentifier = identifier.MaskPhoneNumber(method.AuthIdentifier)
 		case "email":
 		default:
 			item.AuthIdentifier = maskOpenID(method.AuthIdentifier)

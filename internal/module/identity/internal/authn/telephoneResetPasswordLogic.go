@@ -3,20 +3,16 @@ package auth
 import (
 	"context"
 	"fmt"
-	"time"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	"github.com/perfect-panel/server/internal/auth/password"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/verification"
-	"github.com/perfect-panel/server/pkg/authmethod"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/phone"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -38,12 +34,12 @@ func NewTelephoneResetPasswordLogic(ctx context.Context, deps TelephoneResetPass
 }
 
 func (l *TelephoneResetPasswordLogic) TelephoneResetPassword(req *dto.TelephoneResetPasswordRequest) (resp *dto.LoginResponse, err error) {
-	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, authmethod.Mobile); err != nil {
+	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, identifier.Mobile); err != nil {
 		return nil, err
 	}
 	code := req.Code
 
-	phoneNumber, err := phone.FormatToE164(req.TelephoneAreaCode, req.Telephone)
+	phoneNumber, err := identifier.FormatToE164(req.TelephoneAreaCode, req.Telephone)
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.TelephoneError), "Invalid phone number")
 	}
@@ -54,7 +50,7 @@ func (l *TelephoneResetPasswordLogic) TelephoneResetPassword(req *dto.TelephoneR
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.VerifyCodeError), "code error")
 	}
 
-	authMethods, err := l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, authmethod.Mobile, phoneNumber)
+	authMethods, err := l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, identifier.Mobile, phoneNumber)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		l.Errorw("FindOneByTelephone Error", logger.Field("error", err))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "query user info failed: %v", err.Error())
@@ -74,48 +70,24 @@ func (l *TelephoneResetPasswordLogic) TelephoneResetPassword(req *dto.TelephoneR
 	}
 
 	// Generate password
-	pwd := tool.EncodePassWord(req.Password)
+	pwd := password.EncodePassWord(req.Password)
 	userInfo.Password = pwd
-	userInfo.Algo = tool.PasswordAlgoArgon2id
+	userInfo.Algo = password.PasswordAlgoArgon2id
 	userInfo.Salt = ""
 	err = l.deps.Store.User().Update(l.ctx, userInfo)
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "update user password failed: %v", err.Error())
 	}
 
-	// Bind device to user if identifier is provided
-	if req.Identifier != "" && l.deps.DeviceBinder != nil {
-		if err := l.deps.DeviceBinder.BindDeviceToUser(req.Identifier, req.IP, req.UserAgent, userInfo.Id); err != nil {
-			l.Errorw("failed to bind device to user",
-				logger.Field("user_id", userInfo.Id),
-				logger.Field("identifier", req.Identifier),
-				logger.Field("error", err.Error()),
-			)
-			// Don't fail register if device binding fails, just log the error
-		}
-	}
-	if l.ctx.Value(constant.LoginType) != nil {
-		req.LoginType = l.ctx.Value(constant.LoginType).(string)
-	}
-	// Generate session id
-	sessionId := uuidx.NewUUID().String()
-	// Generate token
-	token, err := jwt.NewJwtToken(
-		l.deps.Config.JWTAccessSecret,
-		timeutil.Now().Unix(),
-		l.deps.Config.JWTAccessExpire,
-		jwt.WithOption("UserId", userInfo.Id),
-		jwt.WithOption("SessionId", sessionId),
-		jwt.WithOption("LoginType", req.LoginType),
-	)
+	device, err := bindLoginDevice(l.deps.DeviceBinder, req.Identifier, req.IP, req.UserAgent, userInfo.Id)
 	if err != nil {
-		l.Errorw("[UserLogin] token generate error", logger.Field("error", err.Error()))
-		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "token generate error: %v", err.Error())
+		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "bind device: %v", err)
 	}
-	sessionIdCacheKey := fmt.Sprintf("%v:%v", config.SessionIdKey, sessionId)
-	if err = l.deps.Redis.Set(l.ctx, sessionIdCacheKey, userInfo.Id, time.Duration(l.deps.Config.JWTAccessExpire)*time.Second).Err(); err != nil {
-		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "set session id error: %v", err.Error())
+	session, err := issueLoginSession(l.ctx, l.deps.Redis, l.deps.Config.JWTAccessSecret, l.deps.Config.JWTAccessExpire, userInfo.Id, req.LoginType, device)
+	if err != nil {
+		return nil, err
 	}
+	token := session.Token
 	defer func() {
 		if token != "" && userInfo.Id != 0 {
 			loginLog := log.Login{

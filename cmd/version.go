@@ -3,8 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/perfect-panel/server/pkg/constant"
-
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/spf13/cobra"
 )
 

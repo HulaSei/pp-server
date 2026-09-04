@@ -8,8 +8,8 @@ import (
 
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	paymentModel "github.com/perfect-panel/server/internal/module/billing/entity/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/payment"
 	"gorm.io/gorm"
 )
 
@@ -39,7 +39,7 @@ func TestCryptomusConfigRequiresBothCredentials(t *testing.T) {
 				Id: 1, Platform: "Cryptomus", Config: `{"merchant_id":"merchant-1","api_key":"test-key"}`, Enable: &enable,
 			}}
 			orders := &updatePaymentOrders{}
-			svc := NewService(repo, orders, nil, "", nil)
+			svc := NewService(repo, orders, nil, "")
 			_, err := svc.Create(context.Background(), &dto.CreatePaymentMethodRequest{
 				Name: "Cryptomus", Platform: "Cryptomus", Config: test.config, Enable: &enable,
 			})
@@ -103,7 +103,7 @@ func TestUpdateBalancePaymentMethodTogglesEnable(t *testing.T) {
 		Enable:   new(bool),
 	}}
 	orders := &updatePaymentOrders{}
-	svc := NewService(repo, orders, nil, "", nil)
+	svc := NewService(repo, orders, nil, "")
 
 	_, err := svc.Update(context.Background(), &dto.UpdatePaymentMethodRequest{
 		Id:       -1,
@@ -139,7 +139,7 @@ func TestDeleteBalancePaymentMethodIsRejected(t *testing.T) {
 		Enable:   new(bool),
 	}}
 	orders := &updatePaymentOrders{}
-	svc := NewService(repo, orders, nil, "", nil)
+	svc := NewService(repo, orders, nil, "")
 
 	err := svc.Delete(context.Background(), &dto.DeletePaymentMethodRequest{Id: -1})
 	if err == nil || !strings.Contains(err.Error(), "cannot be deleted") {
@@ -155,7 +155,7 @@ func TestUpdateGatewayPaymentMethodStillValidatesConfig(t *testing.T) {
 		Platform: "EPay",
 		Enable:   new(bool),
 	}}
-	svc := NewService(repo, &updatePaymentOrders{}, nil, "", nil)
+	svc := NewService(repo, &updatePaymentOrders{}, nil, "")
 
 	_, err := svc.Update(context.Background(), &dto.UpdatePaymentMethodRequest{
 		Id:       1,

@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/perfect-panel/server/internal/repository"
 	"strings"
 
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
+	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/cache"
 	"github.com/perfect-panel/server/pkg/orm"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -60,10 +60,10 @@ func (m *subscribeRepo) getCacheKeys(data *subscribe.Subscribe) []string {
 	var nodeIDs []int64
 	var tags []string
 	if data.Nodes != "" {
-		nodeIDs = tool.StringSliceToInt64Slice(strings.Split(data.Nodes, ","))
+		nodeIDs = slicesx.StringSliceToInt64Slice(strings.Split(data.Nodes, ","))
 	}
 	if data.NodeTags != "" {
-		tags = tool.RemoveDuplicateElements(strings.Split(data.NodeTags, ",")...)
+		tags = slicesx.RemoveDuplicateElements(strings.Split(data.NodeTags, ",")...)
 	}
 	if (len(nodeIDs) > 0 || len(tags) > 0) && m.nodes != nil {
 		// Best effort, matching the old behavior: a failed node lookup
@@ -312,7 +312,7 @@ func (m *subscribeRepo) FilterList(ctx context.Context, params *subscribe.Filter
 			query = query.Where("id IN ?", params.Ids)
 		}
 		if len(params.Node) > 0 {
-			query = query.Scopes(subscribeInSet("nodes", tool.Int64SliceToStringSlice(params.Node)))
+			query = query.Scopes(subscribeInSet("nodes", slicesx.Int64SliceToStringSlice(params.Node)))
 		}
 
 		if len(params.Tags) > 0 {
@@ -362,11 +362,11 @@ func (m *subscribeRepo) FindByNodeScope(ctx context.Context, nodeIDs []int64, ta
 	args := make([]interface{}, 0, len(nodeIDs)+len(tags))
 	list := make([]*subscribe.Subscribe, 0)
 	err := m.QueryNoCacheCtx(ctx, &list, func(conn *gorm.DB, v interface{}) error {
-		if condition, values := orm.CommaSeparatedContainsCondition(conn, "nodes", tool.Int64SliceToStringSlice(nodeIDs)); condition != "" {
+		if condition, values := orm.CommaSeparatedContainsCondition(conn, "nodes", slicesx.Int64SliceToStringSlice(nodeIDs)); condition != "" {
 			conditions = append(conditions, condition)
 			args = append(args, values...)
 		}
-		if condition, values := orm.CommaSeparatedContainsCondition(conn, "node_tags", tool.RemoveDuplicateElements(tags...)); condition != "" {
+		if condition, values := orm.CommaSeparatedContainsCondition(conn, "node_tags", slicesx.RemoveDuplicateElements(tags...)); condition != "" {
 			conditions = append(conditions, condition)
 			args = append(args, values...)
 		}

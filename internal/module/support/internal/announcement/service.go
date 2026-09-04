@@ -5,11 +5,11 @@ package announcement
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	entity "github.com/perfect-panel/server/internal/module/support/entity/announcement"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -72,7 +72,7 @@ func (s *Service) Get(ctx context.Context, req *dto.GetAnnouncementRequest) (*dt
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "get announcement error: %v", err.Error())
 	}
 	resp := &dto.Announcement{}
-	tool.DeepCopy(resp, info)
+	mapping.DeepCopy(resp, info)
 	return resp, nil
 }
 
@@ -89,7 +89,7 @@ func (s *Service) List(ctx context.Context, req *dto.GetAnnouncementListRequest)
 	resp := &dto.GetAnnouncementListResponse{}
 	resp.Total = total
 	resp.List = make([]dto.Announcement, 0)
-	tool.DeepCopy(&resp.List, list)
+	mapping.DeepCopy(&resp.List, list)
 	return resp, nil
 }
 
@@ -106,6 +106,6 @@ func (s *Service) QueryVisible(ctx context.Context, req *dto.QueryAnnouncementRe
 	resp := &dto.QueryAnnouncementResponse{}
 	resp.Total = total
 	resp.List = make([]dto.Announcement, 0)
-	tool.DeepCopy(&resp.List, list)
+	mapping.DeepCopy(&resp.List, list)
 	return resp, nil
 }

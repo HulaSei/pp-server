@@ -3,20 +3,18 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"time"
-
-	"github.com/perfect-panel/server/pkg/constant"
-
 	"log"
 	"os"
 	"os/signal"
 	"syscall"
-
-	"github.com/google/uuid"
+	"time"
+	"uuid"
 
 	"github.com/perfect-panel/server/initialize"
 	"github.com/perfect-panel/server/internal"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/lifecycle"
 	"github.com/perfect-panel/server/internal/route"
 	"github.com/perfect-panel/server/internal/svc"
 	"github.com/perfect-panel/server/internal/trafficagg"
@@ -24,9 +22,7 @@ import (
 	"github.com/perfect-panel/server/pkg/conf"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/orm"
-	"github.com/perfect-panel/server/pkg/service"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/queue"
 	queueHandler "github.com/perfect-panel/server/queue/handler"
 	emailLogic "github.com/perfect-panel/server/queue/logic/email"
@@ -63,7 +59,7 @@ func run() {
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-quit
 }
-func getServers() *service.Group {
+func getServers() *lifecycle.Group {
 	var c config.Config
 
 	// check config file is exist
@@ -173,7 +169,7 @@ func getServers() *service.Group {
 		ExchangeRate: ctx.ExchangeRate,
 	}
 
-	services := service.NewServiceGroup()
+	services := lifecycle.NewServiceGroup()
 	services.Add(internal.NewService(internal.Dependencies{
 		Config:     runtimeConfig,
 		Store:      ctx.Store,
@@ -203,7 +199,7 @@ func initConfig(c *config.Config) bool {
 	}
 	// check access secret
 	if c.JwtAuth.AccessSecret == "" && startConfigPath == "etc/ppanel.yaml" {
-		c.JwtAuth.AccessSecret = uuid.New().String()
+		c.JwtAuth.AccessSecret = uuid.NewV4().String()
 		// Get environment variables
 		dsn := os.Getenv("PPANEL_DB")
 		if dsn == "" {
@@ -221,7 +217,7 @@ func initConfig(c *config.Config) bool {
 		if uri == "" {
 			return true
 		}
-		addr, pass, db, err := tool.ParseRedisURI(uri)
+		addr, pass, db, err := config.ParseRedisURI(uri)
 		if err != nil {
 			return true
 		} else {

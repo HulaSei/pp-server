@@ -6,7 +6,6 @@ var (
 	_ app.HandlerFunc = GetNodeConfigHandler(nil)
 	_ app.HandlerFunc = GetCurrencyConfigHandler(nil)
 	_ app.HandlerFunc = GetRegisterConfigHandler(nil)
-	_ app.HandlerFunc = GetModuleConfigHandler(nil)
 	_ app.HandlerFunc = GetTosConfigHandler(nil)
 	_ app.HandlerFunc = GetInviteConfigHandler(nil)
 	_ app.HandlerFunc = GetVerifyCodeConfigHandler(nil)

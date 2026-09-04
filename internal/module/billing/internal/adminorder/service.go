@@ -5,13 +5,13 @@ package adminorder
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -59,7 +59,7 @@ func (s *Service) Create(ctx context.Context, req *dto.CreateOrderRequest) error
 
 	orderInfo := &order.Order{
 		UserId:         req.UserId,
-		OrderNo:        tool.GenerateTradeNo(),
+		OrderNo:        order.GenerateTradeNo(),
 		Type:           req.Type,
 		Quantity:       req.Quantity,
 		Price:          req.Price,
@@ -94,7 +94,7 @@ func (s *Service) List(ctx context.Context, req *dto.GetOrderListRequest) (*dto.
 	}
 	resp := &dto.GetOrderListResponse{}
 	resp.List = make([]dto.Order, 0)
-	tool.DeepCopy(&resp.List, list)
+	mapping.DeepCopy(&resp.List, list)
 	resp.Total = total
 	return resp, nil
 }

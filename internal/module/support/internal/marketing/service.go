@@ -19,8 +19,8 @@ import (
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/requestmeta"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -88,7 +88,7 @@ func (s *Service) CreateBatchSendEmailTask(ctx context.Context, req *dto.CreateB
 	}
 
 	// 邮箱地址去重
-	emails = tool.RemoveDuplicateElements(emails...)
+	emails = slicesx.RemoveDuplicateElements(emails...)
 
 	var additionalEmails []string
 	// 追加额外的邮箱地址（不覆盖）
@@ -98,7 +98,7 @@ func (s *Service) CreateBatchSendEmailTask(ctx context.Context, req *dto.CreateB
 			return xerr.NewErrMsg(err.Error())
 		}
 	}
-	if len(tool.RemoveDuplicateElements(append(emails, additionalEmails...)...)) == 0 {
+	if len(slicesx.RemoveDuplicateElements(append(emails, additionalEmails...)...)) == 0 {
 		log.Errorf("[CreateBatchSendEmailTask] No email addresses provided for campaign")
 		return xerr.NewErrMsg("No email addresses found for the campaign")
 	}
@@ -140,7 +140,7 @@ func (s *Service) CreateBatchSendEmailTask(ctx context.Context, req *dto.CreateB
 	var total uint64
 	if additionalEmails != nil {
 		list := append(emails, additionalEmails...)
-		total = uint64(len(tool.RemoveDuplicateElements(list...)))
+		total = uint64(len(slicesx.RemoveDuplicateElements(list...)))
 	} else {
 		total = uint64(len(emails))
 	}
@@ -208,7 +208,7 @@ func (s *Service) GetPreSendEmailCount(ctx context.Context, req *dto.GetPreSendE
 		logger.WithContext(ctx).Errorf("[GetPreSendEmailCount] Count error: %v", err)
 		return nil, xerr.NewErrMsg("Failed to count emails")
 	}
-	count := len(tool.RemoveDuplicateElements(append(emails, additional...)...))
+	count := len(slicesx.RemoveDuplicateElements(append(emails, additional...)...))
 	return &dto.GetPreSendEmailCountResponse{Count: int64(count)}, nil
 }
 
@@ -599,7 +599,7 @@ func normalizeAdditionalEmails(raw string) ([]string, error) {
 		}
 		emails = append(emails, strings.ToLower(parsed.Address))
 	}
-	return tool.RemoveDuplicateElements(emails...), nil
+	return slicesx.RemoveDuplicateElements(emails...), nil
 }
 
 func validPositiveIDs(ids []int64) bool {

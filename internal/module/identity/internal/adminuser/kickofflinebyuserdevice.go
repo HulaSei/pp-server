@@ -3,6 +3,7 @@ package adminuser
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/auth/devicesession"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -25,13 +26,15 @@ func newKickOfflineByUserDeviceLogic(ctx context.Context, deps Deps) *KickOfflin
 }
 
 func (l *KickOfflineByUserDeviceLogic) KickOfflineByUserDevice(req *dto.KickOfflineRequest) error {
-	device, err := l.deps.Devices.FindOneDevice(l.ctx, req.Id)
+	device, err := l.deps.Devices.FindDeviceForAuth(l.ctx, req.Id)
 	if err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "get Device  error: %v", err.Error())
 	}
+	if err := devicesession.Revoke(l.ctx, l.deps.Redis, device.Id); err != nil {
+		return err
+	}
 	l.deps.kickDevice(device.UserId, device.Identifier)
-	device.Online = false
-	err = l.deps.Devices.UpdateDevice(l.ctx, device)
+	err = l.deps.Devices.SetDeviceOnline(l.ctx, device.Id, false)
 	if err != nil {
 		l.Logger.Error("[KickOfflineByUserDeviceLogic] Update Device Error:", logger.Field("err", err.Error()))
 		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseUpdateError), "update Device error: %v", err.Error())

@@ -6,7 +6,6 @@ import (
 
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 func Currency(ctx *Dependencies) {
@@ -22,7 +21,7 @@ func Currency(ctx *Dependencies) {
 		CurrencySymbol string
 		AccessKey      string
 	}{}
-	tool.SystemConfigSliceReflectToStruct(currency, &configs)
+	config.SystemConfigSliceReflectToStruct(currency, &configs)
 	ctx.ExchangeRate.Set(0) // Default exchange rate to 0
 	currencyConfig := config.Currency{
 		Unit:      configs.CurrencyUnit,

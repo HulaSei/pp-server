@@ -8,7 +8,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // PurchaseCheckoutHandler documents Purchase Checkout.
@@ -18,22 +17,22 @@ import (
 // @Accept json
 // @Produce json
 // @Param request body dto.CheckoutOrderRequest true "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.CheckoutOrderResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.CheckoutOrderResponse}
 // @Router /v1/public/portal/order/checkout [post]
 func PurchaseCheckoutHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.CheckoutOrderRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		validateErr := validation.Validate(&req)
 		if validateErr != nil {
-			result.ParamErrorResult(ctx, validateErr)
+			httpx.ParamErrorResult(ctx, validateErr)
 			return
 		}
 
 		resp, err := service.PortalCheckout(c, &req)
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }

@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/perfect-panel/server/internal/mail"
 	"github.com/perfect-panel/server/internal/module/platform/entity/task"
-	emailpkg "github.com/perfect-panel/server/pkg/email"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 
@@ -49,7 +49,7 @@ func NewWorkerManager() *WorkerManager {
 // RunWorker keeps queue acknowledgement coupled to the actual campaign run.
 // A duplicate delivery in the same process is harmless: the existing worker
 // remains authoritative for that database task.
-func (m *WorkerManager) RunWorker(ctx context.Context, id int64, tasks TaskStore, sender emailpkg.Sender, options ...WorkerOption) error {
+func (m *WorkerManager) RunWorker(ctx context.Context, id int64, tasks TaskStore, sender mail.Sender, options ...WorkerOption) error {
 	m.mutex.Lock()
 	if _, exists := m.workers[id]; exists {
 		m.mutex.Unlock()

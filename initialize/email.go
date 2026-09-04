@@ -6,9 +6,9 @@ import (
 	"fmt"
 
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/mapping"
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 // Email get email smtp config
@@ -21,7 +21,7 @@ func Email(ctx *Dependencies) {
 	var cfg config.EmailConfig
 	var emailConfig = new(auth.EmailAuthConfig)
 	emailConfig.Unmarshal(method.Config)
-	tool.DeepCopy(&cfg, emailConfig)
+	mapping.DeepCopy(&cfg, emailConfig)
 	cfg.Enable = *method.Enabled
 	value, _ := json.Marshal(emailConfig.PlatformConfig)
 	cfg.PlatformConfig = string(value)

@@ -5,19 +5,18 @@ import (
 	"fmt"
 	"time"
 
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
-	facebookoauth "github.com/perfect-panel/server/pkg/oauth/facebook"
-	githuboauth "github.com/perfect-panel/server/pkg/oauth/github"
-	"github.com/perfect-panel/server/pkg/oauth/google"
-	"github.com/perfect-panel/server/pkg/oauth/telegram"
-	"github.com/perfect-panel/server/pkg/oauthstate"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/facebook"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/github"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/google"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/telegram"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthstate"
+	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/random"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"golang.org/x/oauth2"
-
-	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/pkg/logger"
 )
 
 type BindOAuthLogic struct {
@@ -102,7 +101,7 @@ func (l *BindOAuthLogic) facebook(req *dto.BindOAuthRequest) (string, error) {
 		l.Errorw("error unmarshal facebook config", logger.Field("error", err.Error()))
 		return "", err
 	}
-	client := facebookoauth.New(&facebookoauth.Config{
+	client := facebook.New(&facebook.Config{
 		ClientID:     cfg.ClientId,
 		ClientSecret: cfg.ClientSecret,
 		RedirectURL:  req.Redirect,
@@ -154,7 +153,7 @@ func (l *BindOAuthLogic) github(req *dto.BindOAuthRequest) (string, error) {
 		l.Errorw("error unmarshal github config", logger.Field("error", err.Error()))
 		return "", err
 	}
-	client := githuboauth.New(&githuboauth.Config{
+	client := github.New(&github.Config{
 		ClientID:     cfg.ClientId,
 		ClientSecret: cfg.ClientSecret,
 		RedirectURL:  req.Redirect,

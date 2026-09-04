@@ -3,11 +3,11 @@ package adminserver
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
-	"github.com/perfect-panel/server/pkg/ip"
+	"github.com/perfect-panel/server/internal/module/network/internal/geolocation"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -40,7 +40,7 @@ func (l *UpdateServerLogic) UpdateServer(req *dto.UpdateServerRequest) error {
 	// only update address when it's  different
 	if req.Address != data.Address {
 		// query server ip location
-		result, err := ip.GetRegionByIp(req.Address)
+		result, err := geolocation.GetRegionByIp(req.Address)
 		if err != nil {
 			l.Errorf("[UpdateServer] GetRegionByIp Error: %v", err.Error())
 		} else {
@@ -65,7 +65,7 @@ func (l *UpdateServerLogic) UpdateServer(req *dto.UpdateServerRequest) error {
 			return errors.Wrapf(xerr.NewErrCodeMsg(xerr.InvalidParams, "protocols type is empty"), "protocols type is empty")
 		}
 		var protocol node.Protocol
-		tool.DeepCopy(&protocol, item)
+		mapping.DeepCopy(&protocol, item)
 		if existing, ok := existingProtocolLookup[normalizedProtocolType(item.Type)]; ok {
 			protocol, err = mergeMissingProtocolFields(protocol, existing, protocolFieldSetAt(req.ProtocolFieldSets, index))
 			if err != nil {

@@ -3,13 +3,14 @@ package checkout
 import (
 	"context"
 	"encoding/json"
+	"slices"
 
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -109,8 +110,8 @@ func (s *Service) PreCreateOrder(ctx context.Context, req *dto.PurchaseOrderRequ
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.CouponInsufficientUsage), "coupon limit exceeded")
 		}
 
-		couponSub := tool.StringToInt64Slice(couponInfo.Subscribe)
-		if len(couponSub) > 0 && !tool.Contains(couponSub, req.SubscribeId) {
+		couponSub := slicesx.StringToInt64Slice(couponInfo.Subscribe)
+		if len(couponSub) > 0 && !slices.Contains(couponSub, req.SubscribeId) {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.CouponNotApplicable), "coupon not match")
 		}
 		couponAmount = calculateCoupon(amount, couponInfo)

@@ -8,7 +8,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // FilterOrderLogHandler documents Filter order creation logs.
@@ -19,21 +18,21 @@ import (
 // @Produce json
 // @Security BearerAuth
 // @Param request query dto.FilterOrderLogRequest false "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.FilterOrderLogResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.FilterOrderLogResponse}
 // @Router /v1/admin/log/order/list [get]
 func FilterOrderLogHandler(service platform.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		var req dto.FilterOrderLogRequest
 		if err := httpx.ShouldBind(c, &req); err != nil {
-			result.ParamErrorResult(c, err)
+			httpx.ParamErrorResult(c, err)
 			return
 		}
 		if err := validation.Validate(&req); err != nil {
-			result.ParamErrorResult(c, err)
+			httpx.ParamErrorResult(c, err)
 			return
 		}
 
 		resp, err := service.FilterOrderLog(ctx, &req)
-		result.HttpResult(c, resp, err)
+		httpx.HttpResult(c, resp, err)
 	}
 }

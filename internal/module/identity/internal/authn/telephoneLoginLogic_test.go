@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/pkg/authmethod"
 )
 
 type fakeTelephoneLoginPolicy struct {
@@ -28,7 +28,7 @@ func TestTelephoneLoginUsesInjectedMethodPolicy(t *testing.T) {
 	if !errors.Is(err, blocked) {
 		t.Fatalf("TelephoneLogin error = %v, want method policy error", err)
 	}
-	if len(policy.methods) != 1 || policy.methods[0] != authmethod.Mobile {
+	if len(policy.methods) != 1 || policy.methods[0] != identifier.Mobile {
 		t.Fatalf("method policy calls = %#v, want [mobile]", policy.methods)
 	}
 }

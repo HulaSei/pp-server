@@ -8,7 +8,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // FilterMobileLogHandler documents Filter mobile log.
@@ -19,22 +18,22 @@ import (
 // @Produce json
 // @Security BearerAuth
 // @Param request query dto.FilterLogParams false "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.FilterMobileLogResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.FilterMobileLogResponse}
 // @Router /v1/admin/log/mobile/list [get]
 func FilterMobileLogHandler(service platform.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		var req dto.FilterLogParams
 		if err := httpx.ShouldBind(c, &req); err != nil {
-			result.ParamErrorResult(c, err)
+			httpx.ParamErrorResult(c, err)
 			return
 		}
 		validateErr := validation.Validate(&req)
 		if validateErr != nil {
-			result.ParamErrorResult(c, validateErr)
+			httpx.ParamErrorResult(c, validateErr)
 			return
 		}
 
 		resp, err := service.FilterMobileLog(ctx, &req)
-		result.HttpResult(c, resp, err)
+		httpx.HttpResult(c, resp, err)
 	}
 }

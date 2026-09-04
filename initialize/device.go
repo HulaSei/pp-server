@@ -3,11 +3,10 @@ package initialize
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/logger"
-
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/mapping"
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/logger"
 )
 
 func Device(ctx *Dependencies) {
@@ -19,7 +18,7 @@ func Device(ctx *Dependencies) {
 	var cfg config.DeviceConfig
 	var deviceConfig auth.DeviceConfig
 	deviceConfig.Unmarshal(method.Config)
-	tool.DeepCopy(&cfg, deviceConfig)
+	mapping.DeepCopy(&cfg, deviceConfig)
 	cfg.Enable = *method.Enabled
 	ctx.updateConfig(func(current *config.Config) { current.Device = cfg })
 }

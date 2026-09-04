@@ -3,10 +3,10 @@ package initialize
 import (
 	tgbot "github.com/go-telegram/bot"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/module/billing"
+	"github.com/perfect-panel/server/internal/module/network"
 	"github.com/perfect-panel/server/internal/module/notification"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/exchangeRate"
-	"github.com/perfect-panel/server/pkg/nodeMultiplier"
 )
 
 // Dependencies is the startup/reconfiguration boundary. It owns only mutable
@@ -15,10 +15,10 @@ type Dependencies struct {
 	Config                   func() config.Config
 	UpdateConfig             func(func(*config.Config))
 	Store                    repository.Store
-	ExchangeRate             *exchangeRate.Cache
+	ExchangeRate             *billing.CurrencyRateCache
 	Notification             notification.Service
 	SetTelegramBot           func(*tgbot.Bot)
-	SetNodeMultiplierManager func(*nodeMultiplier.Manager)
+	SetNodeMultiplierManager func(*network.MultiplierManager)
 }
 
 func (d *Dependencies) currentConfig() config.Config {

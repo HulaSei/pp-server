@@ -10,15 +10,15 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	paymentEntity "github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	walletEntity "github.com/perfect-panel/server/internal/module/billing/entity/wallet"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/cryptomus"
 	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"
 	subscribeEntity "github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/payment/cryptomus"
 )
 
 type cryptomusCloseTransport func(*http.Request) (*http.Response, error)

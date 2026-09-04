@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
@@ -11,10 +12,8 @@ import (
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -62,7 +61,7 @@ func (s *Service) ResetTraffic(ctx context.Context, req *dto.ResetTrafficOrderRe
 		Id:             0,
 		ParentId:       userSubscribe.OrderId,
 		UserId:         u.Id,
-		OrderNo:        tool.GenerateTradeNo(),
+		OrderNo:        order.GenerateTradeNo(),
 		Type:           3,
 		Price:          userSubscribe.Subscribe.Replacement,
 		Amount:         amount,

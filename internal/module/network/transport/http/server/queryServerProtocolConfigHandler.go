@@ -9,8 +9,8 @@ import (
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"github.com/perfect-panel/server/internal/module/network"
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
+	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 // QueryServerProtocolConfigHandler documents Get Server Protocol Config.
@@ -21,7 +21,7 @@ import (
 // @Security NodeSecret
 // @Param server_id path int true "Server ID"
 // @Param protocols query []string false "Protocols to include" collectionFormat(multi)
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.QueryServerConfigResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.QueryServerConfigResponse}
 // @Router /v2/server/{server_id} [get]
 func QueryServerProtocolConfigHandler(service network.Service, nodeSecret func() string) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
@@ -66,7 +66,7 @@ func QueryServerProtocolConfigHandler(service network.Service, nodeSecret func()
 			writeHTTPResult(ctx, nil, err)
 			return
 		}
-		etag := tool.GenerateETag(body)
+		etag := httpx.GenerateETag(body)
 		ctx.Header("ETag", etag)
 		if string(ctx.GetHeader("If-None-Match")) == etag {
 			ctx.SetStatusCode(consts.StatusNotModified)

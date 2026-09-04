@@ -5,13 +5,13 @@ package ticket
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/mapping"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	entity "github.com/perfect-panel/server/internal/module/support/entity/ticket"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -81,7 +81,7 @@ func (s *Service) List(ctx context.Context, req *dto.GetTicketListRequest) (*dto
 		Total: total,
 		List:  make([]dto.Ticket, 0),
 	}
-	tool.DeepCopy(&resp.List, list)
+	mapping.DeepCopy(&resp.List, list)
 	return resp, nil
 }
 
@@ -92,7 +92,7 @@ func (s *Service) GetDetail(ctx context.Context, req *dto.GetTicketRequest) (*dt
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "get ticket detail failed: %v", err.Error())
 	}
 	resp := &dto.Ticket{}
-	tool.DeepCopy(resp, data)
+	mapping.DeepCopy(resp, data)
 	return resp, nil
 }
 
@@ -177,7 +177,7 @@ func (s *Service) GetUserDetail(ctx context.Context, req *dto.GetUserTicketDetai
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "invalid access")
 	}
 	resp := &dto.Ticket{}
-	tool.DeepCopy(resp, data)
+	mapping.DeepCopy(resp, data)
 	return resp, nil
 }
 
@@ -196,7 +196,7 @@ func (s *Service) GetUserList(ctx context.Context, req *dto.GetUserTicketListReq
 		Total: total,
 		List:  make([]dto.Ticket, 0),
 	}
-	tool.DeepCopy(&resp.List, list)
+	mapping.DeepCopy(&resp.List, list)
 	return resp, nil
 }
 

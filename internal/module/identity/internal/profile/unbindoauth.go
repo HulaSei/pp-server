@@ -2,9 +2,9 @@ package profile
 
 import (
 	"context"
+	"strings"
 
-	"github.com/perfect-panel/server/pkg/constant"
-
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -45,5 +45,10 @@ func (l *UnbindOAuthLogic) UnbindOAuth(req *dto.UnbindOAuthRequest) error {
 	return nil
 }
 func (l *UnbindOAuthLogic) validator(req *dto.UnbindOAuthRequest) bool {
-	return req.Method != "" && req.Method != "email" && req.Method != "mobile"
+	switch strings.ToLower(strings.TrimSpace(req.Method)) {
+	case "google", "apple", "github", "facebook", "telegram":
+		return true
+	default:
+		return false
+	}
 }

@@ -7,13 +7,12 @@ package trial
 import (
 	"context"
 	"fmt"
+	"uuid"
 
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
 )
 
 const inboxTrialGrant = "subscription.trial_grant"
@@ -76,10 +75,10 @@ func (s *Service) GrantTrial(ctx context.Context, userID int64) error {
 				OrderId:     0,
 				SubscribeId: plan.Id,
 				StartTime:   now,
-				ExpireTime:  tool.AddTime(policy.TimeUnit, policy.Duration, now),
+				ExpireTime:  timeutil.AddTime(policy.TimeUnit, policy.Duration, now),
 				Traffic:     plan.Traffic,
-				Token:       uuidx.SubscribeToken(fmt.Sprintf("Trial-%v-%s", userID, uuidx.NewUUID().String())),
-				UUID:        uuidx.NewUUID().String(),
+				Token:       usersub.TokenFromOrder(fmt.Sprintf("Trial-%v-%s", userID, uuid.NewV7().String())),
+				UUID:        uuid.NewV7().String(),
 				Status:      usersub.SubscribeStatusActive,
 			}
 			if err := store.UserSubscription().InsertSubscribe(ctx, granted); err != nil {

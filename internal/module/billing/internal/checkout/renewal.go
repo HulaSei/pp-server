@@ -3,8 +3,10 @@ package checkout
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"time"
 
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
@@ -13,10 +15,9 @@ import (
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -42,7 +43,7 @@ func (s *Service) Renewal(ctx context.Context, req *dto.RenewalOrderRequest) (*d
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidParams), "quantity exceeds maximum limit of %d", MaxQuantity)
 	}
 
-	orderNo := tool.GenerateTradeNo()
+	orderNo := order.GenerateTradeNo()
 	// find user subscribe
 	userSubscribe, err := s.deps.UserSubs.FindOneUserSubscribe(ctx, req.UserSubscribeID)
 	if err != nil {
@@ -99,8 +100,8 @@ func (s *Service) Renewal(ctx context.Context, req *dto.RenewalOrderRequest) (*d
 		if couponInfo.Count != 0 && couponInfo.Count <= couponInfo.UsedCount {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.CouponInsufficientUsage), "coupon used")
 		}
-		couponSub := tool.StringToInt64Slice(couponInfo.Subscribe)
-		if len(couponSub) > 0 && !tool.Contains(couponSub, sub.Id) {
+		couponSub := slicesx.StringToInt64Slice(couponInfo.Subscribe)
+		if len(couponSub) > 0 && !slices.Contains(couponSub, sub.Id) {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.CouponNotApplicable), "coupon not match")
 		}
 		count, err := s.deps.Orders.CountUserCouponUsage(ctx, u.Id, req.Coupon)

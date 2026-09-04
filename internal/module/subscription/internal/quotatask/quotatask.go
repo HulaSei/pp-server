@@ -24,8 +24,8 @@ import (
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/requestmeta"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 const (
@@ -131,7 +131,7 @@ func (l *QuotaTaskLogic) process(ctx context.Context, taskID int64) error {
 		for _, sub := range subscribes {
 			userIds = append(userIds, sub.UserId)
 		}
-		userIds = tool.RemoveDuplicateElements(userIds...)
+		userIds = slicesx.RemoveDuplicateElements(userIds...)
 		users, err := l.deps.Store.User().FindUsersByIds(ctx, userIds)
 		if err != nil {
 			logger.WithContext(ctx).Error("[QuotaTaskLogic.ProcessTask] find users error",

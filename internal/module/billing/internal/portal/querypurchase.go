@@ -6,11 +6,11 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -107,7 +107,7 @@ func (s *Service) fetchOrderDetails(ctx context.Context, orderInfo *order.Order)
 	}
 
 	var subscribeInfo dto.BillingSubscribeSnapshot
-	tool.DeepCopy(&subscribeInfo, sub)
+	mapping.DeepCopy(&subscribeInfo, sub)
 
 	payment, err := s.deps.Payments.FindOne(ctx, orderInfo.PaymentId)
 	if err != nil {
@@ -115,7 +115,7 @@ func (s *Service) fetchOrderDetails(ctx context.Context, orderInfo *order.Order)
 	}
 
 	var paymentInfo dto.PaymentMethod
-	tool.DeepCopy(&paymentInfo, payment)
+	mapping.DeepCopy(&paymentInfo, payment)
 
 	return subscribeInfo, paymentInfo, nil
 }

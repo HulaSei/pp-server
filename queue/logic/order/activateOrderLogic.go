@@ -14,16 +14,15 @@ import (
 	"strconv"
 
 	"github.com/hibiken/asynq"
+	"github.com/perfect-panel/server/internal/auth/password"
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/notification"
 	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	types "github.com/perfect-panel/server/queue/types"
 )
 
@@ -176,17 +175,17 @@ func (l *ActivateOrderLogic) ensureGuestAccount(ctx context.Context, orderInfo *
 		if passwordHash == "" {
 			// Compatibility for an already-created guest checkout from an older
 			// release. New records only retain PasswordHash in Redis.
-			passwordHash = tool.EncodePassWord(tempOrder.Password)
+			passwordHash = password.EncodePassWord(tempOrder.Password)
 		}
 		if passwordHash == "" {
 			return fmt.Errorf("guest order password hash is missing")
 		}
-		userInfo := &user.User{Password: passwordHash, Algo: tool.PasswordAlgoForHash(passwordHash)}
+		userInfo := &user.User{Password: passwordHash, Algo: password.PasswordAlgoForHash(passwordHash)}
 		err = l.deps.Store.InIdentityTx(ctx, func(store repository.IdentityStore) error {
 			if err := store.User().Insert(ctx, userInfo); err != nil {
 				return err
 			}
-			userInfo.ReferCode = uuidx.UserInviteCode(userInfo.Id)
+			userInfo.ReferCode = user.GenerateInviteCode(userInfo.Id)
 			if err := store.User().Update(ctx, userInfo); err != nil {
 				return err
 			}

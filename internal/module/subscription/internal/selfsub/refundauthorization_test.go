@@ -4,15 +4,14 @@ import (
 	"context"
 	"testing"
 
-	"github.com/pkg/errors"
-
+	"github.com/perfect-panel/server/internal/constant"
 	usermodel "github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger/logtest"
 	"github.com/perfect-panel/server/pkg/xerr"
+	"github.com/pkg/errors"
 )
 
 // fakeUserRepo embeds repository.UserRepo (nil) so any unexpected
