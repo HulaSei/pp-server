@@ -3,10 +3,8 @@ package initialize
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/logger"
-
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/logger"
 )
 
 type verifyConfig struct {
@@ -25,7 +23,7 @@ func Verify(svc *Dependencies) {
 		return
 	}
 	var verify verifyConfig
-	tool.SystemConfigSliceReflectToStruct(configs, &verify)
+	config.SystemConfigSliceReflectToStruct(configs, &verify)
 	verifyConfig := config.Verify{
 		TurnstileSiteKey:    verify.TurnstileSiteKey,
 		TurnstileSecret:     verify.TurnstileSecret,
@@ -43,6 +41,6 @@ func Verify(svc *Dependencies) {
 		logger.Errorf("[Init Verify Config] Get Verify Code Config Error: %s", err.Error())
 		return
 	}
-	tool.SystemConfigSliceReflectToStruct(cfg, &verifyCodeConfig)
+	config.SystemConfigSliceReflectToStruct(cfg, &verifyCodeConfig)
 	svc.updateConfig(func(current *config.Config) { current.VerifyCode = verifyCodeConfig })
 }

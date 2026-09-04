@@ -3,10 +3,9 @@ package selfsub
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/module/platform/entity/log"
-	"github.com/perfect-panel/server/pkg/constant"
-
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
+	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"

@@ -1,6 +1,6 @@
 # The image is built by compiling main.go, so the context only needs the Go
 # sources, go.mod/go.sum, the embedded assets (initialize/templates,
-# initialize/migrate/database, pkg/limit/*.lua) and etc/, which the final stage
+# initialize/migrate/database, internal/auth/ratelimit/*.lua) and etc/, which the final stage
 # copies. Everything below is excluded; .git alone is by far the largest entry.
 .git
 .gitignore

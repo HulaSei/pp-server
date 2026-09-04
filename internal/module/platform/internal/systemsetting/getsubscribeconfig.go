@@ -3,9 +3,9 @@ package systemsetting
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/config"
 	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -34,6 +34,6 @@ func (l *GetSubscribeConfigLogic) GetSubscribeConfig() (resp *dto.SubscribeConfi
 	}
 
 	// reflect to response
-	tool.SystemConfigSliceReflectToStruct(subscribeConfigs, resp)
+	config.SystemConfigSliceReflectToStruct(subscribeConfigs, resp)
 	return resp, nil
 }

@@ -7,7 +7,7 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -44,7 +44,7 @@ func (l *FilterNodeListLogic) FilterNodeList(req *dto.FilterNodeListRequest) (re
 		list = append(list, dto.Node{
 			Id:        datum.Id,
 			Name:      datum.Name,
-			Tags:      tool.RemoveDuplicateElements(strings.Split(datum.Tags, ",")...),
+			Tags:      slicesx.RemoveDuplicateElements(strings.Split(datum.Tags, ",")...),
 			Port:      datum.Port,
 			Address:   datum.Address,
 			ServerId:  datum.ServerId,

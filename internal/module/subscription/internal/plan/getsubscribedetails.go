@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"strings"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -34,14 +35,14 @@ func (l *GetSubscribeDetailsLogic) GetSubscribeDetails(req *dto.GetSubscribeDeta
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "get subscribe details failed: %v", err.Error())
 	}
 	resp = &dto.Subscribe{}
-	tool.DeepCopy(resp, sub)
+	mapping.DeepCopy(resp, sub)
 	if sub.Discount != "" {
 		err = json.Unmarshal([]byte(sub.Discount), &resp.Discount)
 		if err != nil {
 			l.Logger.Error("[GetSubscribeDetailsLogic] JSON unmarshal failed: ", logger.Field("error", err.Error()), logger.Field("discount", sub.Discount))
 		}
 	}
-	resp.Nodes = dto.StringInt64Slice(tool.StringToInt64Slice(sub.Nodes))
+	resp.Nodes = dto.StringInt64Slice(slicesx.StringToInt64Slice(sub.Nodes))
 	resp.NodeTags = strings.Split(sub.NodeTags, ",")
 	return resp, nil
 }

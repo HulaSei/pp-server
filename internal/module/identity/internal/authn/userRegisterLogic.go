@@ -6,18 +6,17 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	"github.com/perfect-panel/server/internal/auth/password"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/internal/verification"
-	"github.com/perfect-panel/server/pkg/authmethod"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -40,12 +39,12 @@ func NewUserRegisterLogic(ctx context.Context, deps UserRegisterDependencies) *U
 
 func (l *UserRegisterLogic) UserRegister(req *dto.UserRegisterRequest) (resp *dto.LoginResponse, err error) {
 
-	canonicalEmail, err := authmethod.ValidateEmail(req.Email, l.deps.Config.EmailDomainSuffixList, l.deps.Config.EmailEnableDomainSuffix)
+	canonicalEmail, err := identifier.ValidateEmail(req.Email, l.deps.Config.EmailDomainSuffixList, l.deps.Config.EmailEnableDomainSuffix)
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidParams), "invalid email: %v", err)
 	}
 	var referer *user.User
-	if err := l.deps.Policy.EnsureRegistrationOpen(l.ctx, authmethod.Email); err != nil {
+	if err := l.deps.Policy.EnsureRegistrationOpen(l.ctx, identifier.Email); err != nil {
 		return nil, err
 	}
 	if err := l.deps.Policy.VerifyHuman(l.ctx, req.CfToken, req.IP); err != nil {
@@ -93,10 +92,10 @@ func (l *UserRegisterLogic) UserRegister(req *dto.UserRegisterRequest) (resp *dt
 	}
 
 	// Generate password
-	pwd := tool.EncodePassWord(req.Password)
+	pwd := password.EncodePassWord(req.Password)
 	userInfo := &user.User{
 		Password:          pwd,
-		Algo:              tool.PasswordAlgoArgon2id,
+		Algo:              password.PasswordAlgoArgon2id,
 		OnlyFirstPurchase: &l.deps.Config.OnlyFirstPurchase,
 	}
 	if referer != nil {
@@ -108,7 +107,7 @@ func (l *UserRegisterLogic) UserRegister(req *dto.UserRegisterRequest) (resp *dt
 			return err
 		}
 		// Generate ReferCode
-		userInfo.ReferCode = uuidx.UserInviteCode(userInfo.Id)
+		userInfo.ReferCode = user.GenerateInviteCode(userInfo.Id)
 		// Update ReferCode
 		if err := store.User().Update(l.ctx, userInfo); err != nil {
 			return err
@@ -116,7 +115,7 @@ func (l *UserRegisterLogic) UserRegister(req *dto.UserRegisterRequest) (resp *dt
 		// create user auth info
 		authInfo := &user.AuthMethods{
 			UserId:         userInfo.Id,
-			AuthType:       authmethod.Email,
+			AuthType:       identifier.Email,
 			AuthIdentifier: canonicalEmail,
 			Verified:       l.deps.Config.EmailVerifyEnabled,
 		}

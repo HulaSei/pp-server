@@ -8,15 +8,15 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"uuid"
 
+	token2 "github.com/perfect-panel/server/internal/auth/token"
 	"github.com/perfect-panel/server/internal/config"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
@@ -107,13 +107,13 @@ func (s *Service) Checkout(ctx context.Context, req *dto.CheckoutOrderRequest) (
 // capability-exchange endpoint use this helper so their token and Redis
 // session semantics cannot drift.
 func (s *Service) IssueSession(ctx context.Context, userID int64) (string, error) {
-	sessionId := uuidx.NewUUID().String()
-	token, err := jwt.NewJwtToken(
+	sessionId := uuid.NewV7().String()
+	token, err := token2.NewJwtToken(
 		s.deps.Config.JwtSecret,
 		timeutil.Now().Unix(),
 		s.deps.Config.JwtExpire,
-		jwt.WithOption("UserId", userID),
-		jwt.WithOption("SessionId", sessionId),
+		token2.WithOption("UserId", userID),
+		token2.WithOption("SessionId", sessionId),
 	)
 	if err != nil {
 		return "", errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "Token generation error")

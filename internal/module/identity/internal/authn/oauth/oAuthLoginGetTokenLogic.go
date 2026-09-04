@@ -7,25 +7,25 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"uuid"
 
+	identifier2 "github.com/perfect-panel/server/internal/auth/identifier"
+	token2 "github.com/perfect-panel/server/internal/auth/token"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/apple"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/facebook"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/github"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/google"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthprovider/telegram"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthstate"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/authmethod"
-	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/oauth/apple"
-	facebookoauth "github.com/perfect-panel/server/pkg/oauth/facebook"
-	githuboauth "github.com/perfect-panel/server/pkg/oauth/github"
-	"github.com/perfect-panel/server/pkg/oauth/google"
-	"github.com/perfect-panel/server/pkg/oauth/telegram"
-	"github.com/perfect-panel/server/pkg/oauthstate"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -69,7 +69,7 @@ func NewOAuthLoginGetTokenLogic(ctx context.Context, deps OAuthLoginDependencies
 }
 
 func (l *OAuthLoginGetTokenLogic) OAuthLoginGetToken(req *dto.OAuthLoginGetTokenRequest, ip, userAgent string) (resp *dto.LoginResponse, err error) {
-	requestID := uuidx.NewUUID().String()
+	requestID := uuid.NewV7().String()
 	loginStatus := false
 	var userInfo *user.User
 
@@ -122,7 +122,7 @@ func (l *OAuthLoginGetTokenLogic) google(req *dto.OAuthLoginGetTokenRequest, req
 	)
 
 	var request oauthRequest
-	if err := tool.CloneMapToStruct(req.Callback.(map[string]interface{}), &request); err != nil {
+	if err := mapping.CloneMapToStruct(req.Callback.(map[string]interface{}), &request); err != nil {
 		l.Errorw("failed to parse google callback data",
 			logger.Field("request_id", requestID),
 			logger.Field("provider", OAuthGoogle),
@@ -403,7 +403,7 @@ func (l *OAuthLoginGetTokenLogic) github(req *dto.OAuthLoginGetTokenRequest, req
 	)
 
 	var request oauthRequest
-	if err := tool.CloneMapToStruct(req.Callback.(map[string]interface{}), &request); err != nil {
+	if err := mapping.CloneMapToStruct(req.Callback.(map[string]interface{}), &request); err != nil {
 		l.Errorw("failed to parse github callback data",
 			logger.Field("request_id", requestID),
 			logger.Field("provider", OAuthGithub),
@@ -427,7 +427,7 @@ func (l *OAuthLoginGetTokenLogic) github(req *dto.OAuthLoginGetTokenRequest, req
 		return nil, err
 	}
 
-	client := githuboauth.New(&githuboauth.Config{
+	client := github.New(&github.Config{
 		ClientID:     cfg.ClientId,
 		ClientSecret: cfg.ClientSecret,
 		RedirectURL:  redirect,
@@ -482,7 +482,7 @@ func (l *OAuthLoginGetTokenLogic) facebook(req *dto.OAuthLoginGetTokenRequest, r
 	)
 
 	var request oauthRequest
-	if err := tool.CloneMapToStruct(req.Callback.(map[string]interface{}), &request); err != nil {
+	if err := mapping.CloneMapToStruct(req.Callback.(map[string]interface{}), &request); err != nil {
 		l.Errorw("failed to parse facebook callback data",
 			logger.Field("request_id", requestID),
 			logger.Field("provider", OAuthFacebook),
@@ -506,7 +506,7 @@ func (l *OAuthLoginGetTokenLogic) facebook(req *dto.OAuthLoginGetTokenRequest, r
 		return nil, err
 	}
 
-	client := facebookoauth.New(&facebookoauth.Config{
+	client := facebook.New(&facebook.Config{
 		ClientID:     cfg.ClientId,
 		ClientSecret: cfg.ClientSecret,
 		RedirectURL:  redirect,
@@ -574,7 +574,7 @@ func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, invite
 		return nil, err
 	}
 	if email != "" {
-		canonicalEmail, err := authmethod.ValidateEmail(
+		canonicalEmail, err := identifier2.ValidateEmail(
 			email,
 			l.deps.Config.EmailDomainSuffixList,
 			l.deps.Config.EmailEnableDomainSuffix,
@@ -617,7 +617,7 @@ func (l *OAuthLoginGetTokenLogic) register(email, avatar, method, openid, invite
 			return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseInsertError), "create user info failed: %v", err)
 		}
 
-		userInfo.ReferCode = uuidx.UserInviteCode(userInfo.Id)
+		userInfo.ReferCode = user.GenerateInviteCode(userInfo.Id)
 		l.Debugw("updating user refer code",
 			logger.Field("request_id", requestID),
 			logger.Field("user_id", userInfo.Id),
@@ -833,7 +833,7 @@ func (l *OAuthLoginGetTokenLogic) handleOAuthProvider(req *dto.OAuthLoginGetToke
 
 func (l *OAuthLoginGetTokenLogic) generateToken(userInfo *user.User, requestID string) (string, error) {
 	startTime := timeutil.Now()
-	sessionId := uuidx.NewUUID().String()
+	sessionId := uuid.NewV7().String()
 
 	l.Debugw("generating jwt token",
 		logger.Field("request_id", requestID),
@@ -841,12 +841,12 @@ func (l *OAuthLoginGetTokenLogic) generateToken(userInfo *user.User, requestID s
 		logger.Field("session_id", sessionId),
 	)
 
-	token, err := jwt.NewJwtToken(
+	token, err := token2.NewJwtToken(
 		l.deps.Config.JWTAccessSecret,
 		timeutil.Now().Unix(),
 		l.deps.Config.JWTAccessExpire,
-		jwt.WithOption("UserId", userInfo.Id),
-		jwt.WithOption("SessionId", sessionId),
+		token2.WithOption("UserId", userInfo.Id),
+		token2.WithOption("SessionId", sessionId),
 	)
 	if err != nil {
 		l.Errorw("failed to generate jwt token",

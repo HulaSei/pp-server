@@ -2,11 +2,11 @@ package server
 
 import (
 	"context"
-	dto "github.com/perfect-panel/server/internal/module/network/contract"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/module/network"
-	"github.com/perfect-panel/server/pkg/result"
+	dto "github.com/perfect-panel/server/internal/module/network/contract"
+	"github.com/perfect-panel/server/pkg/httpx"
 )
 
 var _ dto.QueryNodeTagResponse
@@ -17,12 +17,12 @@ var _ dto.QueryNodeTagResponse
 // @Tags admin
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.QueryNodeTagResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.QueryNodeTagResponse}
 // @Router /v1/admin/server/node/tags [get]
 func QueryNodeTagHandler(service network.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 
 		resp, err := service.QueryNodeTag(c)
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }

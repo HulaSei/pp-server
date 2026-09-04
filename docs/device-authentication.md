@@ -31,7 +31,7 @@
 使用不同 `time`；重试也必须重新加密、签名。多个服务实例使用 Redis 原子防重放，
 Redis 不可用时拒绝加密请求，不降级放行。
 
-AES 格式仍由 `pkg/aes.Encrypt` / `Decrypt` 实现。签名使用独立派生密钥：
+AES 与签名实现已内聚到 `internal/auth/deviceauth`，密文格式保持不变。签名使用独立派生密钥：
 
 ```text
 mac_key = SHA256(UTF8("ppanel:device-envelope:v1:" + security_secret))
@@ -51,7 +51,8 @@ BASE64_CIPHERTEXT
 
 - 第二行为实际 HTTP 方法（大写）；第三行为后端接收到的路径，不包含查询串。
 - 第四行为信封位置：请求体用 `body`，查询串用 `query`，响应数据用 `response`。
-- Go 客户端可使用 `pkg/deviceauth.Sign` 计算签名。
+- 本仓库实现可参考 `internal/auth/deviceauth.Sign`。外部客户端应按上述算法计算签名，
+  不应直接依赖服务端的 `internal` 包。
 - 查询串只能有 `data`、`time`、`sign` 三项，业务参数放在加密的 JSON 对象中。
   不允许明文参数、重复信封参数，或“加密请求体 + 明文查询参数”混用。
 - 同时携带查询串和请求体时，两份信封分别签名并使用不同时间戳。

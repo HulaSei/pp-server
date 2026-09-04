@@ -5,8 +5,8 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/pkg/authmethod"
 )
 
 type fakeEmailPasswordResetPolicy struct {
@@ -28,7 +28,7 @@ func TestResetPasswordUsesInjectedMethodPolicy(t *testing.T) {
 	if !errors.Is(err, blocked) {
 		t.Fatalf("ResetPassword error = %v, want method policy error", err)
 	}
-	if len(policy.methods) != 1 || policy.methods[0] != authmethod.Email {
+	if len(policy.methods) != 1 || policy.methods[0] != identifier.Email {
 		t.Fatalf("method policy calls = %#v, want [email]", policy.methods)
 	}
 }

@@ -7,8 +7,8 @@ import (
 	"net/url"
 
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
+	"github.com/perfect-panel/server/internal/module/identity/internal/oauthstate"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/oauthstate"
 )
 
 type AppleLoginCallbackLogic struct {

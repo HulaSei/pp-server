@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/pkg/authmethod"
-	"github.com/perfect-panel/server/pkg/constant"
 )
 
 type fakeEmailCodePolicy struct {
@@ -31,7 +31,7 @@ func TestSendEmailCodeUsesInjectedRegistrationPolicy(t *testing.T) {
 	if !errors.Is(err, blocked) {
 		t.Fatalf("SendEmailCode error = %v, want registration policy error", err)
 	}
-	if policy.method != authmethod.Email {
-		t.Fatalf("registration method = %q, want %q", policy.method, authmethod.Email)
+	if policy.method != identifier.Email {
+		t.Fatalf("registration method = %q, want %q", policy.method, identifier.Email)
 	}
 }

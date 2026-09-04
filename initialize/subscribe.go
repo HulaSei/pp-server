@@ -3,10 +3,8 @@ package initialize
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/logger"
-
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/logger"
 )
 
 func Subscribe(svc *Dependencies) {
@@ -18,6 +16,6 @@ func Subscribe(svc *Dependencies) {
 	}
 
 	var subscribeConfig config.SubscribeConfig
-	tool.SystemConfigSliceReflectToStruct(configs, &subscribeConfig)
+	config.SystemConfigSliceReflectToStruct(configs, &subscribeConfig)
 	svc.updateConfig(func(current *config.Config) { current.Subscribe = subscribeConfig })
 }

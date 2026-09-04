@@ -5,15 +5,13 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/perfect-panel/server/pkg/constant"
-
-	"github.com/perfect-panel/server/pkg/xerr"
-	"github.com/pkg/errors"
-
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/stripe"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/payment/stripe"
+	"github.com/perfect-panel/server/pkg/xerr"
+	"github.com/pkg/errors"
 )
 
 // StripeNotify authenticates and settles a Stripe webhook event.

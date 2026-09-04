@@ -4,16 +4,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	"github.com/perfect-panel/server/internal/auth/password"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/verification"
-	"github.com/perfect-panel/server/pkg/authmethod"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/phone"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -35,16 +34,16 @@ func NewTelephoneLoginLogic(ctx context.Context, deps TelephoneLoginDependencies
 }
 
 func (l *TelephoneLoginLogic) TelephoneLogin(req *dto.TelephoneLoginRequest, ip, userAgent string) (resp *dto.LoginResponse, err error) {
-	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, authmethod.Mobile); err != nil {
+	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, identifier.Mobile); err != nil {
 		return nil, err
 	}
-	phoneNumber, err := phone.FormatToE164(req.TelephoneAreaCode, req.Telephone)
+	phoneNumber, err := identifier.FormatToE164(req.TelephoneAreaCode, req.Telephone)
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.TelephoneError), "Invalid phone number")
 	}
 	loginStatus := false
 
-	authMethodInfo, err := l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, authmethod.Mobile, phoneNumber)
+	authMethodInfo, err := l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, identifier.Mobile, phoneNumber)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.UserNotExist), "user telephone not exist: %v", req.Telephone)
@@ -103,7 +102,7 @@ func (l *TelephoneLoginLogic) TelephoneLogin(req *dto.TelephoneLoginRequest, ip,
 
 	if req.TelephoneCode == "" {
 		// Verify password
-		if !tool.MultiPasswordVerify(userInfo.Algo, userInfo.Salt, req.Password, userInfo.Password) {
+		if !password.MultiPasswordVerify(userInfo.Algo, userInfo.Salt, req.Password, userInfo.Password) {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.UserPasswordError), "user password")
 		}
 		upgradePasswordAfterLogin(l.ctx, l.deps.Store.User(), l.Logger, userInfo, req.Password)

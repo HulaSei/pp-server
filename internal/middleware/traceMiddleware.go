@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/result"
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/trace"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
@@ -98,5 +98,5 @@ func TraceMiddleware() app.HandlerFunc {
 }
 
 func requestError(ctx *app.RequestContext) error {
-	return result.ParamErrorFromRequestContext(ctx)
+	return httpx.ParamErrorFromRequestContext(ctx)
 }

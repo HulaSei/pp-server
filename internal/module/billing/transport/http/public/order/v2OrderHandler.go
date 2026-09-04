@@ -19,7 +19,6 @@ import (
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/result"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/redis/go-redis/v9"
 )
@@ -44,27 +43,27 @@ type EventStreamDeps struct {
 // @Produce json
 // @Param Idempotency-Key header string true "16-128 character request idempotency key"
 // @Param request body dto.V2CreateOrderRequest true "Order parameters"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.V2OrderResponse}
-// @Failure 409 {object} result.ResponseErrorBean
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.V2OrderResponse}
+// @Failure 409 {object} httpx.ResponseErrorBean
 // @Router /v2/public/orders [post]
 func V2CreateAndCheckoutHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		idempotencyKey := strings.TrimSpace(string(ctx.GetHeader("Idempotency-Key")))
 		if !validIdempotencyKey(idempotencyKey) {
-			result.ParamErrorResult(ctx, stdErrors.New("Idempotency-Key must contain 16-128 printable ASCII characters"))
+			httpx.ParamErrorResult(ctx, stdErrors.New("Idempotency-Key must contain 16-128 printable ASCII characters"))
 			return
 		}
 		var req dto.V2CreateOrderRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		resp, err := service.V2CreateAndCheckout(c, &req, idempotencyKey)
 		if stdErrors.Is(err, billing.ErrIdempotencyKeyReused) {
-			ctx.JSON(http.StatusConflict, result.Error(xerr.InvalidParams, "IDEMPOTENCY_KEY_REUSED"))
+			ctx.JSON(http.StatusConflict, httpx.Error(xerr.InvalidParams, "IDEMPOTENCY_KEY_REUSED"))
 			return
 		}
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }
 
@@ -74,17 +73,17 @@ func V2CreateAndCheckoutHandler(service billing.Service) app.HandlerFunc {
 // @Produce json
 // @Param orderNo path string true "Order number"
 // @Param request body dto.V2CheckoutOrderRequest true "Checkout capability and return URL"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.V2OrderResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.V2OrderResponse}
 // @Router /v2/public/orders/{orderNo}/checkout [post]
 func V2CheckoutHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.V2CheckoutOrderRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		resp, err := service.V2Checkout(c, ctx.Param("orderNo"), &req)
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }
 
@@ -93,12 +92,12 @@ func V2CheckoutHandler(service billing.Service) app.HandlerFunc {
 // @Produce json
 // @Param orderNo path string true "Order number"
 // @Param checkout_token query string false "Guest checkout capability"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.V2OrderResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.V2OrderResponse}
 // @Router /v2/public/orders/{orderNo} [get]
 func V2GetOrderHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		resp, err := service.V2GetOrder(c, ctx.Param("orderNo"), ctx.Query("checkout_token"))
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }
 
@@ -108,17 +107,17 @@ func V2GetOrderHandler(service billing.Service) app.HandlerFunc {
 // @Produce json
 // @Param orderNo path string true "Order number"
 // @Param request body dto.V2EventTicketRequest true "Guest checkout capability when applicable"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.V2EventTicketResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.V2EventTicketResponse}
 // @Router /v2/public/orders/{orderNo}/event-ticket [post]
 func V2EventTicketHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.V2EventTicketRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		resp, err := service.V2EventTicket(c, ctx.Param("orderNo"), req.CheckoutToken)
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }
 
@@ -128,17 +127,17 @@ func V2EventTicketHandler(service billing.Service) app.HandlerFunc {
 // @Produce json
 // @Param orderNo path string true "Order number"
 // @Param request body dto.V2OrderSessionRequest true "Guest checkout capability"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.V2OrderSessionResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.V2OrderSessionResponse}
 // @Router /v2/public/orders/{orderNo}/session [post]
 func V2OrderSessionHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.V2OrderSessionRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		resp, err := service.V2Session(c, ctx.Param("orderNo"), req.CheckoutToken)
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }
 
@@ -162,12 +161,12 @@ func V2OrderEventsHandler(deps EventStreamDeps) app.HandlerFunc {
 		ticket := ctx.Query("ticket")
 		snapshot, expiresAt, err := deps.Billing.V2AuthorizeEventStream(c, orderNo, ticket)
 		if err != nil {
-			result.HttpResult(ctx, nil, err)
+			httpx.HttpResult(ctx, nil, err)
 			return
 		}
 		release, allowed := acquireSSEConnection(c, deps.Redis, ticket, time.Until(expiresAt))
 		if !allowed {
-			ctx.JSON(http.StatusTooManyRequests, result.Error(xerr.TooManyRequests, "too many concurrent SSE connections"))
+			ctx.JSON(http.StatusTooManyRequests, httpx.Error(xerr.TooManyRequests, "too many concurrent SSE connections"))
 			return
 		}
 		defer release()

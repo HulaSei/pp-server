@@ -8,7 +8,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // SendEmailCodeHandler documents Get verification code.
@@ -18,22 +17,22 @@ import (
 // @Accept json
 // @Produce json
 // @Param request body dto.SendCodeRequest true "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.SendCodeResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.SendCodeResponse}
 // @Router /v1/common/send_code [post]
 func SendEmailCodeHandler(service identity.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		var req dto.SendCodeRequest
 		if err := httpx.ShouldBind(c, &req); err != nil {
-			result.ParamErrorResult(c, err)
+			httpx.ParamErrorResult(c, err)
 			return
 		}
 		validateErr := validation.Validate(&req)
 		if validateErr != nil {
-			result.ParamErrorResult(c, validateErr)
+			httpx.ParamErrorResult(c, validateErr)
 			return
 		}
 
 		resp, err := service.SendEmailCode(ctx, &req)
-		result.HttpResult(c, resp, err)
+		httpx.HttpResult(c, resp, err)
 	}
 }

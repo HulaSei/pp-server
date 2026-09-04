@@ -3,9 +3,9 @@ package auditlog
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/config"
 	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 type GetLogSettingLogic struct {
@@ -31,6 +31,6 @@ func (l *GetLogSettingLogic) GetLogSetting() (resp *dto.LogSetting, err error) {
 	}
 	resp = &dto.LogSetting{}
 	// reflect to response
-	tool.SystemConfigSliceReflectToStruct(configs, resp)
+	config.SystemConfigSliceReflectToStruct(configs, resp)
 	return
 }

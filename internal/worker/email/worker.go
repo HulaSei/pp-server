@@ -7,13 +7,13 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/perfect-panel/server/internal/mail"
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/module/platform/entity/task"
-	emailpkg "github.com/perfect-panel/server/pkg/email"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/requestmeta"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 type ErrorInfo struct {
@@ -38,7 +38,7 @@ type Worker struct {
 	id       int64
 	tasks    TaskStore
 	ctx      context.Context
-	sender   emailpkg.Sender
+	sender   mail.Sender
 	logs     MessageLogStore
 	platform string
 }
@@ -57,7 +57,7 @@ func WithMessageLogs(logs MessageLogStore, platform string) WorkerOption {
 	}
 }
 
-func NewWorker(ctx context.Context, id int64, tasks TaskStore, sender emailpkg.Sender, options ...WorkerOption) *Worker {
+func NewWorker(ctx context.Context, id int64, tasks TaskStore, sender mail.Sender, options ...WorkerOption) *Worker {
 	worker := &Worker{id: id, tasks: tasks, ctx: ctx, sender: sender}
 	for _, option := range options {
 		if option != nil {
@@ -108,7 +108,7 @@ func (w *Worker) Start() error {
 		return w.failTask(taskInfo, fmt.Errorf("parse task content: %w", err))
 	}
 
-	recipients := tool.RemoveDuplicateElements(append(scope.Recipients, scope.Additional...)...)
+	recipients := slicesx.RemoveDuplicateElements(append(scope.Recipients, scope.Additional...)...)
 	if len(recipients) == 0 {
 		logger.WithContext(w.ctx).Error("Batch Send Email", logger.Field("message", "No valid recipients found"), logger.Field("task_id", w.id))
 		return w.failTask(taskInfo, fmt.Errorf("no valid recipients found"))

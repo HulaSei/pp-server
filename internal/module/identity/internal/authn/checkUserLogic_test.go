@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
+	identifier2 "github.com/perfect-panel/server/internal/auth/identifier"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/authmethod"
 )
 
 type checkUserTestStore struct {
@@ -40,7 +40,7 @@ func TestCheckUserUsesInjectedIdentityStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CheckUser error = %v", err)
 	}
-	if !resp.Exist || repo.method != authmethod.Email || repo.identifier != "user@example.com" {
+	if !resp.Exist || repo.method != identifier2.Email || repo.identifier != "user@example.com" {
 		t.Fatalf("response/repository call = %#v, %q, %q", resp, repo.method, repo.identifier)
 	}
 }
@@ -55,7 +55,7 @@ func TestCheckUserTelephoneUsesInjectedIdentityStore(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CheckUserTelephone error = %v", err)
 	}
-	if !resp.Exist || repo.method != authmethod.Mobile || repo.identifier != "+8615502505555" {
+	if !resp.Exist || repo.method != identifier2.Mobile || repo.identifier != "+8615502505555" {
 		t.Fatalf("response/repository call = %#v, %q, %q", resp, repo.method, repo.identifier)
 	}
 }

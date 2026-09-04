@@ -9,11 +9,10 @@ import (
 
 	"github.com/perfect-panel/server/initialize"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/lifecycle"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/internal/transport/httpserver"
 	"github.com/perfect-panel/server/pkg/logger"
-
-	"github.com/perfect-panel/server/pkg/proc"
 	"github.com/perfect-panel/server/pkg/trace"
 )
 
@@ -76,7 +75,7 @@ func (m *Service) Start() {
 		traceConfig.Name = trace.TraceName
 	}
 	trace.StartAgent(traceConfig)
-	proc.AddShutdownListener(func() {
+	lifecycle.AddShutdownListener(func() {
 		trace.StopAgent()
 	})
 	if m.deps.SetRestart != nil {

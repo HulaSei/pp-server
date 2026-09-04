@@ -2,11 +2,11 @@ package payment
 
 import (
 	"context"
-	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/module/billing"
-	"github.com/perfect-panel/server/pkg/result"
+	dto "github.com/perfect-panel/server/internal/module/billing/contract"
+	"github.com/perfect-panel/server/pkg/httpx"
 )
 
 var _ dto.PaymentPlatformResponse
@@ -17,12 +17,12 @@ var _ dto.PaymentPlatformResponse
 // @Tags admin
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.PaymentPlatformResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.PaymentPlatformResponse}
 // @Router /v1/admin/payment/platform [get]
 func GetPaymentPlatformHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 
 		resp, err := service.GetPaymentPlatform(c)
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }

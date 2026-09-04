@@ -38,6 +38,31 @@ var svcImporters = map[string]bool{
 	"cmd": true,
 }
 
+// Public shared packages are deliberately small in number. Application
+// adapters belong under internal or the module that owns their protocol.
+var sharedPackages = map[string]bool{
+	"cache": true, "conf": true, "httpx": true, "logger": true,
+	"orm": true, "random": true, "requestmeta": true, "slicesx": true,
+	"templatex": true, "timeutil": true, "trace": true, "xerr": true,
+}
+
+func TestSharedPackageBoundary(t *testing.T) {
+	for _, f := range collectGoFiles(t) {
+		rel, ok := strings.CutPrefix(f.dir, "pkg/")
+		if !ok {
+			continue
+		}
+		if !sharedPackages[strings.Split(rel, "/")[0]] {
+			t.Errorf("%s: application-specific package must not be added to pkg", f.path)
+		}
+		for _, imported := range f.imports {
+			if !within(imported, "pkg") {
+				t.Errorf("%s: shared package depends on application code %q", f.path, imported)
+			}
+		}
+	}
+}
+
 // skippedDirs are top-level directories that contain no production Go code
 // relevant to boundary rules.
 var skippedDirs = map[string]bool{

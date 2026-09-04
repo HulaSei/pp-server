@@ -9,11 +9,10 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/perfect-panel/server/internal/auth/deviceauth"
 	appconfig "github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	pkgaes "github.com/perfect-panel/server/pkg/aes"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/deviceauth"
 	"github.com/redis/go-redis/v9"
 )
 
@@ -37,7 +36,7 @@ func TestDeviceSecurityRejectsUnsignedAndReplayedRequests(t *testing.T) {
 		calls++
 		c.JSON(200, map[string]interface{}{"data": map[string]string{"ok": "true"}})
 	})
-	data, timestamp, err := pkgaes.Encrypt([]byte(`{"identifier":"device"}`), secret)
+	data, timestamp, err := deviceauth.Encrypt([]byte(`{"identifier":"device"}`), secret)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +91,7 @@ func TestDeviceSecurityUsesAuthenticatedSessionWithoutHeader(t *testing.T) {
 
 func TestDeviceSecurityRequiresReplayStoreAndValidQueryEnvelope(t *testing.T) {
 	const secret = "key"
-	data, timestamp, err := pkgaes.Encrypt([]byte(`{"identifier":"signed-device"}`), secret)
+	data, timestamp, err := deviceauth.Encrypt([]byte(`{"identifier":"signed-device"}`), secret)
 	if err != nil {
 		t.Fatal(err)
 	}

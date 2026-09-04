@@ -3,11 +3,11 @@ package adminuser
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/phone"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -54,7 +54,7 @@ func (l *GetUserListLogic) GetUserList(req *dto.GetUserListRequest) (*dto.GetUse
 
 	for _, item := range list {
 		var u dto.User
-		tool.DeepCopy(&u, item)
+		mapping.DeepCopy(&u, item)
 		if w, ok := wallets[item.Id]; ok {
 			u.Balance = w.Balance
 			u.GiftAmount = w.GiftAmount
@@ -67,9 +67,9 @@ func (l *GetUserListLogic) GetUserList(req *dto.GetUserListRequest) (*dto.GetUse
 		// 处理 AuthMethods
 		authMethods := make([]dto.UserAuthMethod, len(u.AuthMethods)) // 直接创建目标 slice
 		for i, method := range u.AuthMethods {
-			tool.DeepCopy(&authMethods[i], method)
+			mapping.DeepCopy(&authMethods[i], method)
 			if method.AuthType == "mobile" {
-				authMethods[i].AuthIdentifier = phone.FormatToInternational(method.AuthIdentifier)
+				authMethods[i].AuthIdentifier = identifier.FormatToInternational(method.AuthIdentifier)
 			}
 		}
 		u.AuthMethods = authMethods

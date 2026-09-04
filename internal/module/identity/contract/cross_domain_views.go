@@ -1,6 +1,8 @@
 package dto
 
-import "github.com/perfect-panel/server/pkg/platform"
+import (
+	"github.com/perfect-panel/server/internal/integration"
+)
 
 // Cross-domain view types are module-owned snapshots. They deliberately
 // duplicate JSON shapes instead of coupling one module's API to another.
@@ -25,7 +27,7 @@ type GetUserLoginLogsResponse struct {
 	Total int64          `json:"total"`
 }
 
-type AuthPlatformInfoSnapshot = platform.Info // @name dto.PlatformInfo
+type AuthPlatformInfoSnapshot = integration.Info // @name dto.PlatformInfo
 
 type AuthPlatformResponse struct {
 	List []AuthPlatformInfoSnapshot `json:"list"`

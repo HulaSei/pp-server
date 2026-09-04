@@ -3,9 +3,9 @@ package ads
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	entity "github.com/perfect-panel/server/internal/module/support/entity/ads"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 // GetPublicAds lists the active ads for the public site.
@@ -21,6 +21,6 @@ func (s *Service) GetPublicAds(ctx context.Context, req *dto.GetAdsRequest) (res
 	resp = &dto.GetAdsResponse{
 		List: make([]dto.Ads, len(data)),
 	}
-	tool.DeepCopy(&resp.List, data)
+	mapping.DeepCopy(&resp.List, data)
 	return
 }

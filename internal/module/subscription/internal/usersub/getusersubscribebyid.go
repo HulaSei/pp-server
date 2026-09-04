@@ -3,9 +3,9 @@ package usersub
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -32,7 +32,7 @@ func (l *GetUserSubscribeByIdLogic) GetUserSubscribeById(req *dto.GetUserSubscri
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "FindOneSubscribeDetailsById error: %v", err.Error())
 	}
 	var subscribeDetails dto.UserSubscribeDetail
-	tool.DeepCopy(&subscribeDetails, sub)
+	mapping.DeepCopy(&subscribeDetails, sub)
 	// The identity row is composed at the module layer instead of a
 	// cross-domain preload (ADR-001 step 5).
 	owner, err := l.deps.Users.FindOne(l.ctx, sub.UserId)
@@ -41,6 +41,6 @@ func (l *GetUserSubscribeByIdLogic) GetUserSubscribeById(req *dto.GetUserSubscri
 			logger.Field("error", err.Error()), logger.Field("user_id", sub.UserId))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "load subscription owner error: %v", err.Error())
 	}
-	tool.DeepCopy(&subscribeDetails.User, owner)
+	mapping.DeepCopy(&subscribeDetails.User, owner)
 	return &subscribeDetails, nil
 }

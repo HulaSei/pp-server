@@ -3,11 +3,11 @@ package adminserver
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
-	"github.com/perfect-panel/server/pkg/ip"
+	"github.com/perfect-panel/server/internal/module/network/internal/geolocation"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -42,7 +42,7 @@ func (l *CreateServerLogic) CreateServer(req *dto.CreateServerRequest) error {
 			return errors.Wrapf(xerr.NewErrCodeMsg(xerr.InvalidParams, "protocols type is empty"), "protocols type is empty")
 		}
 		var protocol node.Protocol
-		tool.DeepCopy(&protocol, item)
+		mapping.DeepCopy(&protocol, item)
 		ensureGeneratedProtocolKey(&protocol, nil)
 		ensureShadowsocks2022ServerKey(&protocol, nil)
 		if err := ensureRealityProtocolKey(&protocol, nil); err != nil {
@@ -64,7 +64,7 @@ func (l *CreateServerLogic) CreateServer(req *dto.CreateServerRequest) error {
 	}
 	if data.City == "" && data.Country == "" {
 		// query server ip location
-		result, err := ip.GetRegionByIp(req.Address)
+		result, err := geolocation.GetRegionByIp(req.Address)
 		if err != nil {
 			l.Errorf("[CreateServer] GetRegionByIp Error: %v", err.Error())
 		} else {

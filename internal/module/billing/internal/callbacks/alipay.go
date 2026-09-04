@@ -6,15 +6,13 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/perfect-panel/server/pkg/constant"
-
-	"github.com/perfect-panel/server/pkg/xerr"
-	"github.com/pkg/errors"
-
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/alipay"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/payment/alipay"
+	"github.com/perfect-panel/server/pkg/xerr"
+	"github.com/pkg/errors"
 )
 
 // AlipayNotify authenticates and settles an Alipay F2F notification.

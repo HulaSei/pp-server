@@ -4,17 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/perfect-panel/server/internal/verification"
 	"time"
 
 	"github.com/hibiken/asynq"
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	"github.com/perfect-panel/server/internal/auth/ratelimit"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/pkg/authmethod"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/limit"
+	"github.com/perfect-panel/server/internal/verification"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/phone"
 	"github.com/perfect-panel/server/pkg/random"
 	"github.com/perfect-panel/server/pkg/requestmeta"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -46,13 +45,13 @@ func NewSendSmsCodeLogic(ctx context.Context, deps SendSmsCodeDependencies) *Sen
 func (l *SendSmsCodeLogic) SendSmsCode(req *dto.SendSmsCodeRequest) (resp *dto.SendCodeResponse, err error) {
 	verifyType := constant.ParseVerifyType(req.Type)
 	if verifyType == constant.Register {
-		if err := l.deps.Policy.EnsureRegistrationOpen(l.ctx, authmethod.Mobile); err != nil {
+		if err := l.deps.Policy.EnsureRegistrationOpen(l.ctx, identifier.Mobile); err != nil {
 			return nil, err
 		}
-	} else if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, authmethod.Mobile); err != nil {
+	} else if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, identifier.Mobile); err != nil {
 		return nil, err
 	}
-	phoneNumber, err := phone.FormatToE164(req.TelephoneAreaCode, req.Telephone)
+	phoneNumber, err := identifier.FormatToE164(req.TelephoneAreaCode, req.Telephone)
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.TelephoneError), "Invalid phone number")
 	}
@@ -63,7 +62,7 @@ func (l *SendSmsCodeLogic) SendSmsCode(req *dto.SendSmsCodeRequest) (resp *dto.S
 	if interval <= 0 {
 		interval = 60
 	}
-	limiter := limit.NewPeriodLimit(int(interval), 1, l.deps.Redis, fmt.Sprintf("%smobile:%s:", config.SendIntervalKeyPrefix, verifyType))
+	limiter := ratelimit.NewPeriodLimit(int(interval), 1, l.deps.Redis, fmt.Sprintf("%smobile:%s:", config.SendIntervalKeyPrefix, verifyType))
 	permit, err := limiter.Take(phoneNumber)
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "Failed to take limit")
@@ -76,7 +75,7 @@ func (l *SendSmsCodeLogic) SendSmsCode(req *dto.SendSmsCodeRequest) (resp *dto.S
 	if dailyLimit <= 0 {
 		dailyLimit = 15
 	}
-	dailyLimiter := limit.NewPeriodLimit(86400, int(dailyLimit), l.deps.Redis, config.SendCountLimitKeyPrefix, limit.Align())
+	dailyLimiter := ratelimit.NewPeriodLimit(86400, int(dailyLimit), l.deps.Redis, config.SendCountLimitKeyPrefix, ratelimit.Align())
 	permit, err = dailyLimiter.Take(fmt.Sprintf("%s:%s:%s", "mobile", verifyType, phoneNumber))
 	if err != nil {
 		return nil, err
@@ -84,7 +83,7 @@ func (l *SendSmsCodeLogic) SendSmsCode(req *dto.SendSmsCodeRequest) (resp *dto.S
 	if !dailyLimiter.ParsePermitState(permit) {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.TodaySendCountExceedsLimit), "This account has reached the limit of sending times today")
 	}
-	m, err := l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, authmethod.Mobile, phoneNumber)
+	m, err := l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, identifier.Mobile, phoneNumber)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "FindUserAuthMethodByOpenID error")
 	}

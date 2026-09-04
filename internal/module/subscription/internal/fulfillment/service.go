@@ -8,8 +8,8 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"uuid"
 
-	"github.com/google/uuid"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
@@ -17,8 +17,6 @@ import (
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
 )
 
 // Order lifecycle constants mirrored from the billing domain's order rows.
@@ -139,7 +137,7 @@ func (s *Service) loadOutcome(ctx context.Context, orderInfo *order.Order) (*out
 	token := orderInfo.SubscribeToken
 	if orderInfo.Type == OrderTypeSubscribe {
 		// New-purchase tokens are derived from the order number.
-		token = uuidx.SubscribeToken(orderInfo.OrderNo)
+		token = usersub.TokenFromOrder(orderInfo.OrderNo)
 	}
 	userSub, err := s.deps.UserSubs.FindOneSubscribeByToken(ctx, token)
 	if err != nil {
@@ -238,10 +236,10 @@ func (s *Service) createUserSubscriptionTx(ctx context.Context, store repository
 		OrderId:     orderInfo.Id,
 		SubscribeId: orderInfo.SubscribeId,
 		StartTime:   now,
-		ExpireTime:  tool.AddTime(sub.UnitTime, orderInfo.Quantity, now),
+		ExpireTime:  timeutil.AddTime(sub.UnitTime, orderInfo.Quantity, now),
 		Traffic:     sub.Traffic,
-		Token:       uuidx.SubscribeToken(orderInfo.OrderNo),
-		UUID:        uuid.New().String(),
+		Token:       usersub.TokenFromOrder(orderInfo.OrderNo),
+		UUID:        uuid.NewV4().String(),
 		Status:      1,
 	}
 	if err := store.UserSubscription().InsertSubscribe(ctx, userSub); err != nil {
@@ -286,7 +284,7 @@ func (s *Service) updateSubscriptionForRenewalTx(ctx context.Context, store repo
 		}
 		userSub.FinishedAt = nil
 	}
-	userSub.ExpireTime = tool.AddTime(sub.UnitTime, orderInfo.Quantity, userSub.ExpireTime)
+	userSub.ExpireTime = timeutil.AddTime(sub.UnitTime, orderInfo.Quantity, userSub.ExpireTime)
 	userSub.Status = 1
 	return store.UserSubscription().UpdateSubscribe(ctx, userSub)
 }

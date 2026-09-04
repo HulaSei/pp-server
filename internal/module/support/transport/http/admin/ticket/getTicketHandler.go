@@ -8,7 +8,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // GetTicketHandler documents Get ticket detail.
@@ -19,22 +18,22 @@ import (
 // @Produce json
 // @Security BearerAuth
 // @Param request query dto.GetTicketRequest false "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.Ticket}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.Ticket}
 // @Router /v1/admin/ticket/detail [get]
 func GetTicketHandler(service support.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		var req dto.GetTicketRequest
 		if err := httpx.ShouldBind(c, &req); err != nil {
-			result.ParamErrorResult(c, err)
+			httpx.ParamErrorResult(c, err)
 			return
 		}
 		validateErr := validation.Validate(&req)
 		if validateErr != nil {
-			result.ParamErrorResult(c, validateErr)
+			httpx.ParamErrorResult(c, validateErr)
 			return
 		}
 
 		resp, err := service.GetTicket(ctx, &req)
-		result.HttpResult(c, resp, err)
+		httpx.HttpResult(c, resp, err)
 	}
 }

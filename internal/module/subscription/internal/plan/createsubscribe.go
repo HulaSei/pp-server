@@ -7,7 +7,7 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -50,8 +50,8 @@ func (l *CreateSubscribeLogic) CreateSubscribe(req *dto.CreateSubscribeRequest) 
 		SpeedLimit:        req.SpeedLimit,
 		DeviceLimit:       req.DeviceLimit,
 		Quota:             req.Quota,
-		Nodes:             tool.Int64SliceToString(req.Nodes.Int64s()),
-		NodeTags:          tool.StringSliceToString(req.NodeTags),
+		Nodes:             slicesx.Int64SliceToString(req.Nodes.Int64s()),
+		NodeTags:          slicesx.StringSliceToString(req.NodeTags),
 		Show:              req.Show,
 		Sell:              req.Sell,
 		Sort:              0,

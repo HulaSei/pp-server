@@ -6,9 +6,9 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
+	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/requestmeta"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 const requestActorIDKey = "audit_actor_id"
@@ -48,7 +48,7 @@ func LoggerMiddleware(enrichers ...requestmeta.Enricher) app.HandlerFunc {
 		if actorID, ok := ctx.Get(requestActorIDKey); ok {
 			logs = append(logs, logger.Field("actor_id", actorID))
 		}
-		if result.ParamErrorFromRequestContext(ctx) != nil {
+		if httpx.ParamErrorFromRequestContext(ctx) != nil {
 			// Parameter errors can echo rejected input values. Preserve the fact
 			// that validation failed without persisting the submitted value.
 			logs = append(logs, logger.Field("parameter_error", true))

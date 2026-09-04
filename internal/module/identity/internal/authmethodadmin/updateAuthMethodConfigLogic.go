@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/perfect-panel/server/internal/mail"
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
-	"github.com/perfect-panel/server/pkg/email"
+	"github.com/perfect-panel/server/internal/sms"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/sms"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -36,7 +36,7 @@ func (l *UpdateAuthMethodConfigLogic) UpdateAuthMethodConfig(req *dto.UpdateAuth
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find one by method failed: %v", err.Error())
 	}
 
-	tool.DeepCopy(method, req)
+	mapping.DeepCopy(method, req)
 	if req.Config != nil {
 		_, exist := req.Config.(map[string]interface{})
 		if !exist {
@@ -85,7 +85,7 @@ func (l *UpdateAuthMethodConfigLogic) UpdateAuthMethodConfig(req *dto.UpdateAuth
 	}
 
 	resp = new(dto.AuthMethodConfig)
-	tool.DeepCopy(resp, method)
+	mapping.DeepCopy(resp, method)
 	if method.Config != "" {
 		if err := json.Unmarshal([]byte(method.Config), &resp.Config); err != nil {
 			l.Errorw("unmarshal apple config failed", logger.Field("config", method.Config), logger.Field("error", err.Error()))
@@ -112,7 +112,7 @@ func validatePlatformConfig(platform string, cfg map[string]interface{}) (interf
 		return nil, err
 	}
 	switch platform {
-	case email.SMTP.String():
+	case mail.SMTP.String():
 		config = new(auth.SMTPConfig)
 	case sms.Abosend.String():
 		config = new(auth.AbosendConfig)

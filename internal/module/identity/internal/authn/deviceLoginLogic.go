@@ -6,14 +6,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -188,7 +187,7 @@ func (l *DeviceLoginLogic) registerUserAndDevice(req *dto.DeviceLoginRequest) (*
 		}
 
 		// Update refer code
-		userInfo.ReferCode = uuidx.UserInviteCode(userInfo.Id)
+		userInfo.ReferCode = user.GenerateInviteCode(userInfo.Id)
 		if err := store.User().Update(l.ctx, userInfo); err != nil {
 			l.Errorw("failed to update refer code",
 				logger.Field("user_id", userInfo.Id),

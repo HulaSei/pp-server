@@ -4,18 +4,17 @@ import (
 	"errors"
 	"time"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	password2 "github.com/perfect-panel/server/internal/auth/password"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/pkg/authmethod"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	"gorm.io/gorm"
 )
 
 var errInvalidAdminEmail = errors.New("invalid admin email")
 
 func canonicalAdminEmail(email string) (string, error) {
-	canonicalEmail := authmethod.CanonicalEmail(email)
+	canonicalEmail := identifier.CanonicalEmail(email)
 	if canonicalEmail == "" {
 		return "", errInvalidAdminEmail
 	}
@@ -37,17 +36,17 @@ func CreateAdminUser(email, password string, tx *gorm.DB) error {
 		}
 
 		u := user.User{
-			Password:  tool.EncodePassWord(password),
-			Algo:      tool.PasswordAlgoArgon2id,
+			Password:  password2.EncodePassWord(password),
+			Algo:      password2.PasswordAlgoArgon2id,
 			IsAdmin:   &enable,
-			ReferCode: uuidx.UserInviteCode(time.Now().Unix()),
+			ReferCode: user.GenerateInviteCode(time.Now().Unix()),
 		}
 		if err := tx.Model(&user.User{}).Save(&u).Error; err != nil {
 			return err
 		}
 		method := user.AuthMethods{
 			UserId:         u.Id,
-			AuthType:       authmethod.Email,
+			AuthType:       identifier.Email,
 			AuthIdentifier: canonicalEmail,
 			Verified:       true,
 		}

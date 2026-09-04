@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -47,7 +47,7 @@ func (l *QuerySubscribeListLogic) QuerySubscribeList(req *dto.QuerySubscribeList
 	list := make([]dto.Subscribe, len(data))
 	for i, item := range data {
 		var sub dto.Subscribe
-		tool.DeepCopy(&sub, item)
+		mapping.DeepCopy(&sub, item)
 		if item.Discount != "" {
 			var discount []dto.SubscribeDiscount
 			_ = json.Unmarshal([]byte(item.Discount), &discount)

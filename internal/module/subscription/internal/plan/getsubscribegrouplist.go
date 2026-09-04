@@ -3,9 +3,9 @@ package plan
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -32,7 +32,7 @@ func (l *GetSubscribeGroupListLogic) GetSubscribeGroupList() (resp *dto.GetSubsc
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "get subscribe group list failed: %v", err.Error())
 	}
 	groupList := make([]dto.SubscribeGroup, 0)
-	tool.DeepCopy(&groupList, list)
+	mapping.DeepCopy(&groupList, list)
 	return &dto.GetSubscribeGroupListResponse{
 		Total: total,
 		List:  groupList,

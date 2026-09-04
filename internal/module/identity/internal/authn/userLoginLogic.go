@@ -3,13 +3,13 @@ package auth
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	"github.com/perfect-panel/server/internal/auth/password"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
-	"github.com/perfect-panel/server/pkg/authmethod"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -31,10 +31,10 @@ func NewUserLoginLogic(ctx context.Context, deps UserLoginDependencies) *UserLog
 }
 
 func (l *UserLoginLogic) UserLogin(req *dto.UserLoginRequest) (resp *dto.LoginResponse, err error) {
-	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, authmethod.Email); err != nil {
+	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, identifier.Email); err != nil {
 		return nil, err
 	}
-	email, err := authmethod.ValidateEmail(req.Email, "", false)
+	email, err := identifier.ValidateEmail(req.Email, "", false)
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidParams), "invalid email: %v", err)
 	}
@@ -83,7 +83,7 @@ func (l *UserLoginLogic) UserLogin(req *dto.UserLoginRequest) (resp *dto.LoginRe
 	}
 
 	// Verify password
-	if !tool.MultiPasswordVerify(userInfo.Algo, userInfo.Salt, req.Password, userInfo.Password) {
+	if !password.MultiPasswordVerify(userInfo.Algo, userInfo.Salt, req.Password, userInfo.Password) {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.UserPasswordError), "user password")
 	}
 

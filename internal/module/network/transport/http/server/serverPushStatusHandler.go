@@ -17,7 +17,7 @@ import (
 // @Produce json,application/protobuf
 // @Security NodeSecret
 // @Param request body dto.ServerPushStatusRequest true "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean
+// @Success 200 {object} httpx.ResponseSuccessBean
 // @Router /v1/server/status [post]
 func ServerPushStatusHandler(service network.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {

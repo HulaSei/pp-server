@@ -3,9 +3,10 @@ package checkout
 import (
 	"context"
 	"encoding/json"
-
+	"slices"
 	"time"
 
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
@@ -13,10 +14,9 @@ import (
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -130,8 +130,8 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PurchaseOrderRequest) (
 		if couponInfo.Count != 0 && couponInfo.Count <= couponInfo.UsedCount {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.CouponInsufficientUsage), "coupon used")
 		}
-		couponSub := tool.StringToInt64Slice(couponInfo.Subscribe)
-		if len(couponSub) > 0 && !tool.Contains(couponSub, req.SubscribeId) {
+		couponSub := slicesx.StringToInt64Slice(couponInfo.Subscribe)
+		if len(couponSub) > 0 && !slices.Contains(couponSub, req.SubscribeId) {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.CouponNotApplicable), "coupon not match")
 		}
 		count, err := s.deps.Orders.CountUserCouponUsage(ctx, u.Id, req.Coupon)
@@ -180,7 +180,7 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PurchaseOrderRequest) (
 	// create order
 	orderInfo := &order.Order{
 		UserId:         u.Id,
-		OrderNo:        tool.GenerateTradeNo(),
+		OrderNo:        order.GenerateTradeNo(),
 		Type:           1,
 		Quantity:       req.Quantity,
 		Price:          price,

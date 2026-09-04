@@ -8,7 +8,6 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/perfect-panel/server/internal/module/notification"
-	"github.com/perfect-panel/server/pkg/telegramsecret"
 )
 
 type fakeNotificationService struct {
@@ -65,7 +64,7 @@ func TestTelegramHandler_rejectsAll_whenBotTokenIsEmpty(t *testing.T) {
 	fake := &fakeNotificationService{}
 	_, post := telegramWebhookContext(t, fake, "")
 
-	post(telegramsecret.Derive(""), []byte(`{"update_id":1}`))
+	post(notification.WebhookSecret(""), []byte(`{"update_id":1}`))
 	if len(fake.payloads) != 0 {
 		t.Fatal("update was dispatched despite the bot being unconfigured")
 	}
@@ -76,7 +75,7 @@ func TestTelegramHandler_dispatchesPayload_whenSecretMatches(t *testing.T) {
 	_, post := telegramWebhookContext(t, fake, "bot-token")
 
 	body := []byte(`{"update_id":7}`)
-	if code := post(telegramsecret.Derive("bot-token"), body); code != 200 {
+	if code := post(notification.WebhookSecret("bot-token"), body); code != 200 {
 		t.Fatalf("expected success envelope code 200, got %d", code)
 	}
 	if len(fake.payloads) != 1 || string(fake.payloads[0]) != string(body) {

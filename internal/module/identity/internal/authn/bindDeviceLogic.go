@@ -5,9 +5,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	identifier2 "github.com/perfect-panel/server/internal/auth/identifier"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/authmethod"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
@@ -61,7 +61,7 @@ func (l *BindDeviceLogic) BindDeviceToUser(identifier, ip, userAgent string, use
 	device = &user.Device{UserId: userID, Identifier: identifier, Ip: ip, UserAgent: userAgent, Enabled: true}
 	err = l.deps.Store.InIdentityTx(l.ctx, func(store repository.IdentityStore) error {
 		if err := store.UserAuth().InsertUserAuthMethods(l.ctx, &user.AuthMethods{
-			UserId: userID, AuthType: authmethod.Device, AuthIdentifier: identifier, Verified: true,
+			UserId: userID, AuthType: identifier2.Device, AuthIdentifier: identifier, Verified: true,
 		}); err != nil {
 			return err
 		}

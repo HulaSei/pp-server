@@ -3,8 +3,8 @@ package adminuser
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/auth/devicesession"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/pkg/devicesession"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"

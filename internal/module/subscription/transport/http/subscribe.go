@@ -9,8 +9,8 @@ import (
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/module/subscription"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
+	"github.com/perfect-panel/server/internal/protocolkey"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 type SubscribeDeps struct {
@@ -50,7 +50,7 @@ func SubscribeHandler(deps SubscribeDeps) app.HandlerFunc {
 				ctx.String(consts.StatusForbidden, "Access denied")
 				return
 			}
-			short, err := tool.FixedUniqueString(req.Token, 8, "")
+			short, err := protocolkey.FixedUniqueString(req.Token, 8, "")
 			if err != nil {
 				logger.WithContext(c).Errorf("[SubscribeHandler] Generate short token failed: %v", err)
 				ctx.String(consts.StatusInternalServerError, "Internal Server")

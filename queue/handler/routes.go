@@ -3,9 +3,10 @@ package handler
 import (
 	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/eventbus"
+	"github.com/perfect-panel/server/internal/module/billing"
 	moduleSubscription "github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/exchangeRate"
+	emailLogic "github.com/perfect-panel/server/queue/logic/email"
 	"github.com/perfect-panel/server/queue/logic/events"
 	orderLogic "github.com/perfect-panel/server/queue/logic/order"
 	smslogic "github.com/perfect-panel/server/queue/logic/sms"
@@ -13,8 +14,6 @@ import (
 	"github.com/perfect-panel/server/queue/logic/task"
 	"github.com/perfect-panel/server/queue/logic/traffic"
 	"github.com/perfect-panel/server/queue/types"
-
-	emailLogic "github.com/perfect-panel/server/queue/logic/email"
 )
 
 type Dependencies struct {
@@ -25,7 +24,7 @@ type Dependencies struct {
 	Traffic      traffic.Dependencies
 	Subscription moduleSubscription.Service
 	Store        repository.Store
-	ExchangeRate *exchangeRate.Cache
+	ExchangeRate *billing.CurrencyRateCache
 }
 
 func RegisterHandlers(mux *asynq.ServeMux, deps Dependencies) {

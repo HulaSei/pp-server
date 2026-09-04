@@ -8,13 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/perfect-panel/server/pkg/logger"
-
 	tgbot "github.com/go-telegram/bot"
 	"github.com/go-telegram/bot/models"
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
-	"github.com/perfect-panel/server/pkg/telegramsecret"
+	"github.com/perfect-panel/server/internal/module/notification"
+	"github.com/perfect-panel/server/pkg/logger"
 )
 
 // telegramPoll tracks the long-polling loop across re-initialisations. The
@@ -142,7 +141,7 @@ func Telegram(svc *Dependencies) {
 		webhookURL := fmt.Sprintf("%s/v1/telegram/webhook", tgConfig.WebHookDomain)
 		if _, err = bot.SetWebhook(context.Background(), &tgbot.SetWebhookParams{
 			URL:            webhookURL,
-			SecretToken:    telegramsecret.Derive(tgConfig.BotToken),
+			SecretToken:    notification.WebhookSecret(tgConfig.BotToken),
 			AllowedUpdates: []string{models.AllowedUpdateMessage},
 		}); err != nil {
 			logger.Errorf("[Init Telegram Config] Request Webhook Error: %s", err.Error())

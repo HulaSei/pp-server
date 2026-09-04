@@ -9,11 +9,10 @@ import (
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/perfect-panel/server/internal/auth/deviceauth"
 	"github.com/perfect-panel/server/internal/config"
-	pkgaes "github.com/perfect-panel/server/pkg/aes"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/deviceauth"
-	"github.com/perfect-panel/server/pkg/result"
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/xerr"
 )
 
@@ -40,12 +39,12 @@ func DeviceMiddleware(configProvider func() config.DeviceConfig, replayStore dev
 			return
 		}
 		if cfg.SecuritySecret == "" {
-			result.HttpResult(c, nil, xerr.NewErrCode(xerr.SecretIsEmpty))
+			httpx.HttpResult(c, nil, xerr.NewErrCode(xerr.SecretIsEmpty))
 			c.Abort()
 			return
 		}
 		if err := DecryptDeviceRequest(ctx, c, cfg.SecuritySecret, replayStore); err != nil {
-			result.HttpResult(c, nil, xerr.NewErrCode(xerr.InvalidCiphertext))
+			httpx.HttpResult(c, nil, xerr.NewErrCode(xerr.InvalidCiphertext))
 			c.Abort()
 			return
 		}
@@ -53,7 +52,7 @@ func DeviceMiddleware(configProvider func() config.DeviceConfig, replayStore dev
 		c.Next(ctx)
 		if err := EncryptDeviceResponse(c, cfg.SecuritySecret); err != nil {
 			// Never fall back to a plaintext token or private response.
-			result.HttpResult(c, nil, xerr.NewErrCode(xerr.ERROR))
+			httpx.HttpResult(c, nil, xerr.NewErrCode(xerr.ERROR))
 		}
 		c.Abort()
 	}
@@ -139,7 +138,7 @@ func EncryptDeviceResponse(c *app.RequestContext, secret string) error {
 	if value, ok := data.(string); ok {
 		plain = []byte(value)
 	}
-	ciphertext, timestamp, err := pkgaes.Encrypt(plain, secret)
+	ciphertext, timestamp, err := deviceauth.Encrypt(plain, secret)
 	if err != nil {
 		return err
 	}

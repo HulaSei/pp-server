@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/random"
 	"github.com/perfect-panel/server/pkg/timeutil"

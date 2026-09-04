@@ -10,7 +10,12 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/perfect-panel/server/internal/auth/deviceauth"
+	"github.com/perfect-panel/server/internal/auth/devicesession"
+	"github.com/perfect-panel/server/internal/auth/password"
+	token2 "github.com/perfect-panel/server/internal/auth/token"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/middleware"
 	"github.com/perfect-panel/server/internal/module/identity"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
@@ -20,13 +25,7 @@ import (
 	logentity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/module/platform/entity/outbox"
 	"github.com/perfect-panel/server/internal/repository"
-	pkgaes "github.com/perfect-panel/server/pkg/aes"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/deviceauth"
-	"github.com/perfect-panel/server/pkg/devicesession"
-	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/perfect-panel/server/pkg/logger/logtest"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -78,7 +77,7 @@ func newDeviceFixture(t *testing.T) *deviceFixture {
 		Notification: func(repository.ModuleConn) repository.NotificationRepos { return repository.NotificationRepos{} },
 	})
 	enabled := true
-	f := &deviceFixture{db: db, store: store, rdb: rdb, redis: rds, owner: &user.User{Enable: &enabled}, other: &user.User{Enable: &enabled, Password: tool.EncodePassWord("test-password"), Algo: tool.PasswordAlgoArgon2id}}
+	f := &deviceFixture{db: db, store: store, rdb: rdb, redis: rds, owner: &user.User{Enable: &enabled}, other: &user.User{Enable: &enabled, Password: password.EncodePassWord("test-password"), Algo: password.PasswordAlgoArgon2id}}
 	for _, u := range []*user.User{f.owner, f.other} {
 		if err := db.Create(u).Error; err != nil {
 			t.Fatal(err)
@@ -136,7 +135,7 @@ func (f *deviceFixture) admin(kick func(int64, string)) identity.Service {
 func TestDeviceLoginUsesCurrentStateAndRecordsBinding(t *testing.T) {
 	f := newDeviceFixture(t)
 	token := f.token(t, 0)
-	claims, err := jwt.ParseJwtToken(token, deviceTestJWTKey)
+	claims, err := token2.ParseJwtToken(token, deviceTestJWTKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -339,7 +338,7 @@ func TestLegacyUnboundDeviceJWTRequiresNewLogin(t *testing.T) {
 	for _, loginType := range []string{"device", ""} {
 		session := "legacy-" + loginType
 		f.rdb.Set(config.SessionIdKey+":"+session, fmt.Sprint(f.owner.Id))
-		token, err := jwt.NewJwtToken(deviceTestJWTKey, time.Now().Unix(), 3600, jwt.WithOption("UserId", f.owner.Id), jwt.WithOption("SessionId", session), jwt.WithOption("LoginType", loginType))
+		token, err := token2.NewJwtToken(deviceTestJWTKey, time.Now().Unix(), 3600, token2.WithOption("UserId", f.owner.Id), token2.WithOption("SessionId", session), token2.WithOption("LoginType", loginType))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -392,7 +391,7 @@ func TestSignedDeviceLoginEndToEndRejectsReplay(t *testing.T) {
 		return config.DeviceConfig{Enable: true, OnlyRealDevice: true, EnableSecurity: true, SecuritySecret: secret}
 	}, f.redis), authhttp.DeviceLoginHandler(f.service(nil, true)))
 	plain, _ := json.Marshal(map[string]string{"identifier": f.devices[0].Identifier, "user_agent": "spoofed"})
-	data, timestamp, err := pkgaes.Encrypt(plain, secret)
+	data, timestamp, err := deviceauth.Encrypt(plain, secret)
 	if err != nil {
 		t.Fatal(err)
 	}

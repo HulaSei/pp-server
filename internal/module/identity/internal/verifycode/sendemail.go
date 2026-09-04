@@ -4,24 +4,23 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/perfect-panel/server/internal/verification"
 	"time"
 
 	"github.com/hibiken/asynq"
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	"github.com/perfect-panel/server/internal/auth/ratelimit"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/pkg/authmethod"
-	"github.com/perfect-panel/server/pkg/constant"
-	emailpkg "github.com/perfect-panel/server/pkg/email"
-	"github.com/perfect-panel/server/pkg/limit"
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/mail"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
+	"github.com/perfect-panel/server/internal/verification"
+	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/random"
 	"github.com/perfect-panel/server/pkg/requestmeta"
-	"github.com/pkg/errors"
-	"gorm.io/gorm"
-
-	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	queue "github.com/perfect-panel/server/queue/types"
+	"github.com/pkg/errors"
+	"gorm.io/gorm"
 )
 
 type SendEmailCodeLogic struct {
@@ -45,7 +44,7 @@ func NewSendEmailCodeLogic(ctx context.Context, deps SendEmailCodeDependencies) 
 
 func (l *SendEmailCodeLogic) SendEmailCode(req *dto.SendCodeRequest) (resp *dto.SendCodeResponse, err error) {
 	verifyType := constant.ParseVerifyType(req.Type)
-	email, err := authmethod.ValidateEmail(
+	email, err := identifier.ValidateEmail(
 		req.Email,
 		l.deps.Config.DomainSuffixList,
 		verifyType == constant.Register && l.deps.Config.EnableDomainSuffix,
@@ -54,10 +53,10 @@ func (l *SendEmailCodeLogic) SendEmailCode(req *dto.SendCodeRequest) (resp *dto.
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidParams), "invalid email: %v", err)
 	}
 	if verifyType == constant.Register {
-		if err := l.deps.Policy.EnsureRegistrationOpen(l.ctx, authmethod.Email); err != nil {
+		if err := l.deps.Policy.EnsureRegistrationOpen(l.ctx, identifier.Email); err != nil {
 			return nil, err
 		}
-	} else if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, authmethod.Email); err != nil {
+	} else if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, identifier.Email); err != nil {
 		return nil, err
 	}
 	// Check if there is Redis in the code
@@ -67,7 +66,7 @@ func (l *SendEmailCodeLogic) SendEmailCode(req *dto.SendCodeRequest) (resp *dto.
 	if interval <= 0 {
 		interval = IntervalTime
 	}
-	limiter := limit.NewPeriodLimit(int(interval), 1, l.deps.Redis, fmt.Sprintf("%semail:%s:", config.SendIntervalKeyPrefix, verifyType))
+	limiter := ratelimit.NewPeriodLimit(int(interval), 1, l.deps.Redis, fmt.Sprintf("%semail:%s:", config.SendIntervalKeyPrefix, verifyType))
 	permit, err := limiter.Take(email)
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "Failed to take limit")
@@ -80,7 +79,7 @@ func (l *SendEmailCodeLogic) SendEmailCode(req *dto.SendCodeRequest) (resp *dto.
 	if dailyLimit <= 0 {
 		dailyLimit = 15
 	}
-	dailyLimiter := limit.NewPeriodLimit(86400, int(dailyLimit), l.deps.Redis, config.SendCountLimitKeyPrefix, limit.Align())
+	dailyLimiter := ratelimit.NewPeriodLimit(86400, int(dailyLimit), l.deps.Redis, config.SendCountLimitKeyPrefix, ratelimit.Align())
 	permit, err = dailyLimiter.Take(fmt.Sprintf("%s:%s:%s", "email", verifyType, email))
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "Failed to take limit")
@@ -88,7 +87,7 @@ func (l *SendEmailCodeLogic) SendEmailCode(req *dto.SendCodeRequest) (resp *dto.
 	if !dailyLimiter.ParsePermitState(permit) {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.TodaySendCountExceedsLimit), "send email too many requests")
 	}
-	m, err := l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, authmethod.Email, email)
+	m, err := l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, identifier.Email, email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "FindUserAuthMethodByOpenID error")
 	}
@@ -108,7 +107,7 @@ func (l *SendEmailCodeLogic) SendEmailCode(req *dto.SendCodeRequest) (resp *dto.
 	}
 	taskPayload.Type = queue.EmailTypeVerify
 	taskPayload.Email = email
-	taskPayload.Subject = emailpkg.DefaultEmailVerifySubject
+	taskPayload.Subject = mail.DefaultEmailVerifySubject
 	taskPayload.Content = map[string]interface{}{
 		"Type":     req.Type,
 		"SiteLogo": l.deps.Config.SiteLogo,

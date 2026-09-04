@@ -7,7 +7,7 @@ import (
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 )
 
 // clearDeletedUserAccessCaches makes account deletion effective immediately
@@ -27,7 +27,7 @@ func clearUserAccessCaches(ctx context.Context, deps Deps, userIDs []int64) {
 	}
 	log := logger.WithContext(ctx)
 	serverIDs := make(map[int64]struct{})
-	for _, userID := range tool.RemoveDuplicateElements(userIDs...) {
+	for _, userID := range slicesx.RemoveDuplicateElements(userIDs...) {
 		details, err := deps.UserSubs.QueryUserSubscribe(ctx, userID)
 		if err != nil {
 			log.Errorw("query subscriptions while deleting user", logger.Field("user_id", userID), logger.Field("error", err.Error()))
@@ -59,7 +59,7 @@ func collectPlanServerIDs(ctx context.Context, deps Deps, nodes, tags string, se
 	if value := strings.TrimSpace(nodes); value != "" {
 		queries = append(queries, &node.FilterNodeParams{
 			Page: 1, Size: 9999,
-			NodeId: tool.StringSliceToInt64Slice(strings.Split(value, ",")),
+			NodeId: slicesx.StringSliceToInt64Slice(strings.Split(value, ",")),
 		})
 	}
 	if value := strings.TrimSpace(tags); value != "" {

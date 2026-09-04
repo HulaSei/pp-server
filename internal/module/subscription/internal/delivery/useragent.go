@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 )
 
 func (s *Service) IsUserAgentAllowed(ctx context.Context, userAgent string) bool {
@@ -13,7 +13,7 @@ func (s *Service) IsUserAgentAllowed(ctx context.Context, userAgent string) bool
 		return false
 	}
 
-	keywords := tool.RemoveDuplicateElements(strings.Split(s.deps.config().UserAgentList, "\n")...)
+	keywords := slicesx.RemoveDuplicateElements(strings.Split(s.deps.config().UserAgentList, "\n")...)
 	clients, err := s.deps.Clients.List(ctx)
 	if err != nil {
 		logger.WithContext(ctx).Errorw("[Subscribe] Query client list failed", logger.Field("error", err.Error()))

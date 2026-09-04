@@ -5,7 +5,7 @@ import (
 
 	"github.com/perfect-panel/server/pkg/logger"
 
-	"github.com/perfect-panel/server/pkg/deduction"
+	"github.com/perfect-panel/server/internal/module/subscription/internal/deduction"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )

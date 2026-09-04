@@ -3,9 +3,9 @@ package adminuser
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -32,7 +32,7 @@ func (l *GetUserAuthMethodLogic) GetUserAuthMethod(req *dto.GetUserAuthMethodReq
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "Get User Auth Method Error")
 	}
 	list := make([]dto.UserAuthMethod, 0)
-	tool.DeepCopy(&list, methods)
+	mapping.DeepCopy(&list, methods)
 
 	return &dto.GetUserAuthMethodResponse{
 		AuthMethods: list,

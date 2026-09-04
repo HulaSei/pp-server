@@ -3,9 +3,9 @@ package wallet
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"

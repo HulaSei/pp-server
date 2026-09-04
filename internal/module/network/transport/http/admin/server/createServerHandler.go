@@ -8,7 +8,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // CreateServerHandler documents Create Server.
@@ -19,22 +18,22 @@ import (
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.CreateServerRequest true "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean
+// @Success 200 {object} httpx.ResponseSuccessBean
 // @Router /v1/admin/server/create [post]
 func CreateServerHandler(service network.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.CreateServerRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		validateErr := validation.Validate(&req)
 		if validateErr != nil {
-			result.ParamErrorResult(ctx, validateErr)
+			httpx.ParamErrorResult(ctx, validateErr)
 			return
 		}
 
 		err := service.CreateServer(c, &req)
-		result.HttpResult(ctx, nil, err)
+		httpx.HttpResult(ctx, nil, err)
 	}
 }

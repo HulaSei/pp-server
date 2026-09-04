@@ -3,12 +3,11 @@ package profile
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/constant"
-
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -40,7 +39,7 @@ func (l *GetOAuthMethodsLogic) GetOAuthMethods() (resp *dto.GetOAuthMethodsRespo
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find user auth methods failed: %v", err.Error())
 	}
 	list := make([]dto.UserAuthMethod, 0)
-	tool.DeepCopy(&list, methods)
+	mapping.DeepCopy(&list, methods)
 	return &dto.GetOAuthMethodsResponse{
 		Methods: list,
 	}, nil

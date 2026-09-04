@@ -6,12 +6,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/perfect-panel/server/internal/auth/password"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -61,8 +61,8 @@ func (l *UpdateUserBasicInfoLogic) UpdateUserBasicInfo(req *dto.UpdateUserBasice
 			if userInfo.Id == 2 && isDemo {
 				return errors.Wrapf(xerr.NewErrCodeMsg(503, "Demo mode does not allow modification of the admin user password"), "UpdateUserBasicInfo failed: cannot update admin user password in demo mode")
 			}
-			userInfo.Password = tool.EncodePassWord(req.Password)
-			userInfo.Algo = tool.PasswordAlgoArgon2id
+			userInfo.Password = password.EncodePassWord(req.Password)
+			userInfo.Algo = password.PasswordAlgoArgon2id
 			userInfo.Salt = ""
 		}
 		// The profile save skips the billing-owned money columns; the
@@ -141,7 +141,7 @@ func validateAvatarUpdate(currentAvatar, requestedAvatar string) error {
 		return nil
 	}
 
-	if !tool.IsValidImageSize(requestedAvatar, 1024) {
+	if !IsValidImageSize(requestedAvatar, 1024) {
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidParams), "Invalid avatar")
 	}
 

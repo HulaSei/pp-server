@@ -26,12 +26,12 @@
 
 | 模块 | 职责 | 现有资产（repo / 包） |
 |---|---|---|
-| `identity` | 用户、认证、OAuth、设备、验证码 | UserRepo、AuthRepo、UserAuthRepo、UserDeviceRepo、`pkg/oauth` |
-| `billing` | 订单、支付、优惠券、余额与提现 | OrderRepo、OrderEventRepo、PaymentRepo、CouponRepo、UserWithdrawalRepo、`internal/orderflow`、`internal/orderstream`、`pkg/payment` |
+| `identity` | 用户、认证、OAuth、设备、验证码 | UserRepo、AuthRepo、UserAuthRepo、UserDeviceRepo、模块内的 OAuth 适配器 |
+| `billing` | 订单、支付、优惠券、余额与提现 | OrderRepo、OrderEventRepo、PaymentRepo、CouponRepo、UserWithdrawalRepo、`internal/orderflow`、`internal/orderstream`、模块内的支付适配器 |
 | `subscription` | 套餐、用户订阅、配额 | SubscribeRepo、UserSubscriptionRepo、SubscriptionTrafficRepo |
 | `network` | 节点、流量、edge、订阅分发 | NodeRepo、TrafficRepo、`internal/edgeauth`、`internal/trafficagg`、`adapter/` |
 | `support` | 工单、公告、文档、广告、营销 | TicketRepo、AnnouncementRepo、DocumentRepo、AdsRepo |
-| `notification` | email / sms / telegram / 站内通知 | `pkg/email`、`pkg/sms`、`queue/logic/email|sms`、telegram bot |
+| `notification` | email / sms / telegram / 站内通知 | `internal/mail`、`internal/sms`、`queue/logic/email|sms`、telegram bot |
 | `platform`（共享内核） | 配置、系统设置、日志、汇率、GeoIP、缓存、ID 生成 | SystemRepo、LogRepo、ClientRepo、TaskRepo、`pkg/*` 基础库 |
 
 划分原则：粒度对齐"未来的微服务候选"。`platform` 是共享内核，任何模块可依赖它，它不依赖任何模块。
@@ -230,7 +230,7 @@ builder 指向独立连接即可。不允许 import `internal/svc` 与 `internal
   `subscription.fulfillment`、`identity.balance_recharge`、`identity.commission`、
   `subscription.trial_grant`、`subscription.quota_grant`、`billing.quota_gift`。
 
-**异步 trace 贯通（2026-07-25）**：asynq 无消息头，`pkg/asynqx` 用 payload 信封携带
+**异步 trace 贯通（2026-07-25）**：asynq 无消息头，`internal/taskqueue` 用 payload 信封携带
 W3C trace 上下文——`asynqx.Client`（`ServiceContext.Queue` 的类型）在 `EnqueueContext`
 时把调用方 span 上下文包进 `{__trace_carrier__, __trace_body__}` 信封；worker 侧
 `mux.Use(asynqx.Middleware())` 解包、以生产者为父开 consumer span（含 task id/重试次数

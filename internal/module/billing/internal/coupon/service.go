@@ -4,18 +4,18 @@ package coupon
 
 import (
 	"context"
-	"math/rand"
+	"crypto/rand"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	entity "github.com/perfect-panel/server/internal/module/billing/entity/coupon"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/random"
-	"github.com/perfect-panel/server/pkg/snowflake"
-	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
+	"gorm.io/gorm"
 )
 
 type Service struct {
@@ -30,23 +30,33 @@ func (s *Service) Create(ctx context.Context, req *dto.CreateCouponRequest) erro
 	if err := validateCouponInput(req); err != nil {
 		return err
 	}
-	if req.Code == "" {
-		rand.NewSource(timeutil.Now().UnixNano())
-		sid := snowflake.GetID()
-		req.Code = random.KeyNew(4, 2) + "-" + random.StrToDashedString(random.EncodeBase36(sid))
-	}
+	generateCode := req.Code == ""
 	couponInfo := &entity.Coupon{}
-	tool.DeepCopy(couponInfo, req)
-	couponInfo.Subscribe = tool.Int64SliceToString(req.Subscribe)
+	mapping.DeepCopy(couponInfo, req)
+	couponInfo.Subscribe = slicesx.Int64SliceToString(req.Subscribe)
 	if req.Enable == nil {
 		enabled := true
 		couponInfo.Enable = &enabled
 	}
-	if err := s.repo.Insert(ctx, couponInfo); err != nil {
-		logger.WithContext(ctx).Errorw("[CreateCoupon] Database Error", logger.Field("error", err.Error()))
-		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseInsertError), "create coupon error: %v", err.Error())
+	var err error
+	for attempt := 0; attempt < 3; attempt++ {
+		if generateCode {
+			// Coupon codes need unpredictable uniqueness, not a machine/clock
+			// based numeric ID. Keep the database's unique constraint authoritative.
+			req.Code = random.StrToDashedString(rand.Text())
+			couponInfo.Code = req.Code
+			couponInfo.Id = 0
+		}
+		err = s.repo.Insert(ctx, couponInfo)
+		if err == nil {
+			return nil
+		}
+		if !generateCode || !errors.Is(err, gorm.ErrDuplicatedKey) {
+			break
+		}
 	}
-	return nil
+	logger.WithContext(ctx).Errorw("[CreateCoupon] Database Error", logger.Field("error", err.Error()))
+	return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseInsertError), "create coupon error: %v", err)
 }
 
 func (s *Service) Update(ctx context.Context, req *dto.UpdateCouponRequest) error {
@@ -66,8 +76,8 @@ func (s *Service) Update(ctx context.Context, req *dto.UpdateCouponRequest) erro
 		return errors.Wrapf(xerr.NewErrCodeMsg(400, "COUPON_USED_COUNT_IMMUTABLE"), "used count cannot be reduced")
 	}
 	couponInfo := &entity.Coupon{}
-	tool.DeepCopy(couponInfo, req)
-	couponInfo.Subscribe = tool.Int64SliceToString(req.Subscribe)
+	mapping.DeepCopy(couponInfo, req)
+	couponInfo.Subscribe = slicesx.Int64SliceToString(req.Subscribe)
 	if couponInfo.Enable == nil {
 		couponInfo.Enable = existing.Enable
 	}
@@ -105,8 +115,8 @@ func (s *Service) List(ctx context.Context, req *dto.GetCouponListRequest) (*dto
 	resp.List = make([]dto.Coupon, 0)
 	for _, item := range list {
 		couponInfo := dto.Coupon{}
-		tool.DeepCopy(&couponInfo, item)
-		couponInfo.Subscribe = tool.StringToInt64Slice(item.Subscribe)
+		mapping.DeepCopy(&couponInfo, item)
+		couponInfo.Subscribe = slicesx.StringToInt64Slice(item.Subscribe)
 		resp.List = append(resp.List, couponInfo)
 	}
 	return resp, nil

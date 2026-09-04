@@ -3,19 +3,17 @@ package profile
 import (
 	"context"
 	"fmt"
-	"github.com/perfect-panel/server/pkg/authmethod"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/verification"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/phone"
+	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
-
-	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/pkg/logger"
 )
 
 type UpdateBindMobileLogic struct {
@@ -34,7 +32,7 @@ func newUpdateBindMobileLogic(ctx context.Context, deps Deps) *UpdateBindMobileL
 }
 
 func (l *UpdateBindMobileLogic) UpdateBindMobile(req *dto.UpdateBindMobileRequest) error {
-	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, authmethod.Mobile); err != nil {
+	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, identifier.Mobile); err != nil {
 		return err
 	}
 	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
@@ -43,7 +41,7 @@ func (l *UpdateBindMobileLogic) UpdateBindMobile(req *dto.UpdateBindMobileReques
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
 	}
 	// verify mobile
-	phoneNumber, err := phone.FormatToE164(req.AreaCode, req.Mobile)
+	phoneNumber, err := identifier.FormatToE164(req.AreaCode, req.Mobile)
 	if err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.TelephoneError), "Invalid phone number")
 	}

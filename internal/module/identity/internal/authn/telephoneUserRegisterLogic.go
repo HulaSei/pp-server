@@ -6,19 +6,17 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	"github.com/perfect-panel/server/internal/auth/password"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/internal/verification"
-	"github.com/perfect-panel/server/pkg/authmethod"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/phone"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -40,17 +38,17 @@ func NewTelephoneUserRegisterLogic(ctx context.Context, deps TelephoneUserRegist
 }
 
 func (l *TelephoneUserRegisterLogic) TelephoneUserRegister(req *dto.TelephoneRegisterRequest) (resp *dto.LoginResponse, err error) {
-	if err := l.deps.Policy.EnsureRegistrationOpen(l.ctx, authmethod.Mobile); err != nil {
+	if err := l.deps.Policy.EnsureRegistrationOpen(l.ctx, identifier.Mobile); err != nil {
 		return nil, err
 	}
 	if err := l.deps.Policy.VerifyHuman(l.ctx, req.CfToken, req.IP); err != nil {
 		return nil, err
 	}
-	if !phone.Check(req.TelephoneAreaCode, req.Telephone) {
+	if !identifier.Check(req.TelephoneAreaCode, req.Telephone) {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.TelephoneError), "telephone number error")
 	}
 
-	phoneNumber, err := phone.FormatToE164(req.TelephoneAreaCode, req.Telephone)
+	phoneNumber, err := identifier.FormatToE164(req.TelephoneAreaCode, req.Telephone)
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.TelephoneError), "Invalid phone number")
 	}
@@ -61,7 +59,7 @@ func (l *TelephoneUserRegisterLogic) TelephoneUserRegister(req *dto.TelephoneReg
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.VerifyCodeError), "code error")
 	}
 	// Check if the user exists
-	_, err = l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, authmethod.Mobile, phoneNumber)
+	_, err = l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, identifier.Mobile, phoneNumber)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		l.Errorw("FindOneByTelephone Error", logger.Field("error", err))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "query user info failed: %v", err.Error())
@@ -90,14 +88,14 @@ func (l *TelephoneUserRegisterLogic) TelephoneUserRegister(req *dto.TelephoneReg
 	}
 
 	// Generate password
-	pwd := tool.EncodePassWord(req.Password)
+	pwd := password.EncodePassWord(req.Password)
 	userInfo := &user.User{
 		Password:          pwd,
-		Algo:              tool.PasswordAlgoArgon2id,
+		Algo:              password.PasswordAlgoArgon2id,
 		OnlyFirstPurchase: &l.deps.Config.OnlyFirstPurchase,
 		AuthMethods: []user.AuthMethods{
 			{
-				AuthType:       authmethod.Mobile,
+				AuthType:       identifier.Mobile,
 				AuthIdentifier: phoneNumber,
 				Verified:       true,
 			},
@@ -112,7 +110,7 @@ func (l *TelephoneUserRegisterLogic) TelephoneUserRegister(req *dto.TelephoneReg
 			return err
 		}
 		// Generate ReferCode
-		userInfo.ReferCode = uuidx.UserInviteCode(userInfo.Id)
+		userInfo.ReferCode = user.GenerateInviteCode(userInfo.Id)
 		// Update ReferCode
 		if err := store.User().Update(l.ctx, userInfo); err != nil {
 			return err

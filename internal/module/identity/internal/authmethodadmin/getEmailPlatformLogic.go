@@ -3,8 +3,7 @@ package authmethodadmin
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/email"
-
+	"github.com/perfect-panel/server/internal/mail"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/pkg/logger"
 )
@@ -26,6 +25,6 @@ func newGetEmailPlatformLogic(ctx context.Context, deps Deps) *GetEmailPlatformL
 
 func (l *GetEmailPlatformLogic) GetEmailPlatform() (resp *dto.AuthPlatformResponse, err error) {
 	return &dto.AuthPlatformResponse{
-		List: email.GetSupportedPlatforms(),
+		List: mail.GetSupportedPlatforms(),
 	}, nil
 }

@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"strconv"
 	"time"
+	"uuid"
 
+	"github.com/perfect-panel/server/internal/auth/devicesession"
+	token2 "github.com/perfect-panel/server/internal/auth/token"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/devicesession"
-	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
@@ -46,8 +46,8 @@ func issueLoginSession(ctx context.Context, client *redis.Client, secret string,
 	if client == nil || lifetime <= 0 {
 		return nil, errors.New("session store unavailable")
 	}
-	sessionID := uuidx.NewUUID().String()
-	options := []jwt.Option{jwt.WithOption("UserId", userID), jwt.WithOption("SessionId", sessionID), jwt.WithOption("LoginType", loginType)}
+	sessionID := uuid.NewV7().String()
+	options := []token2.Option{token2.WithOption("UserId", userID), token2.WithOption("SessionId", sessionID), token2.WithOption("LoginType", loginType)}
 	if device != nil {
 		if device.Id <= 0 || device.UserId != userID || !device.Enabled {
 			return nil, errors.Wrap(xerr.NewErrCode(xerr.InvalidAccess), "device session binding invalid")
@@ -56,9 +56,9 @@ func issueLoginSession(ctx context.Context, client *redis.Client, secret string,
 		if err != nil {
 			return nil, err
 		}
-		options = append(options, jwt.WithOption(devicesession.IDClaim, strconv.FormatInt(device.Id, 10)), jwt.WithOption(devicesession.EpochClaim, epoch))
+		options = append(options, token2.WithOption(devicesession.IDClaim, strconv.FormatInt(device.Id, 10)), token2.WithOption(devicesession.EpochClaim, epoch))
 	}
-	token, err := jwt.NewJwtToken(secret, timeutil.Now().Unix(), lifetime, options...)
+	token, err := token2.NewJwtToken(secret, timeutil.Now().Unix(), lifetime, options...)
 	if err != nil {
 		return nil, err
 	}

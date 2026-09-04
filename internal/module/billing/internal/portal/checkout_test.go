@@ -9,13 +9,13 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/hibiken/asynq"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	walletEntity "github.com/perfect-panel/server/internal/module/billing/entity/wallet"
 	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )

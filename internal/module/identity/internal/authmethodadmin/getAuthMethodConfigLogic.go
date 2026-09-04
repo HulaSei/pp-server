@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -34,7 +34,7 @@ func (l *GetAuthMethodConfigLogic) GetAuthMethodConfig(req *dto.GetAuthMethodCon
 	}
 
 	resp = new(dto.AuthMethodConfig)
-	tool.DeepCopy(resp, method)
+	mapping.DeepCopy(resp, method)
 	if method.Config != "" {
 		if err := json.Unmarshal([]byte(method.Config), &resp.Config); err != nil {
 			l.Errorw("unmarshal config failed", logger.Field("config", method.Config), logger.Field("error", err.Error()))

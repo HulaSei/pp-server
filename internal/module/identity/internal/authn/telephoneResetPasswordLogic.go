@@ -4,16 +4,15 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
+	"github.com/perfect-panel/server/internal/auth/password"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/verification"
-	"github.com/perfect-panel/server/pkg/authmethod"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/phone"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -35,12 +34,12 @@ func NewTelephoneResetPasswordLogic(ctx context.Context, deps TelephoneResetPass
 }
 
 func (l *TelephoneResetPasswordLogic) TelephoneResetPassword(req *dto.TelephoneResetPasswordRequest) (resp *dto.LoginResponse, err error) {
-	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, authmethod.Mobile); err != nil {
+	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, identifier.Mobile); err != nil {
 		return nil, err
 	}
 	code := req.Code
 
-	phoneNumber, err := phone.FormatToE164(req.TelephoneAreaCode, req.Telephone)
+	phoneNumber, err := identifier.FormatToE164(req.TelephoneAreaCode, req.Telephone)
 	if err != nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.TelephoneError), "Invalid phone number")
 	}
@@ -51,7 +50,7 @@ func (l *TelephoneResetPasswordLogic) TelephoneResetPassword(req *dto.TelephoneR
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.VerifyCodeError), "code error")
 	}
 
-	authMethods, err := l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, authmethod.Mobile, phoneNumber)
+	authMethods, err := l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, identifier.Mobile, phoneNumber)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		l.Errorw("FindOneByTelephone Error", logger.Field("error", err))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "query user info failed: %v", err.Error())
@@ -71,9 +70,9 @@ func (l *TelephoneResetPasswordLogic) TelephoneResetPassword(req *dto.TelephoneR
 	}
 
 	// Generate password
-	pwd := tool.EncodePassWord(req.Password)
+	pwd := password.EncodePassWord(req.Password)
 	userInfo.Password = pwd
-	userInfo.Algo = tool.PasswordAlgoArgon2id
+	userInfo.Algo = password.PasswordAlgoArgon2id
 	userInfo.Salt = ""
 	err = l.deps.Store.User().Update(l.ctx, userInfo)
 	if err != nil {

@@ -14,14 +14,12 @@ import (
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	"github.com/perfect-panel/server/internal/module/platform/entity/client"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
-	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
-
-	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
-
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
+	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
+	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -268,8 +266,8 @@ func (l *SubscribeLogic) getServers(userSub *usersub.Subscribe, subDetails *subs
 		return l.createNoticeServers("流量已用尽 / Traffic Exhausted"), nil
 	}
 
-	nodeIds := tool.StringToInt64Slice(subDetails.Nodes)
-	tags := tool.RemoveStringElement(strings.Split(subDetails.NodeTags, ","), "")
+	nodeIds := slicesx.StringToInt64Slice(subDetails.Nodes)
+	tags := slicesx.RemoveStringElement(strings.Split(subDetails.NodeTags, ","), "")
 
 	l.Debugf("[Generate Subscribe]nodes: %v, NodeTags: %v", len(nodeIds), len(tags))
 	if len(nodeIds) == 0 && len(tags) == 0 {
@@ -277,7 +275,7 @@ func (l *SubscribeLogic) getServers(userSub *usersub.Subscribe, subDetails *subs
 		return []*node.Node{}, nil
 	}
 	enable := true
-	nodes, err := l.deps.Nodes.ListNodesByScope(l.ctx, nodeIds, tool.RemoveDuplicateElements(tags...), &enable, true)
+	nodes, err := l.deps.Nodes.ListNodesByScope(l.ctx, nodeIds, slicesx.RemoveDuplicateElements(tags...), &enable, true)
 
 	l.Debugf("[Query Subscribe]found servers: %v", len(nodes))
 

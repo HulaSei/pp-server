@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
+	payment2 "github.com/perfect-panel/server/internal/module/billing/internal/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/epay"
 	"github.com/perfect-panel/server/internal/module/billing/internal/settle"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
-	paymentPlatform "github.com/perfect-panel/server/pkg/payment"
-	"github.com/perfect-panel/server/pkg/payment/epay"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -117,8 +117,8 @@ type epayCredentials struct {
 
 func epayCredentialsForPayment(data *payment.Payment) (epayCredentials, error) {
 	var result epayCredentials
-	switch paymentPlatform.ParsePlatform(data.Platform) {
-	case paymentPlatform.EPay:
+	switch payment2.ParsePlatform(data.Platform) {
+	case payment2.EPay:
 		var config payment.EPayConfig
 		if err := json.Unmarshal([]byte(data.Config), &config); err != nil {
 			return result, err

@@ -4,15 +4,15 @@ import (
 	"context"
 	"strings"
 
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -113,7 +113,7 @@ func (l *QueryUserSubscribeNodeListLogic) getServers(userSub *usersub.Subscribe,
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find subscribe details error: %v", err.Error())
 		}
 	}
-	nodeIds := tool.StringToInt64Slice(subDetails.Nodes)
+	nodeIds := slicesx.StringToInt64Slice(subDetails.Nodes)
 	tags := strings.Split(subDetails.NodeTags, ",")
 	cleanTags := make([]string, 0, len(tags))
 	for _, tag := range tags {

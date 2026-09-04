@@ -9,12 +9,11 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/perfect-panel/server/internal/auth/deviceauth"
 	appconfig "github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/repository"
-	pkgaes "github.com/perfect-panel/server/pkg/aes"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/deviceauth"
 	"github.com/perfect-panel/server/pkg/xerr"
 )
 
@@ -42,11 +41,11 @@ func TestAuthMiddleware_abortsWithTokenEnvelope_whenAuthorizationMissing(t *test
 func TestDeviceMiddleware_decryptsRequestAndEncryptsResponse_whenDeviceLogin(t *testing.T) {
 	// Given
 	const secret = "device-secret"
-	queryData, queryTime, err := pkgaes.Encrypt([]byte(`{"page":2}`), secret)
+	queryData, queryTime, err := deviceauth.Encrypt([]byte(`{"page":2}`), secret)
 	if err != nil {
 		t.Fatalf("encrypt query: %v", err)
 	}
-	bodyData, bodyTime, err := pkgaes.Encrypt([]byte(`{"name":"device"}`), secret)
+	bodyData, bodyTime, err := deviceauth.Encrypt([]byte(`{"name":"device"}`), secret)
 	if err != nil {
 		t.Fatalf("encrypt body: %v", err)
 	}
@@ -99,7 +98,7 @@ func TestDeviceMiddleware_decryptsRequestAndEncryptsResponse_whenDeviceLogin(t *
 	if err := json.Unmarshal(ctx.Response.Body(), &response); err != nil {
 		t.Fatalf("unmarshal encrypted response: %v", err)
 	}
-	plainText, err := pkgaes.Decrypt(response.Data.Data, secret, response.Data.Time)
+	plainText, err := deviceauth.Decrypt(response.Data.Data, secret, response.Data.Time)
 	if err != nil {
 		t.Fatalf("decrypt response: %v", err)
 	}
@@ -152,7 +151,7 @@ func TestDeviceMiddleware_allowsUnrelatedPlaintextRoute_whenSecurityEnabled(t *t
 func TestDevicePayloadHelpers_roundTripRequestAndResponse_whenPayloadIsEncrypted(t *testing.T) {
 	// Given
 	const secret = "device-secret"
-	ciphertext, iv, err := pkgaes.Encrypt([]byte(`{"name":"device"}`), secret)
+	ciphertext, iv, err := deviceauth.Encrypt([]byte(`{"name":"device"}`), secret)
 	if err != nil {
 		t.Fatalf("encrypt device request: %v", err)
 	}
@@ -185,7 +184,7 @@ func TestDevicePayloadHelpers_roundTripRequestAndResponse_whenPayloadIsEncrypted
 	if err := json.Unmarshal(requestCtx.Response.Body(), &response); err != nil {
 		t.Fatalf("unmarshal encrypted response: %v", err)
 	}
-	plainText, err := pkgaes.Decrypt(response.Data.Data, secret, response.Data.Time)
+	plainText, err := deviceauth.Decrypt(response.Data.Data, secret, response.Data.Time)
 	if err != nil {
 		t.Fatalf("decrypt response data: %v", err)
 	}

@@ -3,8 +3,8 @@ package auth
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/pkg/authmethod"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
@@ -27,7 +27,7 @@ func NewCheckUserLogic(ctx context.Context, deps CheckUserDependencies) *CheckUs
 }
 
 func (l *CheckUserLogic) CheckUser(req *dto.CheckUserRequest) (resp *dto.CheckUserResponse, err error) {
-	authMethod, err := l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, authmethod.Email, req.Email)
+	authMethod, err := l.deps.Store.UserAuth().FindUserAuthMethodByOpenID(l.ctx, identifier.Email, req.Email)
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "find user by email error: %v", err.Error())
 	}

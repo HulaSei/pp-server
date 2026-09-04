@@ -3,9 +3,9 @@ package portal
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -21,7 +21,7 @@ func (s *Service) GetAvailablePaymentMethods(ctx context.Context) (*dto.GetAvail
 		List: make([]dto.PaymentMethod, 0),
 	}
 
-	tool.DeepCopy(&resp.List, data)
+	mapping.DeepCopy(&resp.List, data)
 
 	return resp, nil
 }

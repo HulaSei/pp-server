@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/perfect-panel/server/internal/repository"
 	"strings"
 	"time"
 
+	identifier2 "github.com/perfect-panel/server/internal/auth/identifier"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/pkg/authmethod"
+	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/orm"
 	"gorm.io/gorm"
@@ -24,13 +24,13 @@ import (
 
 func (m *UserRepo) FindOneByEmail(ctx context.Context, email string) (*user.User, error) {
 	var u user.User
-	canonicalEmail, err := canonicalAuthIdentifier(authmethod.Email, email)
+	canonicalEmail, err := canonicalAuthIdentifier(identifier2.Email, email)
 	if err != nil {
 		return &u, err
 	}
 	key := fmt.Sprintf("%s%v", cacheUserEmailPrefix, canonicalEmail)
 	err = m.QueryCtx(ctx, &u, key, func(conn *gorm.DB, v interface{}) error {
-		data, err := findUserAuthMethodByIdentifier(conn, authmethod.Email, canonicalEmail)
+		data, err := findUserAuthMethodByIdentifier(conn, identifier2.Email, canonicalEmail)
 		if err != nil {
 			return err
 		}

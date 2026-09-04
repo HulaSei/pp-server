@@ -3,18 +3,18 @@ package middleware
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/perfect-panel/server/internal/auth/devicesession"
+	token2 "github.com/perfect-panel/server/internal/auth/token"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/devicesession"
-	"github.com/perfect-panel/server/pkg/jwt"
+	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/requestmeta"
-	"github.com/perfect-panel/server/pkg/result"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
@@ -30,7 +30,7 @@ func AuthMiddleware(deps AuthDeps) app.HandlerFunc {
 	return func(ctx context.Context, requestCtx *app.RequestContext) {
 		ctx, err := AuthenticateRequest(ctx, deps, string(requestCtx.GetHeader("Authorization")), string(requestCtx.Path()))
 		if err != nil {
-			result.HttpResult(requestCtx, nil, err)
+			httpx.HttpResult(requestCtx, nil, err)
 			requestCtx.Abort()
 			return
 		}
@@ -56,7 +56,7 @@ func OptionalAuthMiddleware(deps AuthDeps) app.HandlerFunc {
 
 		authenticatedCtx, err := AuthenticateRequest(ctx, deps, token, string(requestCtx.Path()))
 		if err != nil {
-			result.HttpResult(requestCtx, nil, err)
+			httpx.HttpResult(requestCtx, nil, err)
 			requestCtx.Abort()
 			return
 		}
@@ -74,7 +74,7 @@ func AuthenticateRequest(ctx context.Context, deps AuthDeps, token string, path 
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.ErrorTokenEmpty), "Token Empty")
 	}
 
-	claims, err := jwt.ParseJwtToken(token, jwtConfig.AccessSecret)
+	claims, err := token2.ParseJwtToken(token, jwtConfig.AccessSecret)
 	if err != nil {
 		logger.WithContext(ctx).Debug("[AuthMiddleware] ParseJwtToken", logger.Field("error", err.Error()))
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.ErrorTokenExpire), "Token Invalid")
@@ -128,7 +128,7 @@ func AuthenticateRequest(ctx context.Context, deps AuthDeps, token string, path 
 	}
 
 	paths := strings.Split(path, "/")
-	if tool.StringSliceContains(paths, "admin") && (userInfo.IsAdmin == nil || !*userInfo.IsAdmin) {
+	if slices.Contains(paths, "admin") && (userInfo.IsAdmin == nil || !*userInfo.IsAdmin) {
 		logger.WithContext(ctx).Debug("[AuthMiddleware] Not Admin User", logger.Field("userId", userId), logger.Field("sessionId", sessionId))
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
 	}

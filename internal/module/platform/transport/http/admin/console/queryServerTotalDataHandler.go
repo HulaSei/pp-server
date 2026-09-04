@@ -2,11 +2,11 @@ package console
 
 import (
 	"context"
-	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/module/platform"
-	"github.com/perfect-panel/server/pkg/result"
+	dto "github.com/perfect-panel/server/internal/module/platform/contract"
+	"github.com/perfect-panel/server/pkg/httpx"
 )
 
 var _ dto.ServerTotalDataResponse
@@ -17,12 +17,12 @@ var _ dto.ServerTotalDataResponse
 // @Tags admin
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.ServerTotalDataResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.ServerTotalDataResponse}
 // @Router /v1/admin/console/server [get]
 func QueryServerTotalDataHandler(service platform.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 
 		resp, err := service.QueryServerTotalData(ctx)
-		result.HttpResult(c, resp, err)
+		httpx.HttpResult(c, resp, err)
 	}
 }

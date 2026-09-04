@@ -4,12 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/perfect-panel/server/internal/repository"
 
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
+	payment2 "github.com/perfect-panel/server/internal/module/billing/internal/payment"
+	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/cache"
 	"github.com/perfect-panel/server/pkg/orm"
-	paymentPlatform "github.com/perfect-panel/server/pkg/payment"
 	"gorm.io/gorm"
 )
 
@@ -119,7 +119,7 @@ func (m *paymentRepo) FindAvailableMethods(ctx context.Context) ([]*payment.Paym
 		// Legacy rows for removed or otherwise unsupported gateways must never
 		// be offered to a buyer, even if they remain enabled in the database.
 		return conn.Model(&payment.Payment{}).
-			Where("enable = ? AND platform IN ?", true, paymentPlatform.SupportedPlatformNames()).
+			Where("enable = ? AND platform IN ?", true, payment2.SupportedPlatformNames()).
 			Order("sort ASC, id ASC").
 			Find(v).Error
 	})

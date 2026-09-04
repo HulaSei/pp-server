@@ -5,7 +5,7 @@ import (
 
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -34,7 +34,7 @@ func (l *UpdateNodeLogic) UpdateNode(req *dto.UpdateNodeRequest) error {
 	}
 	oldServerID := data.ServerId
 	data.Name = req.Name
-	data.Tags = tool.StringSliceToString(req.Tags)
+	data.Tags = slicesx.StringSliceToString(req.Tags)
 	data.ServerId = req.ServerId
 	data.Port = req.Port
 	data.Address = req.Address

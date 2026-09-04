@@ -7,14 +7,14 @@ import (
 	"github.com/perfect-panel/server/internal/module/notification"
 	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/asynqx"
+	"github.com/perfect-panel/server/internal/taskqueue"
 	"github.com/redis/go-redis/v9"
 )
 
 type Dependencies struct {
 	Store        repository.Store
 	Redis        *redis.Client
-	Queue        *asynqx.Client
+	Queue        *taskqueue.Client
 	Inspector    *asynq.Inspector
 	Billing      billing.Service
 	Subscription subscription.Service

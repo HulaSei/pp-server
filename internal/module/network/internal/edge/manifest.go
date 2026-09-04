@@ -18,7 +18,7 @@ import (
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"gorm.io/gorm"
 )
 
@@ -92,7 +92,7 @@ func (l *ManifestLogic) Manifest(token string) (*dto.EdgeManifestResponse, error
 }
 
 func (l *ManifestLogic) proxies(userSubscribe *usersub.Subscribe, plan *subscribe.Subscribe) ([]dto.EdgeManifestProxy, []string, error) {
-	nodeIDs := tool.StringToInt64Slice(plan.Nodes)
+	nodeIDs := slicesx.StringToInt64Slice(plan.Nodes)
 	tags := cleanTags(strings.Split(plan.NodeTags, ","))
 	if len(nodeIDs) == 0 && len(tags) == 0 {
 		return []dto.EdgeManifestProxy{}, nil, nil

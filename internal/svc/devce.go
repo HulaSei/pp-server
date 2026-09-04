@@ -7,9 +7,8 @@ import (
 	"time"
 
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/device"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-
-	"github.com/perfect-panel/server/pkg/device"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/pkg/errors"

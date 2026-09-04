@@ -3,9 +3,10 @@ package usersub
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
+	"github.com/perfect-panel/server/internal/protocolkey"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -39,8 +40,8 @@ func (l *GetUserSubscribeLogic) GetUserSubscribe(req *dto.GetUserSubscribeListRe
 
 	for _, item := range data {
 		var sub dto.UserSubscribe
-		tool.DeepCopy(&sub, item)
-		sub.Short, _ = tool.FixedUniqueString(item.Token, 8, "")
+		mapping.DeepCopy(&sub, item)
+		sub.Short, _ = protocolkey.FixedUniqueString(item.Token, 8, "")
 		resp.List = append(resp.List, sub)
 	}
 	return

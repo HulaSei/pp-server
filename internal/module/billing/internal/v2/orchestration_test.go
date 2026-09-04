@@ -7,14 +7,14 @@ import (
 	"time"
 
 	"github.com/alicebob/miniredis/v2"
+	"github.com/perfect-panel/server/internal/auth/token"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/portal"
 	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/redis/go-redis/v9"
 	"gorm.io/gorm"
 )
@@ -95,8 +95,8 @@ func TestV2OrderEventTicketBindsCurrentOrderOwner(t *testing.T) {
 	if _, err := logic.AuthorizeEventTicket("other-order", ticket); err == nil {
 		t.Fatal("ticket must not authorize a different order")
 	}
-	expired, err := jwt.NewJwtToken("stream-secret", time.Now().Add(-time.Minute).Unix(), 1,
-		jwt.WithOption("OrderNo", orderInfo.OrderNo), jwt.WithOption("Scope", v2EventScope), jwt.WithOption("UserId", orderInfo.UserId))
+	expired, err := token.NewJwtToken("stream-secret", time.Now().Add(-time.Minute).Unix(), 1,
+		token.WithOption("OrderNo", orderInfo.OrderNo), token.WithOption("Scope", v2EventScope), token.WithOption("UserId", orderInfo.UserId))
 	if err != nil {
 		t.Fatalf("mint expired ticket: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestV2GuestSessionExchangeRequiresActivatedAccount(t *testing.T) {
 	if err != nil {
 		t.Fatalf("exchange guest capability for session: %v", err)
 	}
-	claims, err := jwt.ParseJwtToken(response.AccessToken, "session-secret")
+	claims, err := token.ParseJwtToken(response.AccessToken, "session-secret")
 	if err != nil || claimInt64(claims, "UserId") != 42 {
 		t.Fatalf("session claims = %#v, %v; want user 42", claims, err)
 	}

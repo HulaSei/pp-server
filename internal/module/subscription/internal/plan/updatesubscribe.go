@@ -7,7 +7,7 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -43,7 +43,7 @@ func (l *UpdateSubscribeLogic) UpdateSubscribe(req *dto.UpdateSubscribeRequest) 
 		discount = string(val)
 	}
 	// When NodeTags is set, clear Nodes to avoid AND-combined query returning wrong results (#94)
-	nodes := tool.Int64SliceToString(req.Nodes.Int64s())
+	nodes := slicesx.Int64SliceToString(req.Nodes.Int64s())
 	if len(req.NodeTags) > 0 {
 		nodes = ""
 	}
@@ -62,7 +62,7 @@ func (l *UpdateSubscribeLogic) UpdateSubscribe(req *dto.UpdateSubscribeRequest) 
 		DeviceLimit:       req.DeviceLimit,
 		Quota:             req.Quota,
 		Nodes:             nodes,
-		NodeTags:          tool.StringSliceToString(req.NodeTags),
+		NodeTags:          slicesx.StringSliceToString(req.NodeTags),
 		Show:              req.Show,
 		Sell:              req.Sell,
 		Sort:              req.Sort,

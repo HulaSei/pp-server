@@ -9,18 +9,17 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"uuid"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
 	hertzconfig "github.com/cloudwego/hertz/pkg/common/config"
 	"github.com/cloudwego/hertz/pkg/common/utils"
-	"github.com/google/uuid"
 	"github.com/perfect-panel/server/initialize/migrate"
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/pkg/conf"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/orm"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
@@ -95,7 +94,7 @@ func handleInitConfig(_ context.Context, ctx *app.RequestContext) {
 	}
 	cfg.Debug = false
 	// jwt secret
-	cfg.JwtAuth.AccessSecret = uuid.New().String()
+	cfg.JwtAuth.AccessSecret = uuid.NewV4().String()
 	// database
 	dbConfig, err := buildDatabaseConfig(request.DatabaseDriver, request.MysqlHost, request.MysqlPort, request.MysqlDatabase, request.MysqlUser, request.MysqlPassword)
 	if err != nil {
@@ -298,7 +297,7 @@ func HandleRedisTest(_ context.Context, ctx *app.RequestContext) {
 		ctx.Abort()
 		return
 	}
-	if err := tool.RedisPing(fmt.Sprintf("%s:%s", request.Host, request.Port), request.Password, 0); err != nil {
+	if err := config.RedisPing(fmt.Sprintf("%s:%s", request.Host, request.Port), request.Password, 0); err != nil {
 		ctx.JSON(http.StatusOK, utils.H{
 			"code":   200,
 			"msg":    nil,

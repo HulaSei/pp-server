@@ -11,8 +11,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	serverv1 "github.com/perfect-panel/server/api/server/v1"
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
-	"github.com/perfect-panel/server/pkg/result"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"google.golang.org/protobuf/proto"
@@ -80,7 +79,7 @@ func writeHeaders(ctx *app.RequestContext, headers map[string]string) {
 }
 
 func writeHTTPResult(ctx *app.RequestContext, resp interface{}, err error) {
-	res := result.BuildHTTPResult(resp, err)
+	res := httpx.BuildHTTPResult(resp, err)
 	ctx.JSON(res.StatusCode, res.Body)
 }
 
@@ -97,7 +96,7 @@ func writeParamError(ctx *app.RequestContext, err error) {
 		writeServerProtobuf(ctx, consts.StatusOK, &serverv1.Result{Code: xerr.InvalidParams, Message: err.Error()})
 		return
 	}
-	resp := result.BuildParamErrorResult(err)
+	resp := httpx.BuildParamErrorResult(err)
 	ctx.JSON(resp.StatusCode, resp.Body)
 }
 
@@ -123,7 +122,7 @@ func writeServerProtobufWithETag(ctx *app.RequestContext, message proto.Message,
 	if err != nil {
 		return err
 	}
-	etag := tool.GenerateETag(body)
+	etag := httpx.GenerateETag(body)
 	ctx.Header("ETag", etag)
 	if ifNoneMatch == etag {
 		ctx.SetStatusCode(consts.StatusNotModified)

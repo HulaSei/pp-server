@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
+	"github.com/perfect-panel/server/internal/sms"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/sms"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )

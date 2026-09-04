@@ -9,31 +9,28 @@ import (
 	"strings"
 	"time"
 
-	"github.com/perfect-panel/server/internal/module/platform/entity/log"
-	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/exchangeRate"
-	"github.com/perfect-panel/server/pkg/timeutil"
-
-	paymentPlatform "github.com/perfect-panel/server/pkg/payment"
-
 	"github.com/hibiken/asynq"
-	walletEntity "github.com/perfect-panel/server/internal/module/billing/entity/wallet"
-	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	queueType "github.com/perfect-panel/server/queue/types"
-	"github.com/redis/go-redis/v9"
-
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
+	walletEntity "github.com/perfect-panel/server/internal/module/billing/entity/wallet"
 	"github.com/perfect-panel/server/internal/module/billing/internal/checkout"
+	"github.com/perfect-panel/server/internal/module/billing/internal/exchangerate"
+	payment2 "github.com/perfect-panel/server/internal/module/billing/internal/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/alipay"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/cryptomus"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/epay"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/stripe"
+	"github.com/perfect-panel/server/internal/module/identity/entity/user"
+	"github.com/perfect-panel/server/internal/module/platform/entity/log"
+	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/payment/alipay"
-	"github.com/perfect-panel/server/pkg/payment/cryptomus"
-	"github.com/perfect-panel/server/pkg/payment/epay"
-	"github.com/perfect-panel/server/pkg/payment/stripe"
+	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/xerr"
+	queueType "github.com/perfect-panel/server/queue/types"
 	"github.com/pkg/errors"
+	"github.com/redis/go-redis/v9"
 )
 
 // PurchaseCheckoutLogic handles the checkout process for various payment methods
@@ -220,8 +217,8 @@ func (l *PurchaseCheckoutLogic) PurchaseCheckout(req *dto.CheckoutOrderRequest) 
 		return nil, err
 	}
 	// Route to appropriate payment handler based on payment platform
-	switch paymentPlatform.ParsePlatform(orderInfo.Method) {
-	case paymentPlatform.EPay:
+	switch payment2.ParsePlatform(orderInfo.Method) {
+	case payment2.EPay:
 		// Process EPay payment - generates payment URL for redirect
 		url, err := l.epayPayment(paymentConfig, orderInfo, req.ReturnUrl)
 		if err != nil {
@@ -233,7 +230,7 @@ func (l *PurchaseCheckoutLogic) PurchaseCheckout(req *dto.CheckoutOrderRequest) 
 			Type:        "url", // Client should redirect to URL
 		}
 
-	case paymentPlatform.Stripe:
+	case payment2.Stripe:
 		// Process Stripe payment - creates payment sheet for client-side processing
 		stripePayment, err := l.stripePayment(paymentConfig.Config, orderInfo, "")
 		if err != nil {
@@ -244,7 +241,7 @@ func (l *PurchaseCheckoutLogic) PurchaseCheckout(req *dto.CheckoutOrderRequest) 
 			Stripe: stripePayment,
 		}
 
-	case paymentPlatform.AlipayF2F:
+	case payment2.AlipayF2F:
 		// Process Alipay Face-to-Face payment - generates QR code
 		url, err := l.alipayF2fPayment(paymentConfig, orderInfo)
 		if err != nil {
@@ -256,7 +253,7 @@ func (l *PurchaseCheckoutLogic) PurchaseCheckout(req *dto.CheckoutOrderRequest) 
 			CheckoutUrl: url,
 		}
 
-	case paymentPlatform.Cryptomus:
+	case payment2.Cryptomus:
 		// Process Cryptomus crypto payment - generates hosted invoice URL for redirect
 		url, err := l.cryptomusPayment(paymentConfig, orderInfo, req.ReturnUrl)
 		if err != nil {
@@ -268,7 +265,7 @@ func (l *PurchaseCheckoutLogic) PurchaseCheckout(req *dto.CheckoutOrderRequest) 
 			Type:        "url", // Client should redirect to URL
 		}
 
-	case paymentPlatform.Balance:
+	case payment2.Balance:
 		// Process balance payment - validate user and process payment immediately
 		if orderInfo.UserId == 0 {
 			l.Errorw("[PurchaseCheckout] user not found", logger.Field("userId", orderInfo.UserId))
@@ -379,7 +376,7 @@ func (l *PurchaseCheckoutLogic) alipayF2fPayment(pay *payment.Payment, info *ord
 		l.Errorw("[PurchaseCheckout] queryExchangeRate error", logger.Field("error", err.Error()))
 		return "", errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "queryExchangeRate error: %s", err.Error())
 	}
-	convertAmount, err := paymentPlatform.ParseAmount(epay.FormatMoney(amount))
+	convertAmount, err := payment2.ParseAmount(epay.FormatMoney(amount))
 	if err != nil {
 		return "", errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "invalid Alipay amount: %v", err)
 	}
@@ -658,7 +655,7 @@ func (l *PurchaseCheckoutLogic) queryExchangeRate(to string, src int64) (amount 
 	}
 
 	// Convert currency if system currency differs from target currency
-	result, err := exchangeRate.GetExchangeRete(l.deps.Config.CurrencyUnit, to, l.deps.Config.CurrencyAccessKey, 1)
+	result, err := exchangerate.GetExchangeRate(l.deps.Config.CurrencyUnit, to, l.deps.Config.CurrencyAccessKey, 1)
 	if err != nil {
 		l.Logger.Error("[PurchaseCheckout] QueryExchangeRate error", logger.Field("error", err.Error()))
 		return 0, err

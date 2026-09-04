@@ -9,7 +9,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 	"github.com/perfect-panel/server/pkg/xerr"
 )
 
@@ -21,18 +20,18 @@ import (
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.CloseOrderRequest true "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean
+// @Success 200 {object} httpx.ResponseSuccessBean
 // @Router /v1/public/order/close [post]
 func CloseOrderHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.CloseOrderRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		validateErr := validation.Validate(&req)
 		if validateErr != nil {
-			result.ParamErrorResult(ctx, validateErr)
+			httpx.ParamErrorResult(ctx, validateErr)
 			return
 		}
 
@@ -42,6 +41,6 @@ func CloseOrderHandler(service billing.Service) app.HandlerFunc {
 			// business conflict instead of an opaque internal-server error.
 			err = xerr.NewErrCodeMsg(409, "PAYMENT_STATUS_UNCONFIRMED")
 		}
-		result.HttpResult(ctx, nil, err)
+		httpx.HttpResult(ctx, nil, err)
 	}
 }

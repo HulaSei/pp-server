@@ -3,14 +3,13 @@ package verifycode
 import (
 	"context"
 	"fmt"
-	"github.com/perfect-panel/server/internal/verification"
 
+	"github.com/perfect-panel/server/internal/auth/identifier"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/pkg/authmethod"
-	"github.com/perfect-panel/server/pkg/constant"
+	"github.com/perfect-panel/server/internal/verification"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/phone"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -32,8 +31,8 @@ func newCheckVerificationCodeLogic(ctx context.Context, deps Deps) *CheckVerific
 
 func (l *CheckVerificationCodeLogic) CheckVerificationCode(req *dto.CheckVerificationCodeRequest) (resp *dto.CheckVerificationCodeRespone, err error) {
 	resp = &dto.CheckVerificationCodeRespone{}
-	if req.Method == authmethod.Email {
-		email, validationErr := authmethod.ValidateEmail(
+	if req.Method == identifier.Email {
+		email, validationErr := identifier.ValidateEmail(
 			req.Account,
 			l.deps.Config().DomainSuffixList,
 			constant.ParseVerifyType(req.Type) == constant.Register && l.deps.Config().EnableDomainSuffix,
@@ -50,8 +49,8 @@ func (l *CheckVerificationCodeLogic) CheckVerificationCode(req *dto.CheckVerific
 		}
 		resp.Status = true
 	}
-	if req.Method == authmethod.Mobile {
-		if !phone.CheckPhone(req.Account) {
+	if req.Method == identifier.Mobile {
+		if !identifier.CheckPhone(req.Account) {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.TelephoneError), "Invalid phone number")
 		}
 		cacheKey := fmt.Sprintf("%s:%s:+%s", config.AuthCodeTelephoneCacheKey, constant.ParseVerifyType(req.Type), req.Account)

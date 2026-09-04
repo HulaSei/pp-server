@@ -9,7 +9,7 @@ import (
 
 	tgbot "github.com/go-telegram/bot"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/pkg/nodeMultiplier"
+	"github.com/perfect-panel/server/internal/module/network"
 )
 
 type restartHandler struct{ fn func() error }
@@ -20,7 +20,7 @@ type State struct {
 	config   atomic.Pointer[config.Config]
 
 	telegramBot           atomic.Pointer[tgbot.Bot]
-	nodeMultiplierManager atomic.Pointer[nodeMultiplier.Manager]
+	nodeMultiplierManager atomic.Pointer[network.MultiplierManager]
 	restart               atomic.Pointer[restartHandler]
 	reinitialize          atomic.Pointer[reinitializeHandler]
 }
@@ -57,11 +57,11 @@ func (s *State) TelegramBot() *tgbot.Bot { return s.telegramBot.Load() }
 
 func (s *State) SetTelegramBot(bot *tgbot.Bot) { s.telegramBot.Store(bot) }
 
-func (s *State) NodeMultiplierManager() *nodeMultiplier.Manager {
+func (s *State) NodeMultiplierManager() *network.MultiplierManager {
 	return s.nodeMultiplierManager.Load()
 }
 
-func (s *State) SetNodeMultiplierManager(manager *nodeMultiplier.Manager) {
+func (s *State) SetNodeMultiplierManager(manager *network.MultiplierManager) {
 	s.nodeMultiplierManager.Store(manager)
 }
 

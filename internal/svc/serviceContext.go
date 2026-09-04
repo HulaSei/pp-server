@@ -3,11 +3,11 @@ package svc
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/device"
-	"github.com/perfect-panel/server/pkg/exchangeRate"
-
+	"github.com/hibiken/asynq"
 	"github.com/perfect-panel/server/internal/appstate"
+	"github.com/perfect-panel/server/internal/auth/ratelimit"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/device"
 	"github.com/perfect-panel/server/internal/eventbus"
 	"github.com/perfect-panel/server/internal/module/billing"
 	"github.com/perfect-panel/server/internal/module/identity"
@@ -17,20 +17,17 @@ import (
 	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/module/support"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/asynqx"
-	"github.com/perfect-panel/server/pkg/limit"
+	"github.com/perfect-panel/server/internal/taskqueue"
 	"github.com/perfect-panel/server/pkg/orm"
-
-	"github.com/hibiken/asynq"
 	"github.com/redis/go-redis/v9"
 )
 
 type Application struct {
 	Redis        *redis.Client
 	Runtime      *appstate.State
-	Queue        *asynqx.Client
+	Queue        *taskqueue.Client
 	Inspector    *asynq.Inspector
-	ExchangeRate *exchangeRate.Cache
+	ExchangeRate *billing.CurrencyRateCache
 	GeoIP        *IPLocation
 	Store        repository.Store
 
@@ -46,7 +43,7 @@ type Application struct {
 	EventBus     *eventbus.Bus
 
 	//NodeCache   *cache.NodeCacheClient
-	AuthLimiter   *limit.PeriodLimit
+	AuthLimiter   *ratelimit.PeriodLimit
 	DeviceManager *device.DeviceManager
 }
 
@@ -75,10 +72,10 @@ func NewApplication(c config.Config) *Application {
 	if err != nil {
 		panic(err.Error())
 	}
-	authLimiter := limit.NewPeriodLimit(86400, 15, rds, config.SendCountLimitKeyPrefix, limit.Align())
+	authLimiter := ratelimit.NewPeriodLimit(86400, 15, rds, config.SendCountLimitKeyPrefix, ratelimit.Align())
 	store := NewStore(db, rds)
 	queue := NewAsynqClient(c)
-	rate := exchangeRate.NewCache(0)
+	rate := billing.NewCurrencyRateCache(0)
 	srv := &Application{
 		Redis:        rds,
 		Runtime:      appstate.New(c),

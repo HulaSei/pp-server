@@ -19,7 +19,6 @@ import (
 
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
-	"github.com/perfect-panel/server/pkg/lang"
 	"github.com/perfect-panel/server/pkg/logger"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
 )
@@ -34,7 +33,7 @@ const (
 )
 
 var (
-	agents = make(map[string]lang.PlaceholderType)
+	agents = make(map[string]struct{})
 	lock   sync.Mutex
 	tp     *sdktrace.TracerProvider
 )
@@ -58,7 +57,7 @@ func StartAgent(c Config) {
 		return
 	}
 
-	agents[c.Endpoint] = lang.Placeholder
+	agents[c.Endpoint] = struct{}{}
 }
 
 // StopAgent shuts down the span processors in the order they were registered.

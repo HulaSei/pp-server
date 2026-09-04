@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -32,7 +32,7 @@ func (s *Service) GetSubscription(ctx context.Context, req *dto.GetSubscriptionR
 	list := make([]dto.BillingSubscribeSnapshot, len(data))
 	for i, item := range data {
 		var sub dto.BillingSubscribeSnapshot
-		tool.DeepCopy(&sub, item)
+		mapping.DeepCopy(&sub, item)
 		if item.Discount != "" {
 			var discount []dto.BillingSubscribeDiscount
 			_ = json.Unmarshal([]byte(item.Discount), &discount)

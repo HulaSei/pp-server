@@ -2,11 +2,11 @@ package user
 
 import (
 	"context"
-	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/module/identity"
-	"github.com/perfect-panel/server/pkg/result"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
+	"github.com/perfect-panel/server/pkg/httpx"
 )
 
 var _ dto.GetOAuthMethodsResponse
@@ -17,12 +17,12 @@ var _ dto.GetOAuthMethodsResponse
 // @Tags user
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.GetOAuthMethodsResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.GetOAuthMethodsResponse}
 // @Router /v1/public/user/oauth_methods [get]
 func GetOAuthMethodsHandler(service identity.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 
 		resp, err := service.GetOAuthMethods(c)
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }

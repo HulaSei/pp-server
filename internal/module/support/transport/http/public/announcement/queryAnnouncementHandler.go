@@ -8,7 +8,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // QueryAnnouncementHandler documents Query announcement.
@@ -19,22 +18,22 @@ import (
 // @Produce json
 // @Security BearerAuth
 // @Param request query dto.QueryAnnouncementRequest false "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.QueryAnnouncementResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.QueryAnnouncementResponse}
 // @Router /v1/public/announcement/list [get]
 func QueryAnnouncementHandler(service support.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.QueryAnnouncementRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		validateErr := validation.Validate(&req)
 		if validateErr != nil {
-			result.ParamErrorResult(ctx, validateErr)
+			httpx.ParamErrorResult(ctx, validateErr)
 			return
 		}
 
 		resp, err := service.QueryAnnouncement(c, &req)
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }

@@ -12,10 +12,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/module/billing/internal/settle"
-	"github.com/perfect-panel/server/pkg/constant"
 )
 
 func signCryptomusTestPayload(t *testing.T, apiKey string, fields map[string]interface{}) []byte {

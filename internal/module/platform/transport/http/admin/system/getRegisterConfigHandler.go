@@ -2,11 +2,11 @@ package system
 
 import (
 	"context"
-	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/module/platform"
-	"github.com/perfect-panel/server/pkg/result"
+	dto "github.com/perfect-panel/server/internal/module/platform/contract"
+	"github.com/perfect-panel/server/pkg/httpx"
 )
 
 var _ dto.RegisterConfig
@@ -17,12 +17,12 @@ var _ dto.RegisterConfig
 // @Tags admin
 // @Produce json
 // @Security BearerAuth
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.RegisterConfig}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.RegisterConfig}
 // @Router /v1/admin/system/register_config [get]
 func GetRegisterConfigHandler(service platform.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 
 		resp, err := service.GetRegisterConfig(ctx)
-		result.HttpResult(c, resp, err)
+		httpx.HttpResult(c, resp, err)
 	}
 }

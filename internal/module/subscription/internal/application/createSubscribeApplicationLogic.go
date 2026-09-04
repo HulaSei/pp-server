@@ -3,10 +3,10 @@ package application
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	"github.com/perfect-panel/server/internal/module/platform/entity/client"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -28,7 +28,7 @@ func newCreateSubscribeApplicationLogic(ctx context.Context, deps Deps) *CreateS
 
 func (l *CreateSubscribeApplicationLogic) CreateSubscribeApplication(req *dto.CreateSubscribeApplicationRequest) (resp *dto.SubscribeApplication, err error) {
 	var link client.DownloadLink
-	tool.DeepCopy(&link, req.DownloadLink)
+	mapping.DeepCopy(&link, req.DownloadLink)
 	linkData, err := link.Marshal()
 	if err != nil {
 		l.Errorf("Failed to marshal download link: %v", err)
@@ -54,7 +54,7 @@ func (l *CreateSubscribeApplicationLogic) CreateSubscribeApplication(req *dto.Cr
 	}
 
 	resp = &dto.SubscribeApplication{}
-	tool.DeepCopy(resp, data)
+	mapping.DeepCopy(resp, data)
 	resp.DownloadLink = req.DownloadLink
 
 	return

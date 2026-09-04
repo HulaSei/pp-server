@@ -3,15 +3,13 @@ package profile
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/constant"
-
+	"github.com/perfect-panel/server/internal/auth/password"
+	"github.com/perfect-panel/server/internal/constant"
+	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
-
-	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/pkg/logger"
 )
 
 type UpdateUserPasswordLogic struct {
@@ -32,10 +30,10 @@ func newUpdateUserPasswordLogic(ctx context.Context, deps Deps) *UpdateUserPassw
 func (l *UpdateUserPasswordLogic) UpdateUserPassword(req *dto.UpdateUserPasswordRequest) error {
 	userInfo := l.ctx.Value(constant.CtxKeyUser).(*user.User)
 	//update the password
-	userInfo.Password = tool.EncodePassWord(req.Password)
+	userInfo.Password = password.EncodePassWord(req.Password)
 	// Reset algo to the current password algorithm, otherwise a migrated user
 	// would keep verifying the new hash with the old legacy algorithm.
-	userInfo.Algo = tool.PasswordAlgoArgon2id
+	userInfo.Algo = password.PasswordAlgoArgon2id
 	userInfo.Salt = ""
 	if err := l.deps.Users.Update(l.ctx, userInfo); err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.DatabaseUpdateError), "Update user password error")

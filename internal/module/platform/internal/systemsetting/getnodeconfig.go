@@ -7,7 +7,7 @@ import (
 	"github.com/perfect-panel/server/internal/config"
 	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -34,7 +34,7 @@ func (l *GetNodeConfigLogic) GetNodeConfig() (*dto.NodeConfig, error) {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "GetNodeConfig get server config error: %v", err.Error())
 	}
 	var dbConfig config.NodeDBConfig
-	tool.SystemConfigSliceReflectToStruct(configs, &dbConfig)
+	config.SystemConfigSliceReflectToStruct(configs, &dbConfig)
 	c := &dto.NodeConfig{
 		NodeSecret:             dbConfig.NodeSecret,
 		NodePullInterval:       dbConfig.NodePullInterval,
@@ -55,7 +55,7 @@ func (l *GetNodeConfigLogic) GetNodeConfig() (*dto.NodeConfig, error) {
 	if dbConfig.Block != "" {
 		var block []string
 		_ = json.Unmarshal([]byte(dbConfig.Block), &block)
-		c.Block = tool.RemoveDuplicateElements(block...)
+		c.Block = slicesx.RemoveDuplicateElements(block...)
 	}
 	if dbConfig.Outbound != "" {
 		var outbound []dto.PlatformNodeOutboundSnapshot

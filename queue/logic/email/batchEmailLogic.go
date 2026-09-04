@@ -8,9 +8,9 @@ import (
 	"strconv"
 
 	"github.com/hibiken/asynq"
+	"github.com/perfect-panel/server/internal/mail"
 	taskEntity "github.com/perfect-panel/server/internal/module/platform/entity/task"
 	emailworker "github.com/perfect-panel/server/internal/worker/email"
-	"github.com/perfect-panel/server/pkg/email"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
 )
@@ -70,7 +70,7 @@ func (l *BatchEmailLogic) ProcessTask(ctx context.Context, task *asynq.Task) err
 	if l.deps.Email == nil || l.deps.SiteName == nil {
 		return l.handleFailure(ctx, taskID, errors.New("batch email runtime configuration is unavailable"))
 	}
-	sender, err := email.NewSender(l.deps.Email().Platform, l.deps.Email().PlatformConfig, l.deps.SiteName())
+	sender, err := mail.NewSender(l.deps.Email().Platform, l.deps.Email().PlatformConfig, l.deps.SiteName())
 	if err != nil {
 		logger.WithContext(ctx).Error("[BatchEmailLogic] NewSender failed", logger.Field("error", err.Error()))
 		return l.handleFailure(ctx, taskID, err)

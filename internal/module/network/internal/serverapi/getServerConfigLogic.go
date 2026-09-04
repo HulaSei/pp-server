@@ -8,8 +8,8 @@ import (
 
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
+	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 )
 
@@ -41,7 +41,7 @@ func (l *GetServerConfigLogic) GetServerConfig(req *dto.GetServerConfigRequest) 
 	cache, err := l.deps.Redis.Get(l.ctx, cacheKey).Result()
 	if err == nil {
 		if cache != "" {
-			etag := tool.GenerateETag([]byte(cache))
+			etag := httpx.GenerateETag([]byte(cache))
 			//  Check If-None-Match header
 			match := l.request.IfNoneMatch
 			if match == etag {
@@ -107,7 +107,7 @@ func (l *GetServerConfigLogic) GetServerConfig(req *dto.GetServerConfigRequest) 
 		l.Errorw("[GetServerConfig] json marshal error", logger.Field("error", err.Error()))
 		return nil, err
 	}
-	etag := tool.GenerateETag(c)
+	etag := httpx.GenerateETag(c)
 	l.response.SetHeader("ETag", etag)
 	if err = l.deps.Store.Node().SetServerCache(l.ctx, req.ServerId, cacheKey, c, generation); err != nil {
 		l.Errorw("[GetServerConfig] cache set error", logger.Field("error", err.Error()))

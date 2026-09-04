@@ -3,8 +3,8 @@ package tool
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/platform/contract"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 

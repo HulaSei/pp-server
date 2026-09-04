@@ -8,14 +8,14 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	paymentModel "github.com/perfect-panel/server/internal/module/billing/entity/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/stripe"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/payment"
-	"github.com/perfect-panel/server/pkg/payment/stripe"
 	"github.com/perfect-panel/server/pkg/random"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -100,7 +100,7 @@ func (s *Service) Create(ctx context.Context, req *dto.CreatePaymentMethodReques
 	}
 
 	resp := &dto.PaymentConfig{}
-	tool.DeepCopy(resp, paymentMethod)
+	mapping.DeepCopy(resp, paymentMethod)
 	var configMap map[string]interface{}
 	_ = json.Unmarshal([]byte(paymentMethod.Config), &configMap)
 	resp.Config = configMap
@@ -146,14 +146,14 @@ func (s *Service) Update(ctx context.Context, req *dto.UpdatePaymentMethodReques
 			}
 		}
 	}
-	tool.DeepCopy(method, req)
+	mapping.DeepCopy(method, req)
 	method.Config = config
 	if err := s.payments.Update(ctx, method); err != nil {
 		log.Errorw("update payment method error", logger.Field("id", req.Id), logger.Field("error", err.Error()))
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseUpdateError), "update payment method error: %s", err.Error())
 	}
 	resp := &dto.PaymentConfig{}
-	tool.DeepCopy(resp, method)
+	mapping.DeepCopy(resp, method)
 	var configMap map[string]interface{}
 	_ = json.Unmarshal([]byte(method.Config), &configMap)
 	resp.Config = configMap

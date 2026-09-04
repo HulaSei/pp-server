@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/perfect-panel/server/internal/mail"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/pkg/email"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
@@ -27,7 +27,7 @@ func newTestEmailSendLogic(ctx context.Context, deps Deps) *TestEmailSendLogic {
 }
 
 func (l *TestEmailSendLogic) TestEmailSend(req *dto.TestEmailSendRequest) error {
-	client, err := email.NewSender(l.deps.Config().EmailPlatform, l.deps.Config().EmailPlatformConfig, l.deps.Config().SiteName)
+	client, err := mail.NewSender(l.deps.Config().EmailPlatform, l.deps.Config().EmailPlatformConfig, l.deps.Config().SiteName)
 	if err != nil {
 		l.Errorw("new email sender err", logger.Field("error", err.Error()))
 		return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "new email sender err: %v", err.Error())

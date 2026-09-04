@@ -4,8 +4,8 @@ import (
 	"context"
 	"reflect"
 
+	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/tool"
 )
 
 type configFieldValue struct {
@@ -15,7 +15,7 @@ type configFieldValue struct {
 }
 
 func convertedConfigFields(data any) []configFieldValue {
-	return configFields(data, tool.ConvertValueToString)
+	return configFields(data, config.ConvertValueToString)
 }
 
 func stringConfigFields(data any) []configFieldValue {

@@ -17,7 +17,7 @@ import (
 // @Produce json,application/protobuf
 // @Security NodeSecret
 // @Param request body dto.OnlineUsersRequest true "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean
+// @Success 200 {object} httpx.ResponseSuccessBean
 // @Router /v1/server/online [post]
 func PushOnlineUsersHandler(service network.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {

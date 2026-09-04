@@ -8,13 +8,12 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/billing"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
-
-	"github.com/perfect-panel/server/pkg/constant"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment"
+	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/payment"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 const (
@@ -32,7 +31,7 @@ var errNotifyPayloadTooLarge = errors.New("http: request body too large")
 // @Produce json
 // @Param platform path string true "platform"
 // @Param token path string true "token"
-// @Success 200 {object} result.ResponseSuccessBean
+// @Success 200 {object} httpx.ResponseSuccessBean
 // @Router /v1/notify/{platform}/{token} [delete]
 // @Router /v1/notify/{platform}/{token} [get]
 // @Router /v1/notify/{platform}/{token} [head]
@@ -45,7 +44,7 @@ func PaymentNotifyHandler(service billing.Service) app.HandlerFunc {
 		platform, ok := c.Value(constant.CtxKeyPlatform).(string)
 		if !ok {
 			logger.WithContext(c).Errorf("platform not found")
-			result.HttpResult(ctx, nil, fmt.Errorf("platform not found"))
+			httpx.HttpResult(ctx, nil, fmt.Errorf("platform not found"))
 			return
 		}
 
@@ -70,18 +69,18 @@ func PaymentNotifyHandler(service billing.Service) app.HandlerFunc {
 		case payment.Stripe:
 			payload, err := stripePayload(ctx.Request.Body())
 			if err != nil {
-				result.HttpResult(ctx, nil, err)
+				httpx.HttpResult(ctx, nil, err)
 				return
 			}
 			if err := service.StripeNotify(c, payload, string(ctx.GetHeader("Stripe-Signature"))); err != nil {
-				result.HttpResult(ctx, nil, err)
+				httpx.HttpResult(ctx, nil, err)
 				return
 			}
-			result.HttpResult(ctx, nil, nil)
+			httpx.HttpResult(ctx, nil, nil)
 
 		case payment.AlipayF2F:
 			if err := service.AlipayNotify(c, nativeFormValues(ctx)); err != nil {
-				result.HttpResult(ctx, nil, err)
+				httpx.HttpResult(ctx, nil, err)
 				return
 			}
 			// Return success to alipay
@@ -90,7 +89,7 @@ func PaymentNotifyHandler(service billing.Service) app.HandlerFunc {
 		case payment.Cryptomus:
 			payload, err := cryptomusPayload(ctx.Request.Body())
 			if err != nil {
-				result.HttpResult(ctx, nil, err)
+				httpx.HttpResult(ctx, nil, err)
 				return
 			}
 			if err := service.CryptomusNotify(c, payload); err != nil {

@@ -8,7 +8,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // QueryPurchaseOrderHandler documents Query Purchase Order.
@@ -18,22 +17,22 @@ import (
 // @Accept json
 // @Produce json
 // @Param request query dto.QueryPurchaseOrderRequest false "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.QueryPurchaseOrderResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.QueryPurchaseOrderResponse}
 // @Router /v1/public/portal/order/status [get]
 func QueryPurchaseOrderHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.QueryPurchaseOrderRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		validateErr := validation.Validate(&req)
 		if validateErr != nil {
-			result.ParamErrorResult(ctx, validateErr)
+			httpx.ParamErrorResult(ctx, validateErr)
 			return
 		}
 
 		resp, err := service.QueryPurchaseOrder(c, &req)
-		result.HttpResult(ctx, resp, err)
+		httpx.HttpResult(ctx, resp, err)
 	}
 }

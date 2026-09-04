@@ -3,14 +3,13 @@ package adminuser
 import (
 	"context"
 
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/xerr"
-	"github.com/pkg/errors"
-
+	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
+	"github.com/perfect-panel/server/pkg/xerr"
+	"github.com/pkg/errors"
 )
 
 type CurrentUserLogic struct {
@@ -36,7 +35,7 @@ func (l *CurrentUserLogic) CurrentUser() (*dto.User, error) {
 	}
 
 	l.Logger.Infow("current user", logger.Field("user_id", u.Id))
-	tool.DeepCopy(resp, u)
+	mapping.DeepCopy(resp, u)
 	// The context user is the middleware's cached identity row; wallet
 	// values come from the billing-owned table, and a read failure fails
 	// the request rather than rendering zero balances.

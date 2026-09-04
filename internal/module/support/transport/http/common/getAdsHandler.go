@@ -8,7 +8,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // GetAdsHandler documents Get Ads.
@@ -18,22 +17,22 @@ import (
 // @Accept json
 // @Produce json
 // @Param request query dto.GetAdsRequest false "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean{data=dto.GetAdsResponse}
+// @Success 200 {object} httpx.ResponseSuccessBean{data=dto.GetAdsResponse}
 // @Router /v1/common/ads [get]
 func GetAdsHandler(service support.Service) app.HandlerFunc {
 	return func(ctx context.Context, c *app.RequestContext) {
 		var req dto.GetAdsRequest
 		if err := httpx.ShouldBind(c, &req); err != nil {
-			result.ParamErrorResult(c, err)
+			httpx.ParamErrorResult(c, err)
 			return
 		}
 		validateErr := validation.Validate(&req)
 		if validateErr != nil {
-			result.ParamErrorResult(c, validateErr)
+			httpx.ParamErrorResult(c, validateErr)
 			return
 		}
 
 		resp, err := service.GetPublicAds(ctx, &req)
-		result.HttpResult(c, resp, err)
+		httpx.HttpResult(c, resp, err)
 	}
 }

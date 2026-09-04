@@ -17,7 +17,7 @@ import (
 // @Produce json,application/protobuf
 // @Security NodeSecret
 // @Param request body dto.ServerPushUserTrafficRequest true "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean
+// @Success 200 {object} httpx.ResponseSuccessBean
 // @Router /v1/server/push [post]
 func ServerPushUserTrafficHandler(service network.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {

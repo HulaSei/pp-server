@@ -8,8 +8,8 @@ import (
 
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	paymentModel "github.com/perfect-panel/server/internal/module/billing/entity/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/payment"
 	"gorm.io/gorm"
 )
 

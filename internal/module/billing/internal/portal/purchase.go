@@ -3,18 +3,20 @@ package portal
 import (
 	"context"
 	"encoding/json"
+	"slices"
 
+	"github.com/perfect-panel/server/internal/auth/password"
+	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment"
 	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
-	"github.com/perfect-panel/server/pkg/constant"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/payment"
 	"github.com/perfect-panel/server/pkg/random"
+	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -76,8 +78,8 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PortalPurchaseRequest) 
 		if couponInfo.Count != 0 && couponInfo.Count <= couponInfo.UsedCount {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.CouponInsufficientUsage), "coupon used")
 		}
-		couponSub := tool.StringToInt64Slice(couponInfo.Subscribe)
-		if len(couponSub) > 0 && !tool.Contains(couponSub, req.SubscribeId) {
+		couponSub := slicesx.StringToInt64Slice(couponInfo.Subscribe)
+		if len(couponSub) > 0 && !slices.Contains(couponSub, req.SubscribeId) {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.CouponNotApplicable), "coupon not match")
 		}
 
@@ -111,7 +113,7 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PortalPurchaseRequest) 
 		checkoutToken = random.KeyNew(32, 1)
 	}
 	orderInfo := &order.Order{
-		OrderNo:                tool.GenerateTradeNo(),
+		OrderNo:                order.GenerateTradeNo(),
 		Type:                   1,
 		Quantity:               req.Quantity,
 		Price:                  price,
@@ -128,7 +130,7 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PortalPurchaseRequest) 
 		SubscribeId:            req.SubscribeId,
 		GuestAuthType:          req.AuthType,
 		GuestIdentifier:        req.Identifier,
-		GuestPasswordHash:      tool.EncodePassWord(req.Password),
+		GuestPasswordHash:      password.EncodePassWord(req.Password),
 		GuestInviteCode:        req.InviteCode,
 		GuestCheckoutTokenHash: constant.CheckoutTokenHash(checkoutToken),
 	}

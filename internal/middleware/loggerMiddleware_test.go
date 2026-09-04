@@ -8,9 +8,9 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
+	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/requestmeta"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 func TestLoggerMiddlewareOmitsRequestAndResponseData(t *testing.T) {
@@ -43,7 +43,7 @@ func TestLoggerMiddlewareOmitsRequestAndResponseData(t *testing.T) {
 	ctx.Request.SetBodyString(`{"password":"` + requestSecret + `"}`)
 	ctx.Response.SetStatusCode(consts.StatusBadRequest)
 	ctx.Response.SetBodyString(`{"token":"` + responseSecret + `"}`)
-	result.ParamErrorResult(ctx, &sensitiveValidationError{value: parameterValue})
+	httpx.ParamErrorResult(ctx, &sensitiveValidationError{value: parameterValue})
 
 	LoggerMiddleware(func(metadata requestmeta.Metadata) requestmeta.Metadata {
 		metadata.IPCountryCode = "SG"

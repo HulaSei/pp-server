@@ -8,7 +8,6 @@ import (
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
-	"github.com/perfect-panel/server/pkg/result"
 )
 
 // ReviewWithdrawalHandler documents the pending withdrawal transition.
@@ -19,20 +18,20 @@ import (
 // @Produce json
 // @Security BearerAuth
 // @Param request body dto.ReviewWithdrawalRequest true "Request parameters"
-// @Success 200 {object} result.ResponseSuccessBean
+// @Success 200 {object} httpx.ResponseSuccessBean
 // @Router /v1/admin/withdrawal/status [put]
 func ReviewWithdrawalHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
 		var req dto.ReviewWithdrawalRequest
 		if err := httpx.ShouldBind(ctx, &req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		if err := validation.Validate(&req); err != nil {
-			result.ParamErrorResult(ctx, err)
+			httpx.ParamErrorResult(ctx, err)
 			return
 		}
 		err := service.ReviewWithdrawal(c, &req)
-		result.HttpResult(ctx, nil, err)
+		httpx.HttpResult(ctx, nil, err)
 	}
 }

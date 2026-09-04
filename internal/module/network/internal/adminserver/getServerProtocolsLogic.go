@@ -3,9 +3,9 @@ package adminserver
 import (
 	"context"
 
+	"github.com/perfect-panel/server/internal/mapping"
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"github.com/perfect-panel/server/pkg/logger"
-	"github.com/perfect-panel/server/pkg/tool"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 )
@@ -40,7 +40,7 @@ func (l *GetServerProtocolsLogic) GetServerProtocols(req *dto.GetServerProtocols
 		l.Errorf("[FilterServerList] UnmarshalProtocols Error: %s", err.Error())
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "[FilterServerList] UnmarshalProtocols Error: %s", err.Error())
 	}
-	tool.DeepCopy(&protocols, dst)
+	mapping.DeepCopy(&protocols, dst)
 
 	return &dto.GetServerProtocolsResponse{
 		Protocols: protocols,

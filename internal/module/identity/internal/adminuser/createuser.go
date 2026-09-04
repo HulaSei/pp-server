@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/perfect-panel/server/internal/auth/password"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -32,15 +31,15 @@ func newCreateUserLogic(ctx context.Context, deps Deps) *CreateUserLogic {
 func (l *CreateUserLogic) CreateUser(req *dto.CreateUserRequest) error {
 	if req.ReferCode == "" {
 		// timestamp replaces user id
-		req.ReferCode = uuidx.UserInviteCode(timeutil.Now().UnixMicro())
+		req.ReferCode = user.GenerateInviteCode(timeutil.Now().UnixMicro())
 	}
 	if req.Password == "" {
 		req.Password = req.Email
 	}
-	pwd := tool.EncodePassWord(req.Password)
+	pwd := password.EncodePassWord(req.Password)
 	newUser := &user.User{
 		Password:           pwd,
-		Algo:               tool.PasswordAlgoArgon2id,
+		Algo:               password.PasswordAlgoArgon2id,
 		ReferralPercentage: req.ReferralPercentage,
 		OnlyFirstPurchase:  &req.OnlyFirstPurchase,
 		ReferCode:          req.ReferCode,

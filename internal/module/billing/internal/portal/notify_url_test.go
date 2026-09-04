@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"github.com/perfect-panel/server/internal/constant"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
-	"github.com/perfect-panel/server/pkg/constant"
 )
 
 func TestPaymentPublicBaseURL(t *testing.T) {
