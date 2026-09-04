@@ -14,6 +14,7 @@ import (
 	"github.com/perfect-panel/server/internal/repository"
 	pkgaes "github.com/perfect-panel/server/pkg/aes"
 	"github.com/perfect-panel/server/pkg/constant"
+	"github.com/perfect-panel/server/pkg/deviceauth"
 	"github.com/perfect-panel/server/pkg/xerr"
 )
 
@@ -49,7 +50,7 @@ func TestDeviceMiddleware_decryptsRequestAndEncryptsResponse_whenDeviceLogin(t *
 	if err != nil {
 		t.Fatalf("encrypt body: %v", err)
 	}
-	requestBody, err := json.Marshal(map[string]string{"data": bodyData, "time": bodyTime})
+	requestBody, err := json.Marshal(map[string]string{"data": bodyData, "time": bodyTime, "sign": deviceauth.Sign(secret, "POST", "/device", "body", bodyData, bodyTime)})
 	if err != nil {
 		t.Fatalf("marshal request body: %v", err)
 	}
@@ -57,7 +58,7 @@ func TestDeviceMiddleware_decryptsRequestAndEncryptsResponse_whenDeviceLogin(t *
 	engine := server.Default()
 	engine.POST("/device", DeviceMiddleware(func() appconfig.DeviceConfig {
 		return appconfig.DeviceConfig{Enable: true, EnableSecurity: true, SecuritySecret: secret}
-	}), func(requestCtx context.Context, ctx *app.RequestContext) {
+	}, deviceReplayClient(t)), func(requestCtx context.Context, ctx *app.RequestContext) {
 		if loginType, _ := requestCtx.Value(constant.LoginType).(string); loginType != "device" {
 			t.Errorf("expected derived request context login type %q, got %q", "device", loginType)
 		}
@@ -74,7 +75,7 @@ func TestDeviceMiddleware_decryptsRequestAndEncryptsResponse_whenDeviceLogin(t *
 		ctx.JSON(http.StatusCreated, map[string]map[string]string{"data": {"status": "ok"}})
 	})
 
-	values := url.Values{"data": {queryData}, "time": {queryTime}}
+	values := url.Values{"data": {queryData}, "time": {queryTime}, "sign": {deviceauth.Sign(secret, "POST", "/device", "query", queryData, queryTime)}}
 	ctx := requestContext(engine, http.MethodPost, "/device?"+values.Encode())
 	ctx.Request.Header.Set("Login-Type", "device")
 	ctx.Request.SetBody(requestBody)
@@ -113,7 +114,7 @@ func TestDeviceMiddleware_rejectsPlaintextDeviceLoginRoute_withoutLoginTypeHeade
 	downstreamRan := false
 	engine.POST("/v1/auth/login/device", DeviceMiddleware(func() appconfig.DeviceConfig {
 		return appconfig.DeviceConfig{Enable: true, EnableSecurity: true, SecuritySecret: secret}
-	}), func(_ context.Context, ctx *app.RequestContext) {
+	}, deviceReplayClient(t)), func(_ context.Context, ctx *app.RequestContext) {
 		downstreamRan = true
 		ctx.String(http.StatusOK, "unreachable")
 	})
@@ -132,7 +133,7 @@ func TestDeviceMiddleware_allowsUnrelatedPlaintextRoute_whenSecurityEnabled(t *t
 	engine := server.Default()
 	engine.POST("/v1/auth/login", DeviceMiddleware(func() appconfig.DeviceConfig {
 		return appconfig.DeviceConfig{Enable: true, EnableSecurity: true, SecuritySecret: "device-secret"}
-	}), func(_ context.Context, ctx *app.RequestContext) {
+	}, deviceReplayClient(t)), func(_ context.Context, ctx *app.RequestContext) {
 		ctx.String(http.StatusOK, string(ctx.Request.Body()))
 	})
 	ctx := requestContext(engine, http.MethodPost, "/v1/auth/login")
@@ -155,16 +156,18 @@ func TestDevicePayloadHelpers_roundTripRequestAndResponse_whenPayloadIsEncrypted
 	if err != nil {
 		t.Fatalf("encrypt device request: %v", err)
 	}
-	requestBody, err := json.Marshal(map[string]string{"data": ciphertext, "time": iv})
+	requestBody, err := json.Marshal(map[string]string{"data": ciphertext, "time": iv, "sign": deviceauth.Sign(secret, "POST", "/device", "body", ciphertext, iv)})
 	if err != nil {
 		t.Fatalf("marshal encrypted request: %v", err)
 	}
 	requestCtx := app.NewContext(0)
+	requestCtx.Request.Header.SetMethod("POST")
+	requestCtx.Request.SetRequestURI("/device")
 	requestCtx.Request.SetBody(requestBody)
 
 	// When
-	if !DecryptDeviceRequest(requestCtx, secret) {
-		t.Fatal("expected encrypted request to decrypt")
+	if err := DecryptDeviceRequest(context.Background(), requestCtx, secret, deviceReplayClient(t)); err != nil {
+		t.Fatalf("expected encrypted request to decrypt: %v", err)
 	}
 	requestCtx.Response.SetBodyString(`{"data":{"status":"ok"}}`)
 	EncryptDeviceResponse(requestCtx, secret)

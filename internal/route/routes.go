@@ -66,7 +66,10 @@ func (deps Dependencies) optionalAuthMiddleware() app.HandlerFunc {
 }
 
 func (deps Dependencies) deviceMiddleware() app.HandlerFunc {
-	return middleware.DeviceMiddleware(func() config.DeviceConfig { return deps.runtimeConfig().Device })
+	if deps.Redis == nil {
+		return middleware.DeviceMiddleware(func() config.DeviceConfig { return deps.runtimeConfig().Device }, nil)
+	}
+	return middleware.DeviceMiddleware(func() config.DeviceConfig { return deps.runtimeConfig().Device }, deps.Redis)
 }
 
 func RegisterHandlers(router *server.Hertz, deps Dependencies) {

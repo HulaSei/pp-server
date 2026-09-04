@@ -43,4 +43,5 @@ type Deps struct {
 	// NotifyUnbind sends the best-effort Telegram unbind notice through the
 	// runtime-configured bot.
 	NotifyUnbind func(userID, chatID int64) error
+	KickDevice   func(userID int64, identifier string)
 }

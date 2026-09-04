@@ -31,8 +31,7 @@ func NewDeviceManager(srv *Application) *device.DeviceManager {
 		}
 
 		//更新设备状态为离线
-		oneDevice.Online = false
-		err = srv.Store.UserDevice().UpdateDevice(ctx, oneDevice)
+		err = srv.Store.UserDevice().SetDeviceOnline(ctx, oneDevice.Id, false)
 		if err != nil {
 			logger.Errorw("[DeviceManager] failed to update device", logger.Field("error", err.Error()), logger.Field("device_id", deviceID))
 		}
@@ -74,8 +73,7 @@ func NewDeviceManager(srv *Application) *device.DeviceManager {
 			}
 			return
 		}
-		oneDevice.Online = true
-		err = srv.Store.UserDevice().UpdateDevice(ctx, oneDevice)
+		err = srv.Store.UserDevice().SetDeviceOnline(ctx, oneDevice.Id, true)
 		if err != nil {
 			logger.Errorw("[DeviceManager] failed to update device", logger.Field("error", err.Error()), logger.Field("device_id", deviceID))
 			return

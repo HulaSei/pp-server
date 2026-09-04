@@ -2,20 +2,14 @@ package auth
 
 import (
 	"context"
-	"fmt"
-	"time"
 
-	"github.com/perfect-panel/server/internal/config"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/pkg/authmethod"
-	"github.com/perfect-panel/server/pkg/constant"
-	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/tool"
-	"github.com/perfect-panel/server/pkg/uuidx"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
@@ -99,39 +93,15 @@ func (l *UserLoginLogic) UserLogin(req *dto.UserLoginRequest) (resp *dto.LoginRe
 	}
 	upgradePasswordAfterLogin(l.ctx, l.deps.Store.User(), l.Logger, userInfo, req.Password)
 
-	// Bind device to user if identifier is provided
-	if req.Identifier != "" && l.deps.DeviceBinder != nil {
-		if err := l.deps.DeviceBinder.BindDeviceToUser(req.Identifier, req.IP, req.UserAgent, userInfo.Id); err != nil {
-			l.Errorw("failed to bind device to user",
-				logger.Field("user_id", userInfo.Id),
-				logger.Field("identifier", req.Identifier),
-				logger.Field("error", err.Error()),
-			)
-			// Don't fail login if device binding fails, just log the error
-		}
-	}
-	if l.ctx.Value(constant.LoginType) != nil {
-		req.LoginType = l.ctx.Value(constant.LoginType).(string)
-	}
-	// Generate session id
-	sessionId := uuidx.NewUUID().String()
-	// Generate token
-	token, err := jwt.NewJwtToken(
-		l.deps.Config.JWTAccessSecret,
-		timeutil.Now().Unix(),
-		l.deps.Config.JWTAccessExpire,
-		jwt.WithOption("UserId", userInfo.Id),
-		jwt.WithOption("SessionId", sessionId),
-		jwt.WithOption("LoginType", req.LoginType),
-	)
+	device, err := bindLoginDevice(l.deps.DeviceBinder, req.Identifier, req.IP, req.UserAgent, userInfo.Id)
 	if err != nil {
-		l.Logger.Error("[UserLogin] token generate error", logger.Field("error", err.Error()))
-		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "token generate error: %v", err.Error())
+		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "bind device: %v", err)
 	}
-	sessionIdCacheKey := fmt.Sprintf("%v:%v", config.SessionIdKey, sessionId)
-	if err = l.deps.Redis.Set(l.ctx, sessionIdCacheKey, userInfo.Id, time.Duration(l.deps.Config.JWTAccessExpire)*time.Second).Err(); err != nil {
-		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "set session id error: %v", err.Error())
+	session, err := issueLoginSession(l.ctx, l.deps.Redis, l.deps.Config.JWTAccessSecret, l.deps.Config.JWTAccessExpire, userInfo.Id, req.LoginType, device)
+	if err != nil {
+		return nil, err
 	}
+	token := session.Token
 	loginStatus = true
 	return &dto.LoginResponse{
 		Token: token,

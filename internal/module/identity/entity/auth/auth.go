@@ -349,7 +349,9 @@ func (l *TwilioConfig) Unmarshal(data string) error {
 }
 
 type DeviceConfig struct {
-	ShowAds        bool   `json:"show_ads"`
+	ShowAds bool `json:"show_ads"`
+	// OnlyRealDevice is the legacy flag requiring authenticated device transport.
+	// It is not hardware or application attestation.
 	OnlyRealDevice bool   `json:"only_real_device"`
 	EnableSecurity bool   `json:"enable_security"`
 	SecuritySecret string `json:"security_secret"`

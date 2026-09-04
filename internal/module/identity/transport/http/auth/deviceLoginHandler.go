@@ -14,6 +14,7 @@ import (
 // DeviceLoginHandler documents Device Login.
 //
 // @Summary Device Login
+// @Description When device security is enabled, requests and response data use a signed data/time/sign envelope. Each request needs a fresh nonce; see docs/device-authentication.md. The User-Agent is read from the HTTP header.
 // @Tags common
 // @Accept json
 // @Produce json
@@ -27,13 +28,13 @@ func DeviceLoginHandler(service identity.Service) app.HandlerFunc {
 			result.ParamErrorResult(c, err)
 			return
 		}
+		req.IP = c.ClientIP()
+		req.UserAgent = string(c.UserAgent())
 		validateErr := validation.Validate(&req)
 		if validateErr != nil {
 			result.ParamErrorResult(c, validateErr)
 			return
 		}
-		req.IP = c.ClientIP()
-
 		resp, err := service.DeviceLogin(ctx, &req)
 		result.HttpResult(c, resp, err)
 	}

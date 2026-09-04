@@ -2,6 +2,7 @@ package adminuser
 
 import (
 	"context"
+	"strings"
 
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -25,6 +26,9 @@ func newUpdateUserAuthMethodLogic(ctx context.Context, deps Deps) *UpdateUserAut
 }
 
 func (l *UpdateUserAuthMethodLogic) UpdateUserAuthMethod(req *dto.UpdateUserAuthMethodRequest) error {
+	if strings.EqualFold(strings.TrimSpace(req.AuthType), "device") {
+		return errors.Wrap(xerr.NewErrCode(xerr.InvalidParams), "use device management for device identities")
+	}
 	method, err := l.deps.UserAuths.FindUserAuthMethodByPlatform(l.ctx, req.UserId, req.AuthType)
 	if err != nil {
 		l.Errorw("Get user auth method error", logger.Field("error", err.Error()), logger.Field("userId", req.UserId), logger.Field("authType", req.AuthType))

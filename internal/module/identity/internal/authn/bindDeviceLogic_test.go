@@ -36,7 +36,7 @@ func TestBindDeviceUsesInjectedStore(t *testing.T) {
 		Store: bindDeviceTestStore{devices: devices},
 	})
 
-	err := logic.BindDeviceToUser("device-1", "192.0.2.1", "test-agent", 1)
+	_, err := logic.BindDeviceToUser("device-1", "192.0.2.1", "test-agent", 1)
 	if err == nil {
 		t.Fatal("BindDeviceToUser error = nil, want lookup error")
 	}

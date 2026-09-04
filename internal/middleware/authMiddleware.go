@@ -9,6 +9,7 @@ import (
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/constant"
+	"github.com/perfect-panel/server/pkg/devicesession"
 	"github.com/perfect-panel/server/pkg/jwt"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/requestmeta"
@@ -96,6 +97,20 @@ func AuthenticateRequest(ctx context.Context, deps AuthDeps, token string, path 
 	if value != fmt.Sprintf("%v", userId) {
 		logger.WithContext(ctx).Debug("[AuthMiddleware] Invalid Access", logger.Field("userId", userId), logger.Field("sessionId", sessionId))
 		return ctx, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
+	}
+	deviceID, epoch, err := devicesession.Binding(claims)
+	if err != nil {
+		return ctx, errors.Wrap(xerr.NewErrCode(xerr.InvalidAccess), "device session must be renewed")
+	}
+	if deviceID != 0 {
+		device, err := deps.Store.UserDevice().FindDeviceForAuth(ctx, deviceID)
+		if err != nil || device == nil || !device.Enabled || device.UserId != userId {
+			return ctx, errors.Wrap(xerr.NewErrCode(xerr.InvalidAccess), "device is unavailable")
+		}
+		currentEpoch, err := devicesession.Epoch(ctx, deps.Redis, deviceID)
+		if err != nil || epoch != currentEpoch {
+			return ctx, errors.Wrap(xerr.NewErrCode(xerr.InvalidAccess), "device session revoked")
+		}
 	}
 
 	userInfo, err := deps.Store.User().FindOne(ctx, userId)

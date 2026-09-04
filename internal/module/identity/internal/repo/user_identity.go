@@ -751,6 +751,42 @@ func (m *UserRepo) FindUserAuthMethodByUserId(ctx context.Context, method string
 
 // --- device ---
 
+func (m *UserRepo) FindDeviceForAuth(ctx context.Context, id int64) (*user.Device, error) {
+	var device user.Device
+	err := m.QueryNoCacheCtx(ctx, &device, func(conn *gorm.DB, v interface{}) error {
+		return conn.Model(&user.Device{}).Select("id", "user_id", "identifier", "enabled").Where("id = ?", id).First(v).Error
+	})
+	return &device, err
+}
+
+func (m *UserRepo) TouchDevice(ctx context.Context, id, userID int64, ip, userAgent string) (bool, error) {
+	device, err := m.FindDeviceForAuth(ctx, id)
+	if err != nil {
+		return false, err
+	}
+	var changed bool
+	err = m.ExecCtx(ctx, func(conn *gorm.DB) error {
+		result := conn.Model(&user.Device{}).Where("id = ? AND user_id = ? AND enabled = ?", id, userID, true).
+			Updates(map[string]interface{}{"ip": ip, "user_agent": userAgent})
+		changed = result.RowsAffected == 1
+		return result.Error
+	}, device.GetCacheKeys()...)
+	if err == nil && !changed {
+		// MySQL may report zero affected rows when all metadata (including
+		// a second-resolution updated_at) is unchanged. Distinguish that from
+		// a deleted, disabled, or reassigned binding without trusting cache.
+		current, queryErr := m.FindDeviceForAuth(ctx, id)
+		if errors.Is(queryErr, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		if queryErr != nil {
+			return false, queryErr
+		}
+		changed = current.UserId == userID && current.Enabled
+	}
+	return changed, err
+}
+
 func (m *UserRepo) FindOneDevice(ctx context.Context, id int64) (*user.Device, error) {
 	deviceIdKey := fmt.Sprintf("%s%v", cacheUserDeviceIdPrefix, id)
 	var resp user.Device
@@ -800,18 +836,29 @@ func (m *UserRepo) QueryDeviceList(ctx context.Context, userId int64) ([]*user.D
 	return list, total, err
 }
 
-func (m *UserRepo) UpdateDevice(ctx context.Context, data *user.Device, tx ...*gorm.DB) error {
-	old, err := m.FindOneDevice(ctx, data.Id)
+func (m *UserRepo) SetDeviceEnabled(ctx context.Context, id int64, enabled bool) error {
+	return m.updateDeviceField(ctx, id, "enabled", enabled)
+}
+
+func (m *UserRepo) SetDeviceOnline(ctx context.Context, id int64, online bool) error {
+	return m.updateDeviceField(ctx, id, "online", online)
+}
+
+func (m *UserRepo) updateDeviceField(ctx context.Context, id int64, field string, value bool) error {
+	old, err := m.FindDeviceForAuth(ctx, id)
 	if err != nil {
 		return err
 	}
-	err = m.ExecCtx(ctx, func(conn *gorm.DB) error {
-		if len(tx) > 0 {
-			conn = tx[0]
+	return m.ExecCtx(ctx, func(conn *gorm.DB) error {
+		query := conn.Model(&user.Device{}).Where("id = ?", id)
+		if field == "enabled" && !value {
+			return query.Updates(map[string]interface{}{"enabled": false, "online": false}).Error
 		}
-		return conn.Save(data).Error
+		if field == "online" && value {
+			query = query.Where("enabled = ?", true)
+		}
+		return query.Update(field, value).Error
 	}, old.GetCacheKeys()...)
-	return err
 }
 
 func (m *UserRepo) DeleteDevice(ctx context.Context, id int64, tx ...*gorm.DB) error {

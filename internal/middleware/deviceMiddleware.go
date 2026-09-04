@@ -1,129 +1,156 @@
 package middleware
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/config"
 	pkgaes "github.com/perfect-panel/server/pkg/aes"
 	"github.com/perfect-panel/server/pkg/constant"
+	"github.com/perfect-panel/server/pkg/deviceauth"
 	"github.com/perfect-panel/server/pkg/result"
 	"github.com/perfect-panel/server/pkg/xerr"
-	"github.com/pkg/errors"
 )
 
-func DeviceMiddleware(configProvider func() config.DeviceConfig) app.HandlerFunc {
-	return func(ctx context.Context, requestCtx *app.RequestContext) {
-		deviceConfig := configProvider()
-		if !deviceConfig.Enable {
-			requestCtx.Next(ctx)
+func DeviceMiddleware(configProvider func() config.DeviceConfig, replayStore deviceauth.ReplayStore) app.HandlerFunc {
+	return func(ctx context.Context, c *app.RequestContext) {
+		cfg := configProvider()
+		if !cfg.Enable {
+			c.Next(ctx)
 			return
 		}
-		loginType := string(requestCtx.GetHeader("Login-Type"))
-		isDeviceLoginRoute := string(requestCtx.Path()) == "/v1/auth/login/device"
-		if ctx.Value(constant.CtxKeyUser) == nil && loginType != "" {
-			ctx = context.WithValue(ctx, constant.LoginType, loginType)
-		}
-		if !isDeviceLoginRoute && loginType != "device" {
-			requestCtx.Next(ctx)
+		loginType := string(c.GetHeader("Login-Type"))
+		isDeviceLogin := string(c.Path()) == "/v1/auth/login/device"
+		signedLoginType, _ := ctx.Value(constant.LoginType).(string)
+		authenticated := ctx.Value(constant.CtxKeyUser) != nil
+		if !isDeviceLogin && loginType != "device" && !(authenticated && signedLoginType == "device") {
+			c.Next(ctx)
 			return
 		}
-		ctx = context.WithValue(ctx, constant.LoginType, "device")
-		if !deviceConfig.EnableSecurity {
-			requestCtx.Next(ctx)
+		if !authenticated {
+			ctx = context.WithValue(ctx, constant.LoginType, "device")
+		}
+		if !cfg.EnableSecurity {
+			c.Next(ctx)
 			return
 		}
-		if deviceConfig.SecuritySecret == "" {
-			result.HttpResult(requestCtx, nil, errors.Wrapf(xerr.NewErrCode(xerr.SecretIsEmpty), "Secret is empty"))
-			requestCtx.Abort()
+		if cfg.SecuritySecret == "" {
+			result.HttpResult(c, nil, xerr.NewErrCode(xerr.SecretIsEmpty))
+			c.Abort()
 			return
 		}
-
-		if !DecryptDeviceRequest(requestCtx, deviceConfig.SecuritySecret) {
-			result.HttpResult(requestCtx, nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidCiphertext), "Invalid ciphertext"))
-			requestCtx.Abort()
+		if err := DecryptDeviceRequest(ctx, c, cfg.SecuritySecret, replayStore); err != nil {
+			result.HttpResult(c, nil, xerr.NewErrCode(xerr.InvalidCiphertext))
+			c.Abort()
 			return
 		}
 		ctx = context.WithValue(ctx, constant.CtxKeyDeviceSecure, true)
-		requestCtx.Next(ctx)
-		EncryptDeviceResponse(requestCtx, deviceConfig.SecuritySecret)
-		requestCtx.Abort()
+		c.Next(ctx)
+		if err := EncryptDeviceResponse(c, cfg.SecuritySecret); err != nil {
+			// Never fall back to a plaintext token or private response.
+			result.HttpResult(c, nil, xerr.NewErrCode(xerr.ERROR))
+		}
+		c.Abort()
 	}
 }
 
-// DecryptDeviceRequest decrypts device-login query and request-body payloads in place.
-func DecryptDeviceRequest(ctx *app.RequestContext, encryptionKey string) bool {
-	query := ctx.QueryArgs()
-	data := string(query.Peek("data"))
-	iv := string(query.Peek("time"))
-	if data != "" && iv != "" {
-		plainText, err := pkgaes.Decrypt(data, encryptionKey, iv)
-		if err == nil {
-			params := map[string]interface{}{}
-			if err := json.Unmarshal([]byte(plainText), &params); err == nil {
-				for key, value := range params {
-					query.Set(key, fmt.Sprint(value))
-				}
-				query.Del("data")
-				query.Del("time")
-				ctx.URI().SetQueryString(string(query.QueryString()))
+// DecryptDeviceRequest accepts only authenticated envelopes. All validation
+// completes before plaintext is installed; unsigned query parameters cannot
+// be mixed into an authenticated body or accepted on a bodyless POST.
+func DecryptDeviceRequest(ctx context.Context, c *app.RequestContext, secret string, replayStore deviceauth.ReplayStore) error {
+	method, path := string(c.Method()), string(c.Path())
+	query := c.QueryArgs()
+	var envelopes []deviceauth.Envelope
+	var queryParams map[string]interface{}
+	var plainBody string
+	if query.Len() > 0 {
+		seen := make(map[string]bool)
+		valid := true
+		query.VisitAll(func(key, _ []byte) {
+			name := string(key)
+			if (name != "data" && name != "time" && name != "sign") || seen[name] {
+				valid = false
 			}
+			seen[name] = true
+		})
+		if !valid || len(seen) != 3 {
+			return deviceauth.ErrInvalidEnvelope
+		}
+		envelope := deviceauth.Envelope{Data: string(query.Peek("data")), Time: string(query.Peek("time")), Sign: string(query.Peek("sign"))}
+		plain, err := envelope.Open(secret, method, path, "query", time.Now())
+		if err != nil || json.Unmarshal([]byte(plain), &queryParams) != nil || queryParams == nil {
+			return deviceauth.ErrInvalidEnvelope
+		}
+		envelopes = append(envelopes, envelope)
+	}
+	if body := c.Request.Body(); len(body) > 0 {
+		var envelope deviceauth.Envelope
+		decoder := json.NewDecoder(bytes.NewReader(body))
+		decoder.DisallowUnknownFields()
+		if decoder.Decode(&envelope) != nil || decoder.Decode(new(interface{})) != io.EOF {
+			return deviceauth.ErrInvalidEnvelope
+		}
+		var err error
+		plainBody, err = envelope.Open(secret, method, path, "body", time.Now())
+		if err != nil || !json.Valid([]byte(plainBody)) {
+			return deviceauth.ErrInvalidEnvelope
+		}
+		envelopes = append(envelopes, envelope)
+	}
+	if len(envelopes) == 0 {
+		return deviceauth.ErrInvalidEnvelope
+	}
+	for _, envelope := range envelopes {
+		if err := envelope.Consume(ctx, replayStore, secret); err != nil {
+			return err
 		}
 	}
-
-	body := ctx.Request.Body()
-	if len(body) == 0 {
-		return true
+	query.Reset()
+	for key, value := range queryParams {
+		query.Set(key, fmt.Sprint(value))
 	}
-
-	params := map[string]interface{}{}
-	if err := json.Unmarshal(body, &params); err != nil {
-		return false
+	c.URI().SetQueryString(string(query.QueryString()))
+	if plainBody != "" {
+		c.Request.SetBodyString(plainBody)
+		c.Request.Header.Set("Content-Type", "application/json")
 	}
-	data, ok := params["data"].(string)
-	if !ok {
-		return false
-	}
-	iv, ok = params["time"].(string)
-	if !ok {
-		return false
-	}
-	plainText, err := pkgaes.Decrypt(data, encryptionKey, iv)
-	if err != nil {
-		return false
-	}
-	ctx.Request.SetBody([]byte(plainText))
-	return true
+	return nil
 }
 
-// EncryptDeviceResponse encrypts the top-level data field of a device-login response in place.
-func EncryptDeviceResponse(ctx *app.RequestContext, encryptionKey string) {
-	params := map[string]interface{}{}
-	if err := json.Unmarshal(ctx.Response.Body(), &params); err != nil {
-		return
+// EncryptDeviceResponse preserves the data/time format and adds a signature.
+func EncryptDeviceResponse(c *app.RequestContext, secret string) error {
+	var response map[string]interface{}
+	if err := json.Unmarshal(c.Response.Body(), &response); err != nil {
+		return err
 	}
-	data, ok := params["data"]
+	data, ok := response["data"]
 	if !ok || data == nil {
-		return
+		return nil
 	}
-
-	plainText, err := json.Marshal(data)
+	plain, err := json.Marshal(data)
 	if err != nil {
-		return
+		return err
 	}
-	if stringData, ok := data.(string); ok {
-		plainText = []byte(stringData)
+	if value, ok := data.(string); ok {
+		plain = []byte(value)
 	}
-	cipherText, iv, err := pkgaes.Encrypt(plainText, encryptionKey)
+	ciphertext, timestamp, err := pkgaes.Encrypt(plain, secret)
 	if err != nil {
-		return
+		return err
 	}
-	params["data"] = map[string]string{"data": cipherText, "time": iv}
-	response, err := json.Marshal(params)
+	response["data"] = deviceauth.Envelope{
+		Data: ciphertext, Time: timestamp,
+		Sign: deviceauth.Sign(secret, string(c.Method()), string(c.Path()), "response", ciphertext, timestamp),
+	}
+	encoded, err := json.Marshal(response)
 	if err != nil {
-		return
+		return err
 	}
-	ctx.Response.SetBody(response)
+	c.Response.SetBody(encoded)
+	return nil
 }

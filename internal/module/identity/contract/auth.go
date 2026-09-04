@@ -52,10 +52,10 @@ type CheckVerificationCodeRespone struct {
 }
 
 type DeviceLoginRequest struct {
-	Identifier string `json:"identifier" validate:"required"`
+	Identifier string `json:"identifier" validate:"required,max=255"`
 	Invite     string `json:"invite,optional"`
 	IP         string `header:"X-Original-Forwarded-For" swaggerignore:"true"`
-	UserAgent  string `json:"user_agent" validate:"required"`
+	UserAgent  string `header:"User-Agent" json:"-" swaggerignore:"true"`
 	CfToken    string `json:"cf_token,optional"`
 }
 

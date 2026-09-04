@@ -13,7 +13,7 @@ type DeviceAuthticateConfig struct {
 	Enable         bool `json:"enable"`
 	ShowAds        bool `json:"show_ads"`
 	EnableSecurity bool `json:"enable_security"`
-	OnlyRealDevice bool `json:"only_real_device"`
+	OnlyRealDevice bool `json:"only_real_device"` // Requires authenticated device transport, not hardware attestation.
 }
 
 type PlatformDownloadLinkSnapshot struct {
