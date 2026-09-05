@@ -21,9 +21,6 @@ type EmailRegistrationPolicy interface {
 type UserRegisterStore interface {
 	User() repository.UserRepo
 	UserAuth() repository.UserAuthRepo
-	UserSubscription() repository.UserSubscriptionRepo
-	UserCache() repository.UserCacheRepo
-	Subscribe() repository.SubscribeRepo
 	Log() repository.LogRepo
 	InIdentityTx(ctx context.Context, fn func(repository.IdentityStore) error) error
 }
@@ -50,7 +47,7 @@ type UserRegisterConfig struct {
 }
 
 // UserRegisterDependencies explicitly declares the collaborators of email
-// registration instead of passing ServiceContext to business logic.
+// registration instead of passing Application to business logic.
 type UserRegisterDependencies struct {
 	Store        UserRegisterStore
 	Redis        *redis.Client

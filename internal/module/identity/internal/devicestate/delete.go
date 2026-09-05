@@ -15,7 +15,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func Delete(ctx context.Context, store repository.Store, client *redis.Client, id, ownerID int64) (*user.Device, error) {
+func Delete(ctx context.Context, store Store, client *redis.Client, id, ownerID int64) (*user.Device, error) {
 	var removed *user.Device
 	err := store.InIdentityTx(ctx, func(tx repository.IdentityStore) error {
 		device, err := tx.UserDevice().FindDeviceForAuth(ctx, id)
@@ -41,4 +41,10 @@ func Delete(ctx context.Context, store repository.Store, client *redis.Client, i
 		return nil
 	})
 	return removed, err
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	repository.IdentityTransactor
 }

@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/perfect-panel/server/adapter"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	"github.com/perfect-panel/server/internal/module/platform/entity/client"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
+	"github.com/perfect-panel/server/internal/module/subscription/internal/render"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/slicesx"
 	"github.com/perfect-panel/server/pkg/timeutil"
@@ -113,13 +113,13 @@ func (l *SubscribeLogic) Handler(req *dto.SubscribeRequest) (resp *dto.Subscribe
 			logger.Field("error", err.Error()))
 	}
 
-	a := adapter.NewAdapter(
+	a := render.NewAdapter(
 		targetApp.SubscribeTemplate,
-		adapter.WithServers(servers),
-		adapter.WithSiteName(l.cfg.SiteName),
-		adapter.WithSubscribeName(subscribeInfo.Name),
-		adapter.WithOutputFormat(targetApp.OutputFormat),
-		adapter.WithUserInfo(adapter.User{
+		render.WithServers(servers),
+		render.WithSiteName(l.cfg.SiteName),
+		render.WithSubscribeName(subscribeInfo.Name),
+		render.WithOutputFormat(targetApp.OutputFormat),
+		render.WithUserInfo(render.User{
 			ID:           userSubscribe.Id,
 			Password:     userSubscribe.UUID,
 			ExpiredAt:    userSubscribe.ExpireTime,
@@ -128,7 +128,7 @@ func (l *SubscribeLogic) Handler(req *dto.SubscribeRequest) (resp *dto.Subscribe
 			Traffic:      userSubscribe.Traffic,
 			SubscribeURL: l.getSubscribeV2URL(),
 		}),
-		adapter.WithParams(mergeParams(defaultParams, req.Params)),
+		render.WithParams(mergeParams(defaultParams, req.Params)),
 	)
 
 	l.Debugw("[SubscribeLogic] Building client config",

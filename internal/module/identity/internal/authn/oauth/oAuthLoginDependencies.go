@@ -20,7 +20,7 @@ type OAuthLoginURLStore interface {
 }
 
 // OAuthLoginURLDependencies explicitly declares the collaborators of OAuth
-// authorization URL creation instead of passing ServiceContext to business
+// authorization URL creation instead of passing Application to business
 // logic.
 type OAuthLoginURLDependencies struct {
 	Store  OAuthLoginURLStore

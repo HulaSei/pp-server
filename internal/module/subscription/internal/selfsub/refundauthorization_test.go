@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	usermodel "github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
@@ -106,7 +106,7 @@ func errCode(t *testing.T, err error) uint32 {
 func TestPreUnsubscribe_WrongOwner_ReturnsInvalidAccess(t *testing.T) {
 	logtest.Discard(t)
 
-	ctx := context.WithValue(context.Background(), constant.CtxKeyUser, &usermodel.User{Id: 100})
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyUser, &usermodel.User{Id: 100})
 	const subID int64 = 200
 
 	u := &fakeUserRepo{
@@ -138,7 +138,7 @@ func TestPreUnsubscribe_WrongOwner_ReturnsInvalidAccess(t *testing.T) {
 func TestPreUnsubscribe_OwnerBypassesAuthGate(t *testing.T) {
 	logtest.Discard(t)
 
-	ctx := context.WithValue(context.Background(), constant.CtxKeyUser, &usermodel.User{Id: 100})
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyUser, &usermodel.User{Id: 100})
 	const subID int64 = 100
 
 	u := &fakeUserRepo{
@@ -177,7 +177,7 @@ func TestPreUnsubscribe_OwnerBypassesAuthGate(t *testing.T) {
 func TestUnsubscribe_WrongOwner_ReturnsInvalidAccess(t *testing.T) {
 	logtest.Discard(t)
 
-	ctx := context.WithValue(context.Background(), constant.CtxKeyUser, &usermodel.User{Id: 100})
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyUser, &usermodel.User{Id: 100})
 	const subID int64 = 200
 
 	u := &fakeUserRepo{
@@ -206,7 +206,7 @@ func TestUnsubscribe_WrongOwner_ReturnsInvalidAccess(t *testing.T) {
 func TestUnsubscribe_OwnerBypassesAuthGate(t *testing.T) {
 	logtest.Discard(t)
 
-	ctx := context.WithValue(context.Background(), constant.CtxKeyUser, &usermodel.User{Id: 100})
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyUser, &usermodel.User{Id: 100})
 	const subID int64 = 100
 
 	u := &fakeUserRepo{

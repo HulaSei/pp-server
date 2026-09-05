@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
@@ -21,7 +21,7 @@ func (r ownershipUserSubs) FindOneUserSubscribe(_ context.Context, _ int64) (*us
 }
 
 func ownerContext(id int64) context.Context {
-	return context.WithValue(context.Background(), constant.CtxKeyUser, &userEntity.User{Id: id})
+	return context.WithValue(context.Background(), requestctx.CtxKeyUser, &userEntity.User{Id: id})
 }
 
 func TestRenewalRejectsSubscriptionOwnedByAnotherUser(t *testing.T) {

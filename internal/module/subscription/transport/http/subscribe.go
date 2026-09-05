@@ -7,9 +7,9 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"github.com/perfect-panel/server/internal/config"
+	"github.com/perfect-panel/server/internal/infra/protocolkey"
 	"github.com/perfect-panel/server/internal/module/subscription"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
-	"github.com/perfect-panel/server/internal/protocolkey"
 	"github.com/perfect-panel/server/pkg/logger"
 )
 

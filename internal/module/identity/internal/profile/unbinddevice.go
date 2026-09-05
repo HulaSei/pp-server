@@ -3,7 +3,7 @@ package profile
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/identity/internal/devicestate"
@@ -28,7 +28,7 @@ func newUnbindDeviceLogic(ctx context.Context, deps Deps) *UnbindDeviceLogic {
 }
 
 func (l *UnbindDeviceLogic) UnbindDevice(req *dto.UnbindDeviceRequest) error {
-	userInfo := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	userInfo := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	device, err := l.deps.Devices.FindDeviceForAuth(l.ctx, req.Id)
 	if err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.DeviceNotExist), "find device")

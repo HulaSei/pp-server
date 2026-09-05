@@ -7,8 +7,8 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/perfect-panel/server/internal/constant"
-	"github.com/perfect-panel/server/internal/mapping"
+	"github.com/perfect-panel/server/internal/infra/mapping"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	entity "github.com/perfect-panel/server/internal/module/support/entity/document"
@@ -151,7 +151,7 @@ func (s *Service) renderConditional(ctx context.Context, content string) string 
 	}
 
 	hasSubscription := false
-	if u, ok := ctx.Value(constant.CtxKeyUser).(*user.User); ok && u != nil && s.subs != nil {
+	if u, ok := ctx.Value(requestctx.CtxKeyUser).(*user.User); ok && u != nil && s.subs != nil {
 		active, err := s.subs.HasActiveSubscription(ctx, u.Id)
 		if err != nil {
 			logger.WithContext(ctx).Errorw("[QueryDocumentDetailLogic] QueryUserSubscribe error", logger.Field("error", err.Error()), logger.Field("user_id", u.Id))

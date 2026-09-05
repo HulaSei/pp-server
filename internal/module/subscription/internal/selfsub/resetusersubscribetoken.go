@@ -4,8 +4,8 @@ import (
 	"context"
 	"uuid"
 
-	"github.com/perfect-panel/server/internal/constant"
-	"github.com/perfect-panel/server/internal/mapping"
+	"github.com/perfect-panel/server/internal/infra/mapping"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
@@ -32,7 +32,7 @@ func newResetUserSubscribeTokenLogic(ctx context.Context, deps Deps) *ResetUserS
 }
 
 func (l *ResetUserSubscribeTokenLogic) ResetUserSubscribeToken(req *dto.ResetUserSubscribeTokenRequest) error {
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	usermodel "github.com/perfect-panel/server/internal/module/identity/entity/user"
 )
@@ -20,7 +20,7 @@ func (p *fakeBindOAuthMethodPolicy) EnsureMethodEnabled(_ context.Context, metho
 
 func TestBindOAuthCallbackUsesInjectedMethodPolicy(t *testing.T) {
 	policy := &fakeBindOAuthMethodPolicy{}
-	ctx := context.WithValue(context.Background(), constant.CtxKeyUser, &usermodel.User{Id: 7})
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyUser, &usermodel.User{Id: 7})
 	logic := newBindOAuthCallbackLogic(ctx, Deps{Policy: policy})
 
 	err := logic.BindOAuthCallback(&dto.BindOAuthCallbackRequest{

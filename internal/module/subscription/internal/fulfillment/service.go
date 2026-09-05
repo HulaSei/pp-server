@@ -65,7 +65,7 @@ type Deps struct {
 	Orders repository.OrderRepo
 	// Store carries the subscription-scoped fulfillment transaction; the
 	// per-user quota serialization uses the domain's own serial lock.
-	Store    repository.Store
+	Store    Store
 	UserSubs repository.UserSubscriptionRepo
 	Plans    repository.SubscribeRepo
 	Cache    repository.UserCacheRepo
@@ -327,4 +327,11 @@ func (s *Service) activateResetTrafficTx(ctx context.Context, store repository.S
 		return nil, err
 	}
 	return &outcomeParts{order: orderInfo, subscribe: sub, userSub: userSub, notifyType: NotifyResetTraffic}, nil
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	repository.SubscriptionTransactor
+	Inbox() repository.InboxRepo
 }

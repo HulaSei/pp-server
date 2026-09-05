@@ -91,6 +91,28 @@ type PlatformStore interface {
 	Outbox() OutboxRepo
 }
 
+// Transaction capabilities can be injected without granting the complete
+// application store or unrelated domain transactions.
+type BillingTransactor interface {
+	InBillingTx(context.Context, func(BillingStore) error) error
+}
+
+type SubscriptionTransactor interface {
+	InSubscriptionTx(context.Context, func(SubscriptionStore) error) error
+}
+
+type IdentityTransactor interface {
+	InIdentityTx(context.Context, func(IdentityStore) error) error
+}
+
+type NetworkTransactor interface {
+	InNetworkTx(context.Context, func(NetworkStore) error) error
+}
+
+type PlatformTransactor interface {
+	InPlatformTx(context.Context, func(PlatformStore) error) error
+}
+
 // The full store satisfies every domain view; the scoped transactions below
 // hand out the narrowed interface.
 var (

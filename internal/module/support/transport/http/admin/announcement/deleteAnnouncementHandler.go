@@ -6,7 +6,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/module/support"
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
-	"github.com/perfect-panel/server/internal/validation"
+	"github.com/perfect-panel/server/internal/transport/http/validation"
 	"github.com/perfect-panel/server/pkg/httpx"
 )
 

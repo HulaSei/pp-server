@@ -19,7 +19,7 @@ type Snapshot struct {
 // Deps declares the subdomain's dependencies; the module facade forwards
 // them from the composition root.
 type Deps struct {
-	Store repository.Store
+	Store Store
 	// Config snapshots the runtime-mutable settings per request.
 	Config func() Snapshot
 }
@@ -35,4 +35,13 @@ func NewService(deps Deps) *Service {
 
 func (s *Service) Manifest(ctx context.Context, token string) (*dto.EdgeManifestResponse, error) {
 	return newManifestLogic(ctx, s.deps).Manifest(token)
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	Node() repository.NodeRepo
+	Subscribe() repository.SubscribeRepo
+	User() repository.UserRepo
+	UserSubscription() repository.UserSubscriptionRepo
 }

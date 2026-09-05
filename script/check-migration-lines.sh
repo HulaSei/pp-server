@@ -18,14 +18,17 @@ set -euo pipefail
 
 readonly LTS_REF="${LTS_REF:-origin/master}"
 readonly FEATURE_BAND_START=3000
-readonly MIGRATION_DIR=initialize/migrate/database
+readonly MIGRATION_DIR=internal/app/migration/schema/database
+readonly LEGACY_MIGRATION_DIR=initialize/migrate/database
 
 extract_numbers() {
   sed -n 's#.*/\([0-9]\{5\}\)_.*\.up\.sql$#\1#p' | sort -u
 }
 
 ref_migration_numbers() {
-  git ls-tree -r --name-only "$1" -- "$MIGRATION_DIR/$2" | extract_numbers
+  # A branch may still predate the package reorganization. Directory moves do
+  # not create new migrations, so compare the same versions at either path.
+  git ls-tree -r --name-only "$1" -- "$MIGRATION_DIR/$2" "$LEGACY_MIGRATION_DIR/$2" | extract_numbers
 }
 
 # The working tree rather than HEAD, so an uncommitted migration is caught too.

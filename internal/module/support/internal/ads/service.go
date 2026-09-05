@@ -6,7 +6,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/perfect-panel/server/internal/mapping"
+	"github.com/perfect-panel/server/internal/infra/mapping"
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	entity "github.com/perfect-panel/server/internal/module/support/entity/ads"
 	"github.com/perfect-panel/server/internal/repository"

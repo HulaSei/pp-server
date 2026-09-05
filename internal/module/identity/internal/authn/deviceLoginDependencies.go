@@ -21,9 +21,6 @@ type DeviceLoginStore interface {
 	User() repository.UserRepo
 	UserAuth() repository.UserAuthRepo
 	UserDevice() repository.UserDeviceRepo
-	UserSubscription() repository.UserSubscriptionRepo
-	UserCache() repository.UserCacheRepo
-	Subscribe() repository.SubscribeRepo
 	Log() repository.LogRepo
 	InIdentityTx(ctx context.Context, fn func(repository.IdentityStore) error) error
 }
@@ -44,7 +41,7 @@ type DeviceLoginConfig struct {
 }
 
 // DeviceLoginDependencies explicitly declares the collaborators required by
-// device login instead of passing ServiceContext to business logic.
+// device login instead of passing Application to business logic.
 type DeviceLoginDependencies struct {
 	Store  DeviceLoginStore
 	Redis  *redis.Client

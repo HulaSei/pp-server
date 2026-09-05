@@ -66,9 +66,10 @@ type Deps struct {
 	Payments  repository.PaymentRepo
 	UserAuths GuestAccountReader
 	Plans     PlanReader
-	// Store is the transitional full-store dependency shared with the
-	// checkout persistence port and the inventory lifecycle helpers.
-	Store              repository.Store
+	// Store serves billing persistence and read-only identity lookups.
+	// Inventory changes belong to the separately injected capability.
+	Store              Store
+	Inventory          Inventory
 	Sessions           SessionStore
 	Queue              OrderQueue
 	GuestCheckoutCache GuestCheckoutCache
@@ -125,4 +126,20 @@ func (s *Service) IssueSession(ctx context.Context, userID int64) (string, error
 	}
 
 	return token, nil
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	repository.BillingTransactor
+	Log() repository.LogRepo
+	Order() repository.OrderRepo
+	Payment() repository.PaymentRepo
+	User() repository.UserRepo
+	UserCache() repository.UserCacheRepo
+	Wallet() repository.WalletRepo
+}
+
+type Inventory interface {
+	Reserve(context.Context, string, int64) error
 }

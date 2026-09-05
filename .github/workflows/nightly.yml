@@ -93,7 +93,7 @@ jobs:
       - name: Test MariaDB 11.8 compatibility
         env:
           PPANEL_TEST_MYSQL_DSN: "root:mariadb@tcp(127.0.0.1:3307)/ppanel?charset=utf8mb4&parseTime=true&loc=UTC&interpolateParams=true"
-        run: go test -count=1 ./pkg/orm ./initialize/migrate
+        run: go test -count=1 ./pkg/orm ./internal/app/migration/schema
 
   publish:
     name: Publish nightly

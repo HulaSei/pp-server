@@ -10,13 +10,14 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	paymentEntity "github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	walletEntity "github.com/perfect-panel/server/internal/module/billing/entity/wallet"
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment/cryptomus"
 	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"
+	"github.com/perfect-panel/server/internal/module/subscription"
 	subscribeEntity "github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/repository"
 )
@@ -49,6 +50,7 @@ func cryptomusCloseFixture(t *testing.T, gateway func() (int, string, error)) (*
 	queue := &closeQueue{}
 	svc := NewService(Deps{
 		Orders: orders, Store: store, Queue: queue,
+		Inventory: subscription.NewInventory(store),
 		Payments: &closePaymentRepo{method: &paymentEntity.Payment{
 			Id: 2, Platform: "Cryptomus", Config: `{"merchant_id":"merchant-1","api_key":"test-key"}`,
 		}},
@@ -122,7 +124,7 @@ func TestCloseCryptomusKeepsUnconfirmedInvoicesPending(t *testing.T) {
 				})
 				ctx := context.Background()
 				if userInitiated {
-					ctx = context.WithValue(ctx, constant.CtxKeyUser, &userEntity.User{Id: 7})
+					ctx = context.WithValue(ctx, requestctx.CtxKeyUser, &userEntity.User{Id: 7})
 				}
 				err := svc.Close(ctx, &dto.CloseOrderRequest{OrderNo: "cryptomus-order"})
 				if !errors.Is(err, ErrGatewayUnconfirmed) || store.orders.order.Status != 1 || len(queue.activations) != 0 {
@@ -153,7 +155,7 @@ func TestCloseCryptomusQueryErrorsNeverDiscardKnownInvoice(t *testing.T) {
 				store, svc, _ := cryptomusCloseFixture(t, func() (int, string, error) { return test.code, test.body, test.err })
 				ctx := context.Background()
 				if userInitiated {
-					ctx = context.WithValue(ctx, constant.CtxKeyUser, &userEntity.User{Id: 7})
+					ctx = context.WithValue(ctx, requestctx.CtxKeyUser, &userEntity.User{Id: 7})
 				}
 				if err := svc.Close(ctx, &dto.CloseOrderRequest{OrderNo: "cryptomus-order"}); !errors.Is(err, ErrGatewayUnconfirmed) {
 					t.Fatalf("must reject unconfirmed close: %v", err)
@@ -262,7 +264,7 @@ func TestCloseCryptomusSettlesAfterRefusingEarlyUserCancellation(t *testing.T) {
 			store, svc, queue := cryptomusCloseFixture(t, func() (int, string, error) {
 				return 200, cryptomusInvoiceBody(status, status != "confirm_check", "10.00"), nil
 			})
-			ctx := context.WithValue(context.Background(), constant.CtxKeyUser, &userEntity.User{Id: 7})
+			ctx := context.WithValue(context.Background(), requestctx.CtxKeyUser, &userEntity.User{Id: 7})
 			req := &dto.CloseOrderRequest{OrderNo: "cryptomus-order"}
 			if err := svc.Close(ctx, req); !errors.Is(err, ErrGatewayUnconfirmed) {
 				t.Fatalf("must refuse cancellation while confirming: %v", err)

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"strings"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment/stripe"
@@ -17,7 +17,7 @@ import (
 // StripeNotify authenticates and settles a Stripe webhook event.
 func (s *Service) StripeNotify(ctx context.Context, payload []byte, signature string) error {
 	l := logger.WithContext(ctx)
-	stripeConfig, ok := ctx.Value(constant.CtxKeyPayment).(*payment.Payment)
+	stripeConfig, ok := ctx.Value(requestctx.CtxKeyPayment).(*payment.Payment)
 	if !ok {
 		return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "payment config not found")
 	}

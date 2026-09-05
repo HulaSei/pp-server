@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
@@ -43,7 +43,7 @@ func (l *DeviceLoginLogic) DeviceLogin(req *dto.DeviceLoginRequest) (resp *dto.L
 		return nil, xerr.NewErrMsg("Device login is disabled")
 	}
 	if l.deps.Config.OnlyRealDevice {
-		secure, _ := l.ctx.Value(constant.CtxKeyDeviceSecure).(bool)
+		secure, _ := l.ctx.Value(requestctx.CtxKeyDeviceSecure).(bool)
 		if !secure {
 			return nil, errors.Wrap(xerr.NewErrCode(xerr.InvalidAccess), "verified device transport is required")
 		}

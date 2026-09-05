@@ -3,15 +3,15 @@ package edge
 import (
 	"context"
 	"errors"
-	dto "github.com/perfect-panel/server/internal/module/network/contract"
 	"strings"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/edgeauth"
 	"github.com/perfect-panel/server/internal/module/network"
+	dto "github.com/perfect-panel/server/internal/module/network/contract"
+	"github.com/perfect-panel/server/internal/module/network/internal/edgeauth"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/redis/go-redis/v9"
 )

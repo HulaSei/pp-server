@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
@@ -19,7 +19,6 @@ import (
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment/stripe"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
-	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
@@ -52,7 +51,7 @@ func (s *Service) Close(ctx context.Context, req *dto.CloseOrderRequest) error {
 	// Public callers are authenticated by the route. Queue workers use a
 	// context without a user and are the only internal callers allowed to close
 	// any expired order.
-	currentUser, userInitiated := ctx.Value(constant.CtxKeyUser).(*user.User)
+	currentUser, userInitiated := ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	userInitiated = userInitiated && currentUser != nil
 	if userInitiated && orderInfo.UserId != currentUser.Id {
 		return errors.New("order does not belong to the current user")
@@ -192,7 +191,7 @@ func (s *Service) restoreReservedInventory(ctx context.Context, orderInfo *order
 	if orderInfo.Type != orderTypeSubscribe || orderInfo.SubscribeId <= 0 {
 		return nil
 	}
-	if err := orderflow.RestoreInventoryOnce(ctx, s.deps.Store, orderInfo.OrderNo, orderInfo.SubscribeId); err != nil {
+	if err := s.deps.Inventory.Restore(ctx, orderInfo.OrderNo, orderInfo.SubscribeId); err != nil {
 		logger.WithContext(ctx).Errorw("[CloseOrder] Restore subscribe inventory failed",
 			logger.Field("error", err.Error()),
 			logger.Field("subscribeId", orderInfo.SubscribeId),

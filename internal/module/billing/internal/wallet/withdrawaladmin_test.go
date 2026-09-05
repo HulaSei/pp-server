@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	walletEntity "github.com/perfect-panel/server/internal/module/billing/entity/wallet"
 	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"
@@ -153,7 +153,7 @@ func TestCommissionWithdrawCreatesPendingRequestWithWithdrawLog(t *testing.T) {
 	wallet := &withdrawalTestWallet{item: &walletEntity.Wallet{UserId: 7, Commission: 100}}
 	logs := &withdrawalTestLogs{}
 	store := &withdrawalTestStore{withdrawals: withdrawals, wallet: wallet, logs: logs}
-	ctx := context.WithValue(context.Background(), constant.CtxKeyUser, &userEntity.User{Id: 7})
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyUser, &userEntity.User{Id: 7})
 	logic := newCommissionWithdrawLogic(ctx, Deps{Tx: withdrawalTestTx{store: store}})
 
 	resp, err := logic.CommissionWithdraw(&dto.CommissionWithdrawRequest{Amount: 30, Content: "bank"})

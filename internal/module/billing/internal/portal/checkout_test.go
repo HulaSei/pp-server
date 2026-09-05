@@ -9,9 +9,9 @@ import (
 
 	"github.com/alicebob/miniredis/v2"
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
-	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
+	order2 "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	walletEntity "github.com/perfect-panel/server/internal/module/billing/entity/wallet"
 	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
@@ -44,10 +44,10 @@ func (s *balancePaymentStore) Log() repository.LogRepo { return s.logs }
 
 type balancePaymentOrderRepo struct {
 	repository.OrderRepo
-	order *orderEntity.Order
+	order *order2.Order
 }
 
-func (r *balancePaymentOrderRepo) FindOneByOrderNoForUpdate(_ context.Context, orderNo string) (*orderEntity.Order, error) {
+func (r *balancePaymentOrderRepo) FindOneByOrderNoForUpdate(_ context.Context, orderNo string) (*order2.Order, error) {
 	if r.order.OrderNo != orderNo {
 		return nil, stderrors.New("unexpected order")
 	}
@@ -55,7 +55,7 @@ func (r *balancePaymentOrderRepo) FindOneByOrderNoForUpdate(_ context.Context, o
 	return &locked, nil
 }
 
-func (r *balancePaymentOrderRepo) Update(_ context.Context, data *orderEntity.Order, _ ...*gorm.DB) error {
+func (r *balancePaymentOrderRepo) Update(_ context.Context, data *order2.Order, _ ...*gorm.DB) error {
 	r.order.GiftAmount = data.GiftAmount
 	return nil
 }
@@ -119,7 +119,7 @@ func newBalancePaymentLogic(t *testing.T, store *balancePaymentStore) *PurchaseC
 
 func TestBalancePaymentRejectsInsufficientCurrentBalance(t *testing.T) {
 	store := &balancePaymentStore{
-		orders: &balancePaymentOrderRepo{order: &orderEntity.Order{OrderNo: "order-1", UserId: 10, Amount: 2500, Status: 1}},
+		orders: &balancePaymentOrderRepo{order: &order2.Order{OrderNo: "order-1", UserId: 10, Amount: 2500, Status: 1}},
 		users:  &balancePaymentUserRepo{user: &userEntity.User{Id: 10}, wallet: &walletEntity.Wallet{UserId: 10, Balance: 500}},
 		logs:   &balancePaymentLogRepo{},
 	}
@@ -142,7 +142,7 @@ func TestBalancePaymentRejectsInsufficientCurrentBalance(t *testing.T) {
 
 func TestBalancePaymentAddsCheckoutGiftToExistingOrderGift(t *testing.T) {
 	store := &balancePaymentStore{
-		orders: &balancePaymentOrderRepo{order: &orderEntity.Order{OrderNo: "order-2", UserId: 10, Amount: 2500, GiftAmount: 300, Status: 1}},
+		orders: &balancePaymentOrderRepo{order: &order2.Order{OrderNo: "order-2", UserId: 10, Amount: 2500, GiftAmount: 300, Status: 1}},
 		users:  &balancePaymentUserRepo{user: &userEntity.User{Id: 10}, wallet: &walletEntity.Wallet{UserId: 10, Balance: 2300, GiftAmount: 200}},
 		logs:   &balancePaymentLogRepo{},
 	}
@@ -167,7 +167,7 @@ func TestBalancePaymentAddsCheckoutGiftToExistingOrderGift(t *testing.T) {
 
 func TestBalancePaymentDoesNotDebitNonPendingOrder(t *testing.T) {
 	store := &balancePaymentStore{
-		orders: &balancePaymentOrderRepo{order: &orderEntity.Order{OrderNo: "order-3", UserId: 10, Amount: 2500, Status: 2}},
+		orders: &balancePaymentOrderRepo{order: &order2.Order{OrderNo: "order-3", UserId: 10, Amount: 2500, Status: 2}},
 		users:  &balancePaymentUserRepo{user: &userEntity.User{Id: 10}, wallet: &walletEntity.Wallet{UserId: 10, Balance: 2500}},
 		logs:   &balancePaymentLogRepo{},
 	}
@@ -187,10 +187,10 @@ func TestBalancePaymentDoesNotDebitNonPendingOrder(t *testing.T) {
 
 func TestAuthorizeCheckoutRequiresOwnerForUserOrder(t *testing.T) {
 	logic := NewPurchaseCheckoutLogic(
-		context.WithValue(context.Background(), constant.CtxKeyUser, &userEntity.User{Id: 7}),
+		context.WithValue(context.Background(), requestctx.CtxKeyUser, &userEntity.User{Id: 7}),
 		CheckoutDependencies{},
 	)
-	err := logic.authorizeCheckout(&orderEntity.Order{OrderNo: "order-1", UserId: 8}, &dto.CheckoutOrderRequest{OrderNo: "order-1"})
+	err := logic.authorizeCheckout(&order2.Order{OrderNo: "order-1", UserId: 8}, &dto.CheckoutOrderRequest{OrderNo: "order-1"})
 	if err == nil || !strings.Contains(err.Error(), "does not belong") {
 		t.Fatalf("authorizeCheckout error = %v, want owner mismatch", err)
 	}
@@ -201,17 +201,17 @@ func TestAuthorizeCheckoutValidatesGuestCheckoutToken(t *testing.T) {
 	client := redis.NewClient(&redis.Options{Addr: redisServer.Addr()})
 	t.Cleanup(func() { _ = client.Close() })
 
-	info := constant.TemporaryOrderInfo{OrderNo: "guest-order", CheckoutToken: "secure-checkout-token"}
+	info := order2.TemporaryOrderInfo{OrderNo: "guest-order", CheckoutToken: "secure-checkout-token"}
 	encoded, err := info.Marshal()
 	if err != nil {
 		t.Fatalf("marshal temporary order: %v", err)
 	}
-	if err := client.Set(context.Background(), fmt.Sprintf(constant.TempOrderCacheKey, info.OrderNo), encoded, 0).Err(); err != nil {
+	if err := client.Set(context.Background(), fmt.Sprintf(order2.TempOrderCacheKey, info.OrderNo), encoded, 0).Err(); err != nil {
 		t.Fatalf("store temporary order: %v", err)
 	}
 
 	logic := NewPurchaseCheckoutLogic(context.Background(), CheckoutDependencies{GuestCheckoutCache: client})
-	orderInfo := &orderEntity.Order{OrderNo: info.OrderNo}
+	orderInfo := &order2.Order{OrderNo: info.OrderNo}
 	if err := logic.authorizeCheckout(orderInfo, &dto.CheckoutOrderRequest{OrderNo: info.OrderNo, CheckoutToken: info.CheckoutToken}); err != nil {
 		t.Fatalf("valid guest checkout rejected: %v", err)
 	}
@@ -222,11 +222,11 @@ func TestAuthorizeCheckoutValidatesGuestCheckoutToken(t *testing.T) {
 
 type paymentExpectationStore struct {
 	CheckoutStore
-	order       *orderEntity.Order
+	order       *order2.Order
 	updateCalls int
 }
 
-func (s *paymentExpectationStore) FindOrderByOrderNo(_ context.Context, orderNo string) (*orderEntity.Order, error) {
+func (s *paymentExpectationStore) FindOrderByOrderNo(_ context.Context, orderNo string) (*order2.Order, error) {
 	if s.order == nil || s.order.OrderNo != orderNo {
 		return nil, gorm.ErrRecordNotFound
 	}
@@ -245,11 +245,11 @@ func (s *paymentExpectationStore) UpdatePaymentExpectation(_ context.Context, or
 }
 
 func TestPersistPaymentExpectationReusesMatchingSnapshot(t *testing.T) {
-	store := &paymentExpectationStore{order: &orderEntity.Order{
+	store := &paymentExpectationStore{order: &order2.Order{
 		OrderNo: "order-1", Status: 1, PaymentAmount: 1250, PaymentCurrency: "CNY", TradeNo: "pi_123",
 	}}
 	logic := NewPurchaseCheckoutLogic(context.Background(), CheckoutDependencies{Store: store})
-	staleOrder := &orderEntity.Order{OrderNo: "order-1", Status: 1}
+	staleOrder := &order2.Order{OrderNo: "order-1", Status: 1}
 
 	if err := logic.persistPaymentExpectation(staleOrder, 1250, "cny"); err != nil {
 		t.Fatalf("persist matching expectation: %v", err)
@@ -263,11 +263,11 @@ func TestPersistPaymentExpectationReusesMatchingSnapshot(t *testing.T) {
 }
 
 func TestPersistPaymentExpectationRejectsDifferentSnapshot(t *testing.T) {
-	store := &paymentExpectationStore{order: &orderEntity.Order{
+	store := &paymentExpectationStore{order: &order2.Order{
 		OrderNo: "order-1", Status: 1, PaymentAmount: 1250, PaymentCurrency: "CNY",
 	}}
 	logic := NewPurchaseCheckoutLogic(context.Background(), CheckoutDependencies{Store: store})
-	staleOrder := &orderEntity.Order{OrderNo: "order-1", Status: 1}
+	staleOrder := &order2.Order{OrderNo: "order-1", Status: 1}
 
 	err := logic.persistPaymentExpectation(staleOrder, 1300, "CNY")
 	if err == nil || !strings.Contains(err.Error(), "does not match") {

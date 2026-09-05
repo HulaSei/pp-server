@@ -31,11 +31,51 @@ const importPrefix = "github.com/perfect-panel/server/"
 // each new edge makes the future module split harder.
 var legacyLogicImports = map[string][]string{}
 
-// svcImporters is the closed composition-root boundary. Only cmd may import
-// internal/svc to build the application; every runtime consumer receives a
+// appImporters is the closed composition-root boundary. Only cmd may import
+// internal/app to build the application; every runtime consumer receives a
 // module facade or a task/transport-specific dependency set.
-var svcImporters = map[string]bool{
+var appImporters = map[string]bool{
 	"cmd": true,
+}
+
+var internalRoots = map[string]bool{
+	"app": true, "arch": true, "auth": true, "config": true,
+	"infra": true, "module": true, "repository": true, "transport": true,
+}
+
+func TestRuntimePackagesStayInternal(t *testing.T) {
+	for _, f := range collectGoFiles(t) {
+		for _, legacy := range []string{"queue", "scheduler", "adapter", "initialize"} {
+			if within(f.dir, legacy) {
+				t.Errorf("%s: runtime implementation belongs under internal, not %s", f.path, legacy)
+			}
+			for _, imp := range f.imports {
+				if within(imp, legacy) {
+					t.Errorf("%s: legacy root package import %q", f.path, imp)
+				}
+			}
+		}
+	}
+}
+
+func TestInternalLayout(t *testing.T) {
+	for _, f := range collectGoFiles(t) {
+		if f.dir == "internal" {
+			t.Errorf("%s: application code belongs under internal/app, not the internal root", f.path)
+		}
+		if rest, ok := strings.CutPrefix(f.dir, "internal/"); ok && !internalRoots[strings.Split(rest, "/")[0]] {
+			t.Errorf("%s: package must belong to an existing internal responsibility group", f.path)
+		}
+		if !within(f.dir, "internal/infra") && !within(f.dir, "internal/auth") {
+			continue
+		}
+		for _, imp := range f.imports {
+			moduleImpl := within(imp, "internal/module") && !strings.Contains(imp, "/entity/")
+			if within(imp, "internal/app") || within(imp, "internal/transport") || moduleImpl {
+				t.Errorf("%s: shared infrastructure/auth must not import application, transport or business implementation %q", f.path, imp)
+			}
+		}
+	}
 }
 
 // Public shared packages are deliberately small in number. Application
@@ -171,15 +211,15 @@ func TestLogicImportFreeze(t *testing.T) {
 
 // TestModulePurity keeps internal/module packages free of the legacy god
 // object and legacy logic tree: modules receive dependencies via their facade
-// constructors, never by reaching back into svc or logic.
+// constructors, never by reaching back into application assembly or logic.
 func TestModulePurity(t *testing.T) {
 	for _, f := range collectGoFiles(t) {
 		if !within(f.dir, "internal/module") {
 			continue
 		}
 		for _, imp := range f.imports {
-			if within(imp, "internal/svc") {
-				t.Errorf("%s: module code must not import internal/svc; declare the dependency on the module facade constructor instead", f.path)
+			if within(imp, "internal/svc") || (within(imp, "internal/app") && imp != "internal/app/buildinfo") {
+				t.Errorf("%s: module code must not import application assembly; declare the dependency on the module facade constructor instead", f.path)
 			}
 			if within(imp, "internal/logic") {
 				t.Errorf("%s: module code must not import legacy internal/logic packages; migrate the logic into the module", f.path)
@@ -188,19 +228,69 @@ func TestModulePurity(t *testing.T) {
 	}
 }
 
-// TestSvcImportFreeze forbids new packages from importing the internal/svc
-// god object: the frozen baseline above may only shrink. New code receives
-// its dependencies via module facade constructors (ADR-001 step 3).
-func TestSvcImportFreeze(t *testing.T) {
+// Module code declares only the repository capabilities it consumes. The full
+// store remains an application assembly concern, including in type aliases.
+func TestModulesDoNotDependOnFullStore(t *testing.T) {
+	for _, f := range collectGoFiles(t) {
+		if !within(f.dir, "internal/module") || strings.HasSuffix(f.path, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join("..", "..", f.path), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		repositoryAlias := ""
+		for _, imp := range file.Imports {
+			if strings.Trim(imp.Path.Value, `"`) == importPrefix+"internal/repository" {
+				repositoryAlias = "repository"
+				if imp.Name != nil {
+					repositoryAlias = imp.Name.Name
+				}
+			}
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			selector, ok := node.(*ast.SelectorExpr)
+			if !ok || selector.Sel.Name != "Store" {
+				return true
+			}
+			if id, ok := selector.X.(*ast.Ident); ok && id.Name == repositoryAlias {
+				t.Errorf("%s: module depends on repository.Store; define a consumer-owned capability instead", f.path)
+			}
+			return true
+		})
+	}
+}
+
+func TestTasksDoNotOwnIdentityTransactions(t *testing.T) {
+	for _, f := range collectGoFiles(t) {
+		if !within(f.dir, "internal/transport/task") || strings.HasSuffix(f.path, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join("..", "..", f.path), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			if selector, ok := node.(*ast.SelectorExpr); ok && selector.Sel.Name == "InIdentityTx" {
+				t.Errorf("%s: task adapter owns an identity transaction; invoke an identity business capability instead", f.path)
+			}
+			return true
+		})
+	}
+}
+
+// TestAppImportBoundary keeps the composition root private to the CLI. Module
+// facades and runtime adapters receive their own dependency sets instead.
+func TestAppImportBoundary(t *testing.T) {
 	for _, f := range collectGoFiles(t) {
 		for _, imp := range f.imports {
-			if !within(imp, "internal/svc") {
+			if imp != "internal/app" {
 				continue
 			}
-			if within(f.dir, "internal/svc") || svcImporters[f.dir] {
+			if f.dir == "internal/app" || appImporters[f.dir] {
 				continue
 			}
-			t.Errorf("%s: new import of internal/svc — inject dependencies through a module facade instead (see docs/adr-001-modular-monolith.md)", f.path)
+			t.Errorf("%s: import of internal/app outside the CLI — inject dependencies through a module facade instead", f.path)
 		}
 	}
 }
@@ -294,7 +384,7 @@ func TestModuleCoreDoesNotImportTransport(t *testing.T) {
 			continue
 		}
 		for _, imp := range f.imports {
-			if strings.HasPrefix(imp, "internal/module/") && strings.Contains(imp, "/transport/") {
+			if within(imp, "internal/transport") || (strings.HasPrefix(imp, "internal/module/") && strings.Contains(imp, "/transport/")) {
 				t.Errorf("%s: module core imports inbound transport %q; wire adapters only at a composition root", f.path, imp)
 			}
 		}

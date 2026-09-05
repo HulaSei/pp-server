@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/support"
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
@@ -63,7 +63,7 @@ func newDocService(repo *fakeDocumentRepo, subs support.SubscriptionReader) supp
 }
 
 func ctxWithUser(id int64) context.Context {
-	return context.WithValue(context.Background(), constant.CtxKeyUser, &user.User{Id: id})
+	return context.WithValue(context.Background(), requestctx.CtxKeyUser, &user.User{Id: id})
 }
 
 func queryGated(t *testing.T, svc support.Service, ctx context.Context) string {

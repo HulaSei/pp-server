@@ -22,9 +22,6 @@ type OAuthLoginStore interface {
 	Auth() repository.AuthRepo
 	User() repository.UserRepo
 	UserAuth() repository.UserAuthRepo
-	UserSubscription() repository.UserSubscriptionRepo
-	UserCache() repository.UserCacheRepo
-	Subscribe() repository.SubscribeRepo
 	Log() repository.LogRepo
 	InIdentityTx(ctx context.Context, fn func(repository.IdentityStore) error) error
 }
@@ -45,7 +42,7 @@ type OAuthLoginConfig struct {
 }
 
 // OAuthLoginDependencies contains the explicit collaborators of the OAuth
-// login use case. It replaces the application-wide ServiceContext dependency.
+// login use case. It replaces the application-wide Application dependency.
 type OAuthLoginDependencies struct {
 	Store  OAuthLoginStore
 	Redis  *redis.Client

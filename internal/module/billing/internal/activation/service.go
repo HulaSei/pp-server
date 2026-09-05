@@ -1,7 +1,7 @@
 // Package activation implements the billing-domain stages of the paid-order
 // activation saga: the recharge wallet credit, the referral commission and
 // the final settlement. Each stage is idempotent (inbox marker or status
-// CAS); the queue shell sequences the stages. Only the module facade may
+// CAS); Workflow sequences the stages. Only the module facade may
 // reach it.
 package activation
 

@@ -6,8 +6,8 @@ package userorder
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/constant"
-	"github.com/perfect-panel/server/internal/mapping"
+	"github.com/perfect-panel/server/internal/infra/mapping"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	subscribeEntity "github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
@@ -60,7 +60,7 @@ func (s *Service) attachPlan(ctx context.Context, detail *dto.OrderDetail, cache
 // QueryDetail returns one of the current user's orders; ownership is
 // enforced here and the referrer commission never leaves the module.
 func (s *Service) QueryDetail(ctx context.Context, req *dto.QueryOrderDetailRequest) (*dto.OrderDetail, error) {
-	currentUser, ok := ctx.Value(constant.CtxKeyUser).(*user.User)
+	currentUser, ok := ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok || currentUser == nil {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
 	}
@@ -81,7 +81,7 @@ func (s *Service) QueryDetail(ctx context.Context, req *dto.QueryOrderDetailRequ
 }
 
 func (s *Service) QueryList(ctx context.Context, req *dto.QueryOrderListRequest) (*dto.QueryOrderListResponse, error) {
-	u, ok := ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")

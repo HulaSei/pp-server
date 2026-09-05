@@ -112,7 +112,7 @@ type BatchEmailStopper interface {
 }
 
 // Deps declares everything the module needs; the composition root
-// (internal/svc) provides them. The module wraps legacy repositories during
+// (internal/app) provides them. The module wraps legacy repositories during
 // migration and will own its persistence once the domain data moves in
 // (ADR-001 step 5).
 type Deps struct {

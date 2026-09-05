@@ -16,7 +16,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	paymentEntity "github.com/perfect-panel/server/internal/module/billing/entity/payment"
@@ -24,8 +24,8 @@ import (
 	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"
 	inboxEntity "github.com/perfect-panel/server/internal/module/platform/entity/inbox"
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
+	"github.com/perfect-panel/server/internal/module/subscription"
 	subscribeEntity "github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
-	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
 	"gorm.io/gorm"
 )
@@ -68,9 +68,10 @@ func (s *closeOrderStore) Inbox() repository.InboxRepo {
 // dependencies the close flow touches are provided.
 func newCloseService(store *closeOrderStore) *Service {
 	return NewService(Deps{
-		Orders:   store.orders,
-		Payments: nil, // gateway settlement is not exercised: fake orders carry no gateway method
-		Store:    store,
+		Orders:    store.orders,
+		Payments:  nil, // gateway settlement is not exercised: fake orders carry no gateway method
+		Store:     store,
+		Inventory: subscription.NewInventory(store),
 	})
 }
 
@@ -100,7 +101,7 @@ func (r *closeInboxRepo) Insert(_ context.Context, consumer, key, result string)
 // for the order (the new-flow invariant for pending subscribe orders).
 func (s *closeOrderStore) markReserved(t *testing.T, orderNo string) {
 	t.Helper()
-	if err := s.Inbox().Insert(context.Background(), orderflow.InventoryReserveConsumer, orderNo, ""); err != nil {
+	if err := s.Inbox().Insert(context.Background(), subscription.InventoryReserveConsumer, orderNo, ""); err != nil {
 		t.Fatalf("seed reserve marker: %v", err)
 	}
 }
@@ -220,7 +221,8 @@ func epayCloseFixture(gatewayURL string) (*closeOrderStore, *Service) {
 			Id: 2, Platform: "EPay",
 			Config: fmt.Sprintf(`{"pid":"1001","url":%q,"key":"secret","type":"alipay"}`, gatewayURL),
 		}},
-		Store: store,
+		Store:     store,
+		Inventory: subscription.NewInventory(store),
 	})
 	return store, svc
 }
@@ -351,8 +353,9 @@ func alipayCloseFixture(t *testing.T, respond func(method string, call int) (str
 			Id: 3, Platform: "AlipayF2F",
 			Config: fmt.Sprintf(`{"app_id":"2021000000000000","private_key":%q,"public_key":%q,"sandbox":true,"gateway":%q}`, private, public, gatewayURL),
 		}},
-		Store: store,
-		Queue: queue,
+		Store:     store,
+		Inventory: subscription.NewInventory(store),
+		Queue:     queue,
 	})
 	return store, svc, gateway, queue
 }
@@ -499,7 +502,7 @@ func TestCloseAlipayOrderReconcilerStaysStrict(t *testing.T) {
 // the user's own cancellation.
 func TestCloseAlipayOrderUserCancelBypassesUnconfirmedGateway(t *testing.T) {
 	store, svc, _, _ := alipayCloseFixture(t, nil, unreachableGatewayURL())
-	ctx := context.WithValue(context.Background(), constant.CtxKeyUser, &userEntity.User{Id: 7})
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyUser, &userEntity.User{Id: 7})
 
 	if err := svc.Close(ctx, &dto.CloseOrderRequest{OrderNo: "alipay-order"}); err != nil {
 		t.Fatalf("Close: %v", err)
@@ -535,7 +538,7 @@ func TestCloseEPayOrderUserCancelBypassesUnconfirmedGateway(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			store, svc := epayCloseFixture(tt.gatewayURL)
-			ctx := context.WithValue(context.Background(), constant.CtxKeyUser, &userEntity.User{Id: 7})
+			ctx := context.WithValue(context.Background(), requestctx.CtxKeyUser, &userEntity.User{Id: 7})
 
 			if err := svc.Close(ctx, &dto.CloseOrderRequest{OrderNo: "epay-order"}); err != nil {
 				t.Fatalf("Close: %v", err)

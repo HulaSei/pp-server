@@ -10,7 +10,7 @@ import (
 	"github.com/perfect-panel/server/internal/auth/devicesession"
 	token2 "github.com/perfect-panel/server/internal/auth/token"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/timeutil"
@@ -37,7 +37,7 @@ func bindLoginDevice(binder DeviceBinder, identifier, ip, ua string, userID int6
 }
 
 func issueLoginSession(ctx context.Context, client *redis.Client, secret string, lifetime, userID int64, loginType string, device *user.Device) (*dto.LoginResponse, error) {
-	if value, ok := ctx.Value(constant.LoginType).(string); ok {
+	if value, ok := ctx.Value(requestctx.LoginType).(string); ok {
 		loginType = value
 	}
 	if loginType == "device" && device == nil {

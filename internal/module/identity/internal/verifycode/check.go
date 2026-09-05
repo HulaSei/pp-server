@@ -6,9 +6,9 @@ import (
 
 	"github.com/perfect-panel/server/internal/auth/identifier"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/internal/verification"
+	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
+	"github.com/perfect-panel/server/internal/module/identity/internal/verification"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
@@ -35,12 +35,12 @@ func (l *CheckVerificationCodeLogic) CheckVerificationCode(req *dto.CheckVerific
 		email, validationErr := identifier.ValidateEmail(
 			req.Account,
 			l.deps.Config().DomainSuffixList,
-			constant.ParseVerifyType(req.Type) == constant.Register && l.deps.Config().EnableDomainSuffix,
+			auth.ParseVerifyType(req.Type) == auth.Register && l.deps.Config().EnableDomainSuffix,
 		)
 		if validationErr != nil {
 			return resp, nil
 		}
-		cacheKey := fmt.Sprintf("%s:%s:%s", config.AuthCodeCacheKey, constant.ParseVerifyType(req.Type), email)
+		cacheKey := fmt.Sprintf("%s:%s:%s", config.AuthCodeCacheKey, auth.ParseVerifyType(req.Type), email)
 		if err := verification.ValidateVerificationCode(l.ctx, l.deps.Redis, cacheKey, req.Code, false); err != nil {
 			if errors.Is(err, verification.ErrVerificationAttemptsExceeded) {
 				return nil, errors.Wrap(xerr.NewErrCode(xerr.TooManyRequests), "verification attempts exceeded")
@@ -53,7 +53,7 @@ func (l *CheckVerificationCodeLogic) CheckVerificationCode(req *dto.CheckVerific
 		if !identifier.CheckPhone(req.Account) {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.TelephoneError), "Invalid phone number")
 		}
-		cacheKey := fmt.Sprintf("%s:%s:+%s", config.AuthCodeTelephoneCacheKey, constant.ParseVerifyType(req.Type), req.Account)
+		cacheKey := fmt.Sprintf("%s:%s:+%s", config.AuthCodeTelephoneCacheKey, auth.ParseVerifyType(req.Type), req.Account)
 		if err := verification.ValidateVerificationCode(l.ctx, l.deps.Redis, cacheKey, req.Code, false); err != nil {
 			if errors.Is(err, verification.ErrVerificationAttemptsExceeded) {
 				return nil, errors.Wrap(xerr.NewErrCode(xerr.TooManyRequests), "verification attempts exceeded")

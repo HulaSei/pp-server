@@ -50,7 +50,7 @@ type Snapshot struct {
 // Deps declares the subdomain's dependencies; the identity facade forwards
 // them from the composition root.
 type Deps struct {
-	Store repository.Store
+	Store Store
 	Redis *redis.Client
 	// Config snapshots the runtime-mutable settings per request.
 	Config func() Snapshot
@@ -258,4 +258,15 @@ func (s *Service) AppleLoginCallback(ctx context.Context, req *dto.AppleLoginCal
 		Redis:            s.deps.Redis,
 		FallbackRedirect: s.deps.Config().SiteHost,
 	}).AppleLoginCallback(req)
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	Auth() repository.AuthRepo
+	repository.IdentityTransactor
+	Log() repository.LogRepo
+	User() repository.UserRepo
+	UserAuth() repository.UserAuthRepo
+	UserDevice() repository.UserDeviceRepo
 }

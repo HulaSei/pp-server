@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/perfect-panel/server/internal/auth/identifier"
-	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
+	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
 )
 
 type fakeSmsCodePolicy struct {
@@ -27,7 +27,7 @@ func TestSendSmsCodeUsesInjectedRegistrationPolicy(t *testing.T) {
 	policy := &fakeSmsCodePolicy{err: blocked}
 	logic := NewSendSmsCodeLogic(context.Background(), SendSmsCodeDependencies{Policy: policy})
 
-	_, err := logic.SendSmsCode(&dto.SendSmsCodeRequest{Type: uint8(constant.Register)})
+	_, err := logic.SendSmsCode(&dto.SendSmsCodeRequest{Type: uint8(auth.Register)})
 	if !errors.Is(err, blocked) {
 		t.Fatalf("SendSmsCode error = %v, want registration policy error", err)
 	}

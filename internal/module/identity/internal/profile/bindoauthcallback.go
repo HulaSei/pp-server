@@ -7,8 +7,8 @@ import (
 	"time"
 
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/constant"
-	"github.com/perfect-panel/server/internal/mapping"
+	"github.com/perfect-panel/server/internal/infra/mapping"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
@@ -57,7 +57,7 @@ func (l *BindOAuthCallbackLogic) BindOAuthCallback(req *dto.BindOAuthCallbackReq
 	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, req.Method); err != nil {
 		return err
 	}
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
@@ -94,7 +94,7 @@ func (l *BindOAuthCallbackLogic) BindOAuthCallback(req *dto.BindOAuthCallbackReq
 	return nil
 }
 func (l *BindOAuthCallbackLogic) google(req *dto.BindOAuthCallbackRequest) error {
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
@@ -224,7 +224,7 @@ func (l *BindOAuthCallbackLogic) apple(req *dto.BindOAuthCallbackRequest) error 
 		return errors.Wrapf(xerr.NewErrCode(xerr.UserExist), "apple user already exists")
 	}
 	// query user info
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
@@ -245,7 +245,7 @@ func (l *BindOAuthCallbackLogic) apple(req *dto.BindOAuthCallbackRequest) error 
 }
 
 func (l *BindOAuthCallbackLogic) facebook(req *dto.BindOAuthCallbackRequest) error {
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
@@ -322,7 +322,7 @@ func (l *BindOAuthCallbackLogic) facebook(req *dto.BindOAuthCallbackRequest) err
 }
 
 func (l *BindOAuthCallbackLogic) telegram(req *dto.BindOAuthCallbackRequest) error {
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
@@ -431,7 +431,7 @@ func (l *BindOAuthCallbackLogic) telegram(req *dto.BindOAuthCallbackRequest) err
 }
 
 func (l *BindOAuthCallbackLogic) github(req *dto.BindOAuthCallbackRequest) error {
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")

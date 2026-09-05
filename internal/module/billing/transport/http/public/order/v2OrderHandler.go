@@ -15,7 +15,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/protocol/sse"
 	"github.com/perfect-panel/server/internal/module/billing"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
-	"github.com/perfect-panel/server/internal/orderstream"
+	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -30,7 +30,7 @@ const v2SSEMaxConnectionsPerTicket = 3
 type EventStreamDeps struct {
 	Billing billing.Service
 	Redis   *redis.Client
-	Store   repository.Store
+	Store   Store
 }
 
 // V2CreateAndCheckoutHandler combines order creation and checkout initiation.
@@ -288,7 +288,7 @@ func writeSSEReset(writer *sse.Writer, snapshot dto.V2OrderSnapshot) error {
 	return writer.WriteEvent("", "order.reset", data)
 }
 
-func replayOrderEvents(ctx context.Context, writer *sse.Writer, store repository.Store, orderNo string, afterID *int64) error {
+func replayOrderEvents(ctx context.Context, writer *sse.Writer, store Store, orderNo string, afterID *int64) error {
 	for {
 		events, err := store.OrderEvent().ListAfter(ctx, orderNo, *afterID, 500)
 		if err != nil {
@@ -313,7 +313,7 @@ func subscribeOrderEvents(ctx context.Context, client *redis.Client, orderNo str
 	if client == nil {
 		return nil, nil
 	}
-	pubsub := client.Subscribe(ctx, orderstream.Channel(orderNo))
+	pubsub := client.Subscribe(ctx, order.EventChannel(orderNo))
 	confirmCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	if _, err := pubsub.Receive(confirmCtx); err != nil {
@@ -349,4 +349,10 @@ func acquireSSEConnection(ctx context.Context, client *redis.Client, ticket stri
 	return func() {
 		_, _ = client.Decr(context.Background(), key).Result()
 	}, true
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	OrderEvent() repository.OrderEventRepo
 }

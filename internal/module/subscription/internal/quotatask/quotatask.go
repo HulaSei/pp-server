@@ -51,7 +51,7 @@ type Deps struct {
 	// Store carries the staged domain transactions (subscription grant,
 	// billing gift, platform task bookkeeping) and the post-commit cache
 	// invalidation.
-	Store repository.Store
+	Store Store
 }
 
 type QuotaTaskLogic struct {
@@ -541,4 +541,18 @@ func (l *QuotaTaskLogic) createResetTrafficLog(ctx context.Context, logs reposit
 		ObjectID: subscribeId,
 		Date:     now.Format(time.DateOnly),
 	})
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	repository.BillingTransactor
+	repository.PlatformTransactor
+	repository.SubscriptionTransactor
+	Inbox() repository.InboxRepo
+	Subscribe() repository.SubscribeRepo
+	Task() repository.TaskRepo
+	User() repository.UserRepo
+	UserCache() repository.UserCacheRepo
+	UserSubscription() repository.UserSubscriptionRepo
 }

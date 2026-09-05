@@ -10,14 +10,14 @@ import (
 	"github.com/perfect-panel/server/internal/auth/identifier"
 	"github.com/perfect-panel/server/internal/auth/ratelimit"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/taskqueue"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
-	"github.com/perfect-panel/server/internal/verification"
+	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
+	"github.com/perfect-panel/server/internal/module/identity/internal/verification"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/random"
 	"github.com/perfect-panel/server/pkg/requestmeta"
 	"github.com/perfect-panel/server/pkg/xerr"
-	queue "github.com/perfect-panel/server/queue/types"
 	"github.com/pkg/errors"
 	"gorm.io/gorm"
 )
@@ -43,8 +43,8 @@ func NewSendSmsCodeLogic(ctx context.Context, deps SendSmsCodeDependencies) *Sen
 }
 
 func (l *SendSmsCodeLogic) SendSmsCode(req *dto.SendSmsCodeRequest) (resp *dto.SendCodeResponse, err error) {
-	verifyType := constant.ParseVerifyType(req.Type)
-	if verifyType == constant.Register {
+	verifyType := auth.ParseVerifyType(req.Type)
+	if verifyType == auth.Register {
 		if err := l.deps.Policy.EnsureRegistrationOpen(l.ctx, identifier.Mobile); err != nil {
 			return nil, err
 		}
@@ -87,14 +87,14 @@ func (l *SendSmsCodeLogic) SendSmsCode(req *dto.SendSmsCodeRequest) (resp *dto.S
 	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.DatabaseQueryError), "FindUserAuthMethodByOpenID error")
 	}
-	if verifyType == constant.Register && m.Id > 0 {
+	if verifyType == auth.Register && m.Id > 0 {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.UserExist), "mobile already bind")
-	} else if verifyType == constant.Security && m.Id == 0 {
+	} else if verifyType == auth.Security && m.Id == 0 {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.UserNotExist), "mobile not bind")
 	}
 
 	metadata, _ := requestmeta.From(l.ctx)
-	taskPayload := queue.SendSmsPayload{
+	taskPayload := taskqueue.SendSmsPayload{
 		Metadata:      metadata,
 		Type:          req.Type,
 		Telephone:     req.Telephone,
@@ -116,7 +116,7 @@ func (l *SendSmsCodeLogic) SendSmsCode(req *dto.SendSmsCodeRequest) (resp *dto.S
 		return nil, errors.Wrap(xerr.NewErrCode(xerr.ERROR), "Failed to marshal task payload")
 	}
 	// Create a queue task
-	task := asynq.NewTask(queue.ForthwithSendSms, payloadValue)
+	task := asynq.NewTask(taskqueue.ForthwithSendSms, payloadValue)
 	// Enqueue the task
 	taskInfo, err := l.deps.Queue.EnqueueContext(l.ctx, task)
 	if err != nil {

@@ -88,7 +88,7 @@ jobs:
       - name: Test MariaDB 11.8 compatibility
         env:
           PPANEL_TEST_MYSQL_DSN: "root:mariadb@tcp(127.0.0.1:3307)/ppanel?charset=utf8mb4&parseTime=true&loc=UTC&interpolateParams=true"
-        run: go test -count=1 ./pkg/orm ./initialize/migrate
+        run: go test -count=1 ./pkg/orm ./internal/app/migration/schema
 
       # master is the LTS line and main takes the features, so the two can each
       # gain migrations. This keeps their numbering compatible; see the script for

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
-	"github.com/perfect-panel/server/internal/trafficagg"
+	"github.com/perfect-panel/server/internal/module/network/internal/trafficagg"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/pkg/errors"
 )
@@ -35,6 +35,7 @@ func (l *ServerPushUserTrafficLogic) ServerPushUserTraffic(req *dto.ServerPushUs
 
 	if err = trafficagg.New(trafficagg.Deps{
 		Store: l.deps.Store,
+		Usage: l.deps.TrafficUsage,
 		Redis: l.deps.Redis,
 		TrafficReportThreshold: func() int64 {
 			return l.deps.Config().Node.TrafficReportThreshold

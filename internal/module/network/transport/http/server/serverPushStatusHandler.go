@@ -6,7 +6,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/perfect-panel/server/internal/module/network"
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
-	"github.com/perfect-panel/server/internal/validation"
+	"github.com/perfect-panel/server/internal/transport/http/validation"
 )
 
 // ServerPushStatusHandler documents Push server status.

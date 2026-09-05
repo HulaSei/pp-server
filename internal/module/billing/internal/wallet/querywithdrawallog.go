@@ -3,7 +3,7 @@ package wallet
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -27,7 +27,7 @@ func newQueryWithdrawalLogLogic(ctx context.Context, deps Deps) *QueryWithdrawal
 }
 
 func (l *QueryWithdrawalLogLogic) QueryWithdrawalLog(req *dto.QueryWithdrawalLogListRequest) (resp *dto.QueryWithdrawalLogListResponse, err error) {
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		return nil, errors.Wrap(xerr.NewErrCode(xerr.InvalidAccess), "current user is not found in context")
 	}

@@ -27,7 +27,7 @@ type UserLoginConfig struct {
 }
 
 // UserLoginDependencies explicitly declares the collaborators of email login
-// instead of passing ServiceContext to business logic.
+// instead of passing Application to business logic.
 type UserLoginDependencies struct {
 	Store        UserLoginStore
 	Redis        *redis.Client
