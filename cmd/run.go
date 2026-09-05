@@ -10,8 +10,8 @@ import (
 	"time"
 	"uuid"
 
-	"github.com/perfect-panel/server/initialize"
 	"github.com/perfect-panel/server/internal/app"
+	"github.com/perfect-panel/server/internal/app/bootstrap"
 	"github.com/perfect-panel/server/internal/app/buildinfo"
 	"github.com/perfect-panel/server/internal/app/lifecycle"
 	"github.com/perfect-panel/server/internal/app/scheduler"
@@ -19,6 +19,7 @@ import (
 	"github.com/perfect-panel/server/internal/module/network"
 	"github.com/perfect-panel/server/internal/transport/http/routes"
 	"github.com/perfect-panel/server/internal/transport/http/server"
+	"github.com/perfect-panel/server/internal/transport/http/setup"
 	"github.com/perfect-panel/server/internal/transport/task"
 	"github.com/perfect-panel/server/internal/transport/task/email"
 	"github.com/perfect-panel/server/internal/transport/task/order"
@@ -77,7 +78,7 @@ func getServers() *lifecycle.Group {
 	}
 	// check config file is empty, if empty, start init web server
 	if initConfig(&c) {
-		status, engine := initialize.Config(startConfigPath)
+		status, engine := setup.Start(startConfigPath)
 		<-status
 		if err := engine.Shutdown(context.TODO()); err != nil {
 			log.Printf("Init Server Shutdown: %s\n", err.Error())
@@ -96,7 +97,7 @@ func getServers() *lifecycle.Group {
 	// init service context
 	ctx := app.NewApplication(c)
 	runtimeConfig := ctx.Runtime.Config
-	initDeps := &initialize.Dependencies{
+	bootstrapDeps := &bootstrap.Dependencies{
 		Config:                   runtimeConfig,
 		UpdateConfig:             ctx.Runtime.UpdateConfig,
 		Store:                    ctx.Store,
@@ -169,9 +170,9 @@ func getServers() *lifecycle.Group {
 
 	services := lifecycle.NewServiceGroup()
 	services.Add(app.NewService(app.Dependencies{
-		Config:     runtimeConfig,
-		Store:      ctx.Store,
-		Initialize: initDeps,
+		Config:    runtimeConfig,
+		Store:     ctx.Store,
+		Bootstrap: bootstrapDeps,
 		HTTP: func() httpserver.Dependencies {
 			return httpserver.Dependencies{
 				Routes:           routeDeps(),

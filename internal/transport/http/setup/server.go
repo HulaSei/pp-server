@@ -1,4 +1,4 @@
-package initialize
+package setup
 
 import (
 	"context"
@@ -15,7 +15,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app/server"
 	hertzconfig "github.com/cloudwego/hertz/pkg/common/config"
 	"github.com/cloudwego/hertz/pkg/common/utils"
-	"github.com/perfect-panel/server/initialize/migrate"
+	"github.com/perfect-panel/server/internal/app/migration/schema"
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/pkg/conf"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -30,7 +30,8 @@ var templateFS embed.FS
 var initStatus = make(chan bool)
 var configPath string
 
-func Config(path string) (chan bool, *server.Hertz) {
+// Start serves the first-installation UI on the local setup listener.
+func Start(path string) (chan bool, *server.Hertz) {
 	// Set the configuration file path
 	configPath = path
 	engine := newConfigServer(server.WithHostPorts("127.0.0.1:8080"))
@@ -140,7 +141,7 @@ func handleInitConfig(_ context.Context, ctx *app.RequestContext) {
 		defer sqlDB.Close()
 	}
 	// migrate database
-	if err = migrate.Up(dbClient.Driver(), dbClient.MigrationDsn()); err != nil {
+	if err = schema.Up(dbClient.Driver(), dbClient.MigrationDsn()); err != nil {
 		logger.Errorf("[Init Database] Migrate failed: %v", err.Error())
 		ctx.JSON(http.StatusOK, utils.H{
 			"code": 500,
@@ -152,7 +153,7 @@ func handleInitConfig(_ context.Context, ctx *app.RequestContext) {
 	}
 
 	// create admin user
-	if err = migrate.CreateAdminUser(request.AdminEmail, request.AdminPassword, db); err != nil {
+	if err = schema.CreateAdminUser(request.AdminEmail, request.AdminPassword, db); err != nil {
 		logger.Errorf("[Init Database] Create admin user failed: %v", err.Error())
 		ctx.JSON(http.StatusOK, utils.H{
 			"code": 500,

@@ -66,7 +66,7 @@ internal/module/<name>/
 - **架构测试** `internal/arch/arch_test.go`（随 `go test ./...` 与 lefthook pre-commit 运行）：
   - `TestLogicImportFreeze`：legacy logic 跨包依赖基线已清零，禁止恢复；
   - `TestInternalLayout`：固定 internal 的 8 个职责组，限制基础设施的反向依赖；
-  - `TestRuntimePackagesStayInternal`：禁止恢复根目录的 queue、scheduler、adapter Go 包；
+  - `TestRuntimePackagesStayInternal`：禁止恢复根目录的 queue、scheduler、adapter、initialize Go 包；
   - `TestAppImportBoundary`：只有 CLI 导入应用组装根；
   - `TestModulePurity`：模块不得 import 应用组装与 legacy logic，版本元数据除外；
   - `TestModuleLayout`：模块只允许暴露门面、`contract/`、`events/`、`entity/` 与 `transport/`；
@@ -77,6 +77,8 @@ internal/module/<name>/
 ## 迁移路径
 
 2026-09-05 的目录整理已完成：当前布局见 `docs/package-layout.md`。
+运行时初始化与热更新已归 `internal/app/bootstrap`，安装页面归 `internal/transport/http/setup`，
+迁移引擎和 SQL 归 `internal/app/migration/schema`；SQL 内容和编号保持不变。
 下文保留此前迁移的历史背景，旧 `ServiceContext` 名称指当时的结构。
 
 每步独立可交付、可上线，不长期分叉：

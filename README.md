@@ -149,9 +149,8 @@ go test ./internal/transport/http/routes -run '^TestSwagger' -count=1
 ├── cmd/              # 应用程序入口
 ├── doc/              # 文档
 ├── etc/              # 配置文件（如 ppanel.yaml）
-├── initialize/       # 系统初始化
 ├── internal/         # 内部模块
-│   ├── app/          # 应用组装、生命周期与定时调度
+│   ├── app/          # 应用组装、初始化、迁移与定时调度
 │   ├── arch/         # 架构边界检查
 │   ├── auth/         # 跨模块认证能力
 │   ├── config/       # 配置文件解析

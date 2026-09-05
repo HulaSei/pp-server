@@ -7,11 +7,11 @@
 
 | 目录 | 职责与入口 |
 |---|---|
-| `app` | `NewApplication` 组装七个模块；`server.go` 管理服务启动与重启；`state` 发布运行时快照，`lifecycle` 管理停止钩子，`buildinfo` 保存版本元数据；定时调度位于 `scheduler`，迁移工具位于 `migration` |
+| `app` | `NewApplication` 组装七个模块；`server.go` 管理启动与重启；`bootstrap` 加载及重载运行时配置；`state` 发布快照，`lifecycle` 管理停止钩子，`buildinfo` 保存版本元数据；`scheduler` 管理定时调度，`migration` 管理迁移 |
 | `config` | 配置结构、系统设置转换、数据库和 Redis 配置解析 |
 | `auth` | 跨模块的令牌、设备签名与会话、标识规范化、密码、挑战和限流 |
 | `module` | 七个业务模块，各自拥有门面、契约、实体、内部实现与业务 handler |
-| `transport` | `http/server`、`http/routes`、`http/middleware`、`http/validation`；设备 WebSocket 位于 `devicesocket`；`task` 统一任务消费服务、路由与各类处理器，邮件批次执行器并入 `task/email` |
+| `transport` | `http/server`、`http/routes`、`http/middleware`、`http/validation`；首次安装页面位于 `http/setup`；设备 WebSocket 位于 `devicesocket`；`task` 统一任务消费服务、路由与各类处理器，邮件批次执行器并入 `task/email` |
 | `infra` | 邮件、短信、队列、事件总线、GeoIP 数据库、字段映射、协议编码、请求上下文键与供应商元数据 |
 | `repository` | 现有仓储契约、作用域事务和 GORM 组装；各业务仓储实现仍在所属模块内部 |
 | `arch` | 目录归属、模块隔离、共享包及组装根依赖方向的测试 |
@@ -44,7 +44,24 @@
 - 原 `scheduler` 归 `internal/app/scheduler`，负责定时注册任务，调度表达式、重试配置和时区策略保持一致。
 - 原 `adapter` 归 `internal/module/subscription/internal/render`，为订阅下发与模板预览构建客户端配置数据。
   最终输出继续由订阅模板和配置的输出格式决定。
-- `internal/arch` 禁止恢复这三个根目录 Go 包，并禁止模块核心依赖任务或 HTTP 接入层。
+- `internal/arch` 禁止恢复 queue、scheduler、adapter、initialize 根目录 Go 包，并禁止模块核心依赖任务或 HTTP 接入层。
+
+## 初始化与热更新
+
+原 `initialize` 按调用职责拆为三处：
+
+- `internal/app/bootstrap`：启动和后台配置热更新。`bootstrap.go` 集中依赖、启动顺序、重载分发与启动迁移；
+  `settings.go` 合并站点、注册、邀请、订阅和校验设置；`auth_methods.go` 合并邮件、手机和设备配置；
+  `node.go` 合并节点密钥与节点配置；`currency.go`、`telegram.go` 保留各自的运行时副作用。
+- `internal/transport/http/setup`：首次安装 HTTP 服务及内嵌页面，保留 `/init`、`/init/config`、
+  `/init/database/test`、兼容的 `/init/mysql/test` 和 `/init/redis/test`。
+- `internal/app/migration/schema`：数据库迁移引擎、首次安装管理员种子及两种方言的 SQL；
+  同级的 `mysql2postgres` 继续负责数据迁移工具。
+
+启动顺序仍为迁移、站点、节点密钥、节点配置、邮件、设备、邀请、校验、订阅、注册、手机、汇率、Telegram。
+`bootstrap.Reload` 仅重载所选配置项，不运行启动迁移或节点密钥初始化。
+SQL 文件移动时保留原有文件名与内容；分支迁移检查兼容基准提交中的旧目录，目录移动不视为新增迁移。
+空的 `mysql.go` 和无调用的自定义 SQL 执行工具已移除。
 
 ## pkg 边界
 

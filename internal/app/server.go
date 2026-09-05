@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/perfect-panel/server/initialize"
+	"github.com/perfect-panel/server/internal/app/bootstrap"
 	"github.com/perfect-panel/server/internal/app/lifecycle"
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/repository"
@@ -24,7 +24,7 @@ type Service struct {
 type Dependencies struct {
 	Config                 func() config.Config
 	Store                  repository.Store
-	Initialize             *initialize.Dependencies
+	Bootstrap              *bootstrap.Dependencies
 	HTTP                   func() httpserver.Dependencies
 	SetRestart             func(func() error)
 	SetReinitializeHandler func(func(string))
@@ -56,13 +56,13 @@ func newTransportServer(deps httpserver.Dependencies, runtimeConfig config.Confi
 }
 
 func (m *Service) Start() {
-	if m.deps.Config == nil || m.deps.Initialize == nil || m.deps.HTTP == nil {
+	if m.deps.Config == nil || m.deps.Bootstrap == nil || m.deps.HTTP == nil {
 		panic("config file path is nil")
 	}
 
 	runtimeConfig := m.deps.Config()
 	serverAddr := fmt.Sprintf("%v:%d", runtimeConfig.Host, runtimeConfig.Port)
-	initialize.StartInitSystemConfig(m.deps.Initialize)
+	bootstrap.Start(m.deps.Bootstrap)
 	if err := m.deps.Store.UserAuth().ValidateEmailIdentityUniqueness(context.Background()); err != nil {
 		panic(err.Error())
 	}
@@ -82,30 +82,7 @@ func (m *Service) Start() {
 		m.deps.SetRestart(m.Restart)
 	}
 	reinitialize := func(subsystem string) {
-		switch subsystem {
-		case "verify":
-			initialize.Verify(m.deps.Initialize)
-		case "node":
-			initialize.Node(m.deps.Initialize)
-		case "telegram":
-			initialize.Telegram(m.deps.Initialize)
-		case "currency":
-			initialize.Currency(m.deps.Initialize)
-		case "register":
-			initialize.Register(m.deps.Initialize)
-		case "site":
-			initialize.Site(m.deps.Initialize)
-		case "invite":
-			initialize.Invite(m.deps.Initialize)
-		case "subscribe":
-			initialize.Subscribe(m.deps.Initialize)
-		case "email":
-			initialize.Email(m.deps.Initialize)
-		case "mobile":
-			initialize.Mobile(m.deps.Initialize)
-		case "device":
-			initialize.Device(m.deps.Initialize)
-		}
+		bootstrap.Reload(m.deps.Bootstrap, subsystem)
 	}
 	if m.deps.SetReinitializeHandler != nil {
 		m.deps.SetReinitializeHandler(reinitialize)

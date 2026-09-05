@@ -45,7 +45,7 @@ var internalRoots = map[string]bool{
 
 func TestRuntimePackagesStayInternal(t *testing.T) {
 	for _, f := range collectGoFiles(t) {
-		for _, legacy := range []string{"queue", "scheduler", "adapter"} {
+		for _, legacy := range []string{"queue", "scheduler", "adapter", "initialize"} {
 			if within(f.dir, legacy) {
 				t.Errorf("%s: runtime implementation belongs under internal, not %s", f.path, legacy)
 			}

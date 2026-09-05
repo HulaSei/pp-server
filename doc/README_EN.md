@@ -150,9 +150,8 @@ Visit [ppanel.dev](https://ppanel.dev/) for more details.
 ├── cmd/              # Application entry point
 ├── doc/              # Documentation
 ├── etc/              # Configuration files (e.g., ppanel.yaml)
-├── initialize/       # System initialization
 ├── internal/         # Internal modules
-│   ├── app/          # Application assembly, lifecycle and scheduling
+│   ├── app/          # Assembly, bootstrap, migrations and scheduling
 │   ├── arch/         # Architecture boundary checks
 │   ├── auth/         # Shared authentication capabilities
 │   ├── config/       # Configuration parsing
