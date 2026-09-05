@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-BENCH_PACKAGE="${BENCH_PACKAGE:-./internal/transport/httpserver}"
+BENCH_PACKAGE="${BENCH_PACKAGE:-./internal/transport/http/server}"
 BENCH_REGEX="${BENCH_REGEX:-^BenchmarkHTTPServer}"
 BENCH_TIME="${BENCH_TIME:-1s}"
 BENCH_COUNT="${BENCH_COUNT:-1}"

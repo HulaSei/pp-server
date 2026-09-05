@@ -69,7 +69,7 @@ type Snapshot struct {
 }
 
 // Deps declares everything the module needs; the composition root
-// (internal/svc) provides them. The module wraps the legacy store during
+// (internal/app) provides them. The module wraps the legacy store during
 // migration and will own its persistence once the domain data moves in
 // (ADR-001 step 5).
 type Deps struct {

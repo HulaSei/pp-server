@@ -9,7 +9,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/billing"
 )
 
@@ -38,7 +38,7 @@ func TestPaymentNotifyHandler_preservesStripeRawPayloadAndSignature_whenPaymentI
 	ctx.Request.SetBodyString(`{"id":"evt_test","type":"payment_intent.succeeded"}`)
 
 	// When
-	PaymentNotifyHandler(billing.New(billing.Deps{}))(context.WithValue(context.Background(), constant.CtxKeyPlatform, "Stripe"), ctx)
+	PaymentNotifyHandler(billing.New(billing.Deps{}))(context.WithValue(context.Background(), requestctx.CtxKeyPlatform, "Stripe"), ctx)
 
 	// Then
 	assertPaymentNotifyError(t, ctx, "Internal Server Error")
@@ -53,7 +53,7 @@ func TestPaymentNotifyHandler_returnsExistingErrorEnvelope_whenStripePayloadExce
 	ctx.Request.SetBody(bytes.Repeat([]byte("x"), 65_537))
 
 	// When
-	PaymentNotifyHandler(billing.New(billing.Deps{}))(context.WithValue(context.Background(), constant.CtxKeyPlatform, "Stripe"), ctx)
+	PaymentNotifyHandler(billing.New(billing.Deps{}))(context.WithValue(context.Background(), requestctx.CtxKeyPlatform, "Stripe"), ctx)
 
 	// Then
 	assertPaymentNotifyError(t, ctx, "Internal Server Error")
@@ -69,7 +69,7 @@ func TestPaymentNotifyHandler_acknowledgesEPayFormFailure_whenPaymentIsMissing(t
 	ctx.Request.SetBodyString("out_trade_no=order-1&trade_status=TRADE_SUCCESS&sign=test")
 
 	// When
-	PaymentNotifyHandler(billing.New(billing.Deps{}))(context.WithValue(context.Background(), constant.CtxKeyPlatform, "EPay"), ctx)
+	PaymentNotifyHandler(billing.New(billing.Deps{}))(context.WithValue(context.Background(), requestctx.CtxKeyPlatform, "EPay"), ctx)
 
 	// Then
 	if got := ctx.Response.StatusCode(); got != http.StatusBadRequest {
@@ -87,7 +87,7 @@ func TestPaymentNotifyHandlerRejectsRemovedCryptoSaaSPlatform(t *testing.T) {
 	ctx.Request.SetRequestURI("/payment/notify")
 	ctx.Request.Header.SetMethod(http.MethodPost)
 
-	PaymentNotifyHandler(billing.New(billing.Deps{}))(context.WithValue(context.Background(), constant.CtxKeyPlatform, "CryptoSaaS"), ctx)
+	PaymentNotifyHandler(billing.New(billing.Deps{}))(context.WithValue(context.Background(), requestctx.CtxKeyPlatform, "CryptoSaaS"), ctx)
 
 	if got := ctx.Response.StatusCode(); got != http.StatusBadRequest {
 		t.Fatalf("expected status %d, got %d", http.StatusBadRequest, got)

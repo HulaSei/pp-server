@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	couponEntity "github.com/perfect-panel/server/internal/module/billing/entity/coupon"
 	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
@@ -94,12 +94,12 @@ func TestQueryOrderDetailEnforcesOwnershipAndHidesCommission(t *testing.T) {
 	}}
 	svc, _ := newBillingService(orders, &fakePaymentRepo{})
 
-	stranger := context.WithValue(context.Background(), constant.CtxKeyUser, &userEntity.User{Id: 8})
+	stranger := context.WithValue(context.Background(), requestctx.CtxKeyUser, &userEntity.User{Id: 8})
 	if _, err := svc.QueryOrderDetail(stranger, &dto.QueryOrderDetailRequest{OrderNo: "o-9"}); err == nil {
 		t.Fatal("reading someone else's order must be rejected")
 	}
 
-	owner := context.WithValue(context.Background(), constant.CtxKeyUser, &userEntity.User{Id: 7})
+	owner := context.WithValue(context.Background(), requestctx.CtxKeyUser, &userEntity.User{Id: 7})
 	got, err := svc.QueryOrderDetail(owner, &dto.QueryOrderDetailRequest{OrderNo: "o-9"})
 	if err != nil {
 		t.Fatalf("QueryOrderDetail: %v", err)

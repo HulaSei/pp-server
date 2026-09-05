@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	walletEntity "github.com/perfect-panel/server/internal/module/billing/entity/wallet"
 	usermodel "github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
@@ -153,7 +153,7 @@ func TestUnsubscribe_AdminCreatedSubscription_SkipsRefund(t *testing.T) {
 		subscribeRepo: subscribeRepo,
 		wallet:        &adminCreatedWalletRepo{},
 	}
-	ctx := context.WithValue(context.Background(), constant.CtxKeyUser, currentUser)
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyUser, currentUser)
 	logic := newUnsubscribeLogic(ctx, Deps{
 		UserSubs: store.userRepo,
 		Users:    store.userRepo,

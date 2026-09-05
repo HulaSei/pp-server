@@ -10,7 +10,7 @@ type SmsCodeConfig struct {
 }
 
 // SendSmsCodeDependencies explicitly declares the collaborators of SMS code
-// delivery instead of passing ServiceContext to business logic.
+// delivery instead of passing Application to business logic.
 type SendSmsCodeDependencies struct {
 	Store  VerificationIdentityStore
 	Redis  *redis.Client

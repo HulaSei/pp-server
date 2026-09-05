@@ -5,8 +5,8 @@ package ticket
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/constant"
-	"github.com/perfect-panel/server/internal/mapping"
+	"github.com/perfect-panel/server/internal/infra/mapping"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/support/contract"
 	entity "github.com/perfect-panel/server/internal/module/support/entity/ticket"
@@ -38,7 +38,7 @@ func NewService(repo repository.TicketRepo, notify Notifier) *Service {
 }
 
 func currentUser(ctx context.Context) (*user.User, error) {
-	u, ok := ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")

@@ -6,10 +6,11 @@ import (
 
 	"github.com/perfect-panel/server/internal/auth/identifier"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
+	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/internal/verification"
+	"github.com/perfect-panel/server/internal/module/identity/internal/verification"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
 	"github.com/pkg/errors"
@@ -35,7 +36,7 @@ func (l *UpdateBindMobileLogic) UpdateBindMobile(req *dto.UpdateBindMobileReques
 	if err := l.deps.Policy.EnsureMethodEnabled(l.ctx, identifier.Mobile); err != nil {
 		return err
 	}
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
@@ -45,7 +46,7 @@ func (l *UpdateBindMobileLogic) UpdateBindMobile(req *dto.UpdateBindMobileReques
 	if err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.TelephoneError), "Invalid phone number")
 	}
-	cacheKey := fmt.Sprintf("%s:%s:%s", config.AuthCodeTelephoneCacheKey, constant.Register, phoneNumber)
+	cacheKey := fmt.Sprintf("%s:%s:%s", config.AuthCodeTelephoneCacheKey, auth.Register, phoneNumber)
 	if err := verification.ValidateVerificationCode(l.ctx, l.deps.Redis, cacheKey, req.Code, false); err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.VerifyCodeError), "code error")
 	}

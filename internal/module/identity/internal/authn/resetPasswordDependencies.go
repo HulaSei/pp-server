@@ -29,7 +29,7 @@ type ResetPasswordConfig struct {
 }
 
 // ResetPasswordDependencies explicitly declares the collaborators of email
-// password reset instead of passing ServiceContext to business logic.
+// password reset instead of passing Application to business logic.
 type ResetPasswordDependencies struct {
 	Store        ResetPasswordStore
 	Redis        *redis.Client

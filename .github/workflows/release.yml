@@ -164,4 +164,4 @@ jobs:
           project_path: "."
           binary_name: "ppanel-server"
           extra_files: LICENSE etc
-          ldflags: -s -w -buildid= -X "github.com/perfect-panel/server/internal/constant.Version=${{env.VERSION}}" -X "github.com/perfect-panel/server/internal/constant.BuildTime=${{env.BUILD_TIME}}" -X "github.com/perfect-panel/server/internal/constant.Channel=${{env.CHANNEL}}"
+          ldflags: -s -w -buildid= -X "github.com/perfect-panel/server/internal/app/buildinfo.Version=${{env.VERSION}}" -X "github.com/perfect-panel/server/internal/app/buildinfo.BuildTime=${{env.BUILD_TIME}}" -X "github.com/perfect-panel/server/internal/app/buildinfo.Channel=${{env.CHANNEL}}"

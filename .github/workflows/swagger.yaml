@@ -53,7 +53,7 @@ jobs:
         run: git diff --exit-code -- ppanel.json
 
       - name: Verify Swagger covers Hertz routes
-        run: go test ./internal/route -run '^TestSwagger' -count=1
+        run: go test ./internal/transport/http/routes -run '^TestSwagger' -count=1
 
       - name: Verify Swagger workflow contract
         run: python3 script/check-swagger-workflow-contract.py

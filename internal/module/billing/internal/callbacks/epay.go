@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	payment2 "github.com/perfect-panel/server/internal/module/billing/internal/payment"
@@ -33,7 +33,7 @@ func (s *Service) EPayNotify(ctx context.Context, meta EPayNotifyMeta, req *dto.
 	if req == nil {
 		return errors.New("callback request is missing")
 	}
-	data, ok := ctx.Value(constant.CtxKeyPayment).(*payment.Payment)
+	data, ok := ctx.Value(requestctx.CtxKeyPayment).(*payment.Payment)
 	if !ok {
 		l.Error("[EPayNotify] Payment not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "payment config not found")

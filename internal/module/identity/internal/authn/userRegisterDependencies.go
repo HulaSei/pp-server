@@ -50,7 +50,7 @@ type UserRegisterConfig struct {
 }
 
 // UserRegisterDependencies explicitly declares the collaborators of email
-// registration instead of passing ServiceContext to business logic.
+// registration instead of passing Application to business logic.
 type UserRegisterDependencies struct {
 	Store        UserRegisterStore
 	Redis        *redis.Client

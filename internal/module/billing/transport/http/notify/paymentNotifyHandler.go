@@ -8,7 +8,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/protocol/consts"
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/billing"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment"
@@ -41,7 +41,7 @@ var errNotifyPayloadTooLarge = errors.New("http: request body too large")
 // @Router /v1/notify/{platform}/{token} [put]
 func PaymentNotifyHandler(service billing.Service) app.HandlerFunc {
 	return func(c context.Context, ctx *app.RequestContext) {
-		platform, ok := c.Value(constant.CtxKeyPlatform).(string)
+		platform, ok := c.Value(requestctx.CtxKeyPlatform).(string)
 		if !ok {
 			logger.WithContext(c).Errorf("platform not found")
 			httpx.HttpResult(ctx, nil, fmt.Errorf("platform not found"))

@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
@@ -33,7 +33,7 @@ func newQueryUserSubscribeNodeListLogic(ctx context.Context, deps Deps) *QueryUs
 }
 
 func (l *QueryUserSubscribeNodeListLogic) QueryUserSubscribeNodeList() (resp *dto.QueryUserSubscribeNodeListResponse, err error) {
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")

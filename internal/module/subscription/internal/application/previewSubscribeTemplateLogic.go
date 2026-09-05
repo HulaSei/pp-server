@@ -3,9 +3,9 @@ package application
 import (
 	"context"
 
-	"github.com/perfect-panel/server/adapter"
 	"github.com/perfect-panel/server/internal/module/network/entity/node"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
+	"github.com/perfect-panel/server/internal/module/subscription/internal/render"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -53,12 +53,12 @@ func (l *PreviewSubscribeTemplateLogic) PreviewSubscribeTemplate(req *dto.Previe
 		l.Errorf("[PreviewSubscribeTemplateLogic] Ignoring malformed default params %q: %v", data.DefaultParams, err)
 	}
 
-	sub := adapter.NewAdapter(data.SubscribeTemplate, adapter.WithServers(servers),
-		adapter.WithParams(defaultParams),
-		adapter.WithSiteName("PerfectPanel"),
-		adapter.WithSubscribeName("Test Subscribe"),
-		adapter.WithOutputFormat(data.OutputFormat),
-		adapter.WithUserInfo(adapter.User{
+	sub := render.NewAdapter(data.SubscribeTemplate, render.WithServers(servers),
+		render.WithParams(defaultParams),
+		render.WithSiteName("PerfectPanel"),
+		render.WithSubscribeName("Test Subscribe"),
+		render.WithOutputFormat(data.OutputFormat),
+		render.WithUserInfo(render.User{
 			ID:           10000,
 			Password:     "test-password",
 			ExpiredAt:    timeutil.Now().AddDate(1, 0, 0),

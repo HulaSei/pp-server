@@ -3,8 +3,8 @@ package selfsub
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/constant"
-	"github.com/perfect-panel/server/internal/mapping"
+	"github.com/perfect-panel/server/internal/infra/mapping"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
@@ -29,7 +29,7 @@ func newUpdateUserSubscribeNoteLogic(ctx context.Context, deps Deps) *UpdateUser
 }
 
 func (l *UpdateUserSubscribeNoteLogic) UpdateUserSubscribeNote(req *dto.UpdateUserSubscribeNoteRequest) error {
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")

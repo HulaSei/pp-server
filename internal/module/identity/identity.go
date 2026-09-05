@@ -102,7 +102,7 @@ type AuthSnapshot = authn.Snapshot
 type AppleLoginRedirect = oauth.AppleLoginRedirect
 
 // Deps declares everything the module needs; the composition root
-// (internal/svc) provides them.
+// (internal/app) provides them.
 type Deps struct {
 	Users     repository.UserRepo
 	UserAuths repository.UserAuthRepo

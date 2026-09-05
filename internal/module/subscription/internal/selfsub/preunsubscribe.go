@@ -3,7 +3,7 @@ package selfsub
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	usermodel "github.com/perfect-panel/server/internal/module/identity/entity/user"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -27,7 +27,7 @@ func newPreUnsubscribeLogic(ctx context.Context, deps Deps) *PreUnsubscribeLogic
 }
 
 func (l *PreUnsubscribeLogic) PreUnsubscribe(req *dto.PreUnsubscribeRequest) (resp *dto.PreUnsubscribeResponse, err error) {
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*usermodel.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*usermodel.User)
 	if !ok {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
 	}

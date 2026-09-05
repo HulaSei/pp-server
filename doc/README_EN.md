@@ -122,7 +122,7 @@ After changing a route, request DTO, or response DTO, run:
 
 ```bash
 ./script/generate-swagger.sh
-go test ./internal/route -run '^TestSwagger' -count=1
+go test ./internal/transport/http/routes -run '^TestSwagger' -count=1
 ```
 
 GitHub Actions on `master` generates the full document plus the `admin.json`, `user.json`, `common.json`, and `node.json` scopes, then syncs them to `public/swagger` in `perfect-panel/ppanel-docs`. The existing `GH_TOKEN` secret needs Contents write access to the documentation repository.
@@ -152,16 +152,15 @@ Visit [ppanel.dev](https://ppanel.dev/) for more details.
 ├── etc/              # Configuration files (e.g., ppanel.yaml)
 ├── initialize/       # System initialization
 ├── internal/         # Internal modules
+│   ├── app/          # Application assembly, lifecycle and scheduling
+│   ├── arch/         # Architecture boundary checks
+│   ├── auth/         # Shared authentication capabilities
 │   ├── config/       # Configuration parsing
-│   ├── handler/      # HTTP handlers
-│   ├── middleware/   # HTTP middleware
-│   ├── logic/        # Business logic
-│   ├── model/        # Data models
-│   ├── svc/          # Service layer
-│   └── types/        # Type definitions
+│   ├── infra/        # Mail, SMS, shared task messages and infrastructure
+│   ├── module/       # Business facades, contracts, entities and adapters
+│   ├── repository/   # Repository contracts and transaction assembly
+│   └── transport/    # HTTP, WebSocket and task consumers
 ├── pkg/              # Utility code
-├── queue/            # Queue services
-├── scheduler/        # Scheduled tasks
 ├── script/           # Installation scripts
 ├── scripts/          # Performance and maintenance scripts
 ├── go.mod            # Go module definition

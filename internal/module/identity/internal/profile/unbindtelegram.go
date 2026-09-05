@@ -4,7 +4,7 @@ import (
 	"context"
 	"strconv"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -28,7 +28,7 @@ func newUnbindTelegramLogic(ctx context.Context, deps Deps) *UnbindTelegramLogic
 
 func (l *UnbindTelegramLogic) UnbindTelegram() error {
 	// Get User Info
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 
 	if !ok {
 		logger.Error("current user is not found in context")

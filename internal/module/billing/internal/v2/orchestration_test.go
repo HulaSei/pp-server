@@ -9,9 +9,9 @@ import (
 	"github.com/alicebob/miniredis/v2"
 	"github.com/perfect-panel/server/internal/auth/token"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
-	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
+	order2 "github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/portal"
 	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/repository"
@@ -21,10 +21,10 @@ import (
 
 type v2TicketOrderRepo struct {
 	repository.OrderRepo
-	order *orderEntity.Order
+	order *order2.Order
 }
 
-func (r *v2TicketOrderRepo) FindOneByOrderNo(_ context.Context, orderNo string) (*orderEntity.Order, error) {
+func (r *v2TicketOrderRepo) FindOneByOrderNo(_ context.Context, orderNo string) (*order2.Order, error) {
 	if r.order == nil || r.order.OrderNo != orderNo {
 		return nil, gorm.ErrRecordNotFound
 	}
@@ -33,7 +33,7 @@ func (r *v2TicketOrderRepo) FindOneByOrderNo(_ context.Context, orderNo string) 
 }
 
 func TestV2OrderRequestHashIgnoresReturnURLAndBindsUser(t *testing.T) {
-	ctx := context.WithValue(context.Background(), constant.CtxKeyUser, &userEntity.User{Id: 17})
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyUser, &userEntity.User{Id: 17})
 	logic := NewService(Deps{}).flow(ctx)
 	first := &dto.V2CreateOrderRequest{
 		Type: v2OrderTypePurchase, PaymentID: 3, SubscribeID: 9, Quantity: 2, Coupon: "SUMMER",
@@ -73,10 +73,10 @@ func TestV2GuestCheckoutTokenIsDeterministicPerIdempotencyKey(t *testing.T) {
 }
 
 func TestV2OrderEventTicketBindsCurrentOrderOwner(t *testing.T) {
-	orderInfo := &orderEntity.Order{
+	orderInfo := &order2.Order{
 		OrderNo: "order-ticket", UserId: 17, Status: 1, CreatedAt: time.Now(), StateVersion: 1,
 	}
-	ctx := context.WithValue(context.Background(), constant.CtxKeyUser, &userEntity.User{Id: 17})
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyUser, &userEntity.User{Id: 17})
 	logic := NewService(Deps{
 		JwtSecret: "stream-secret",
 		Orders:    &v2TicketOrderRepo{order: orderInfo},
@@ -111,10 +111,10 @@ func TestV2GuestCapabilitySurvivesAccountActivation(t *testing.T) {
 		idempotencyKey  = "1234567890abcdef"
 		guestCapability = "guest-checkout-capability"
 	)
-	orderInfo := &orderEntity.Order{
+	orderInfo := &order2.Order{
 		OrderNo: "guest-order", Status: 2, CreatedAt: time.Now(), StateVersion: 2,
 		GuestAuthType: "email", GuestIdentifier: "guest@example.com",
-		GuestCheckoutTokenHash: constant.CheckoutTokenHash(guestCapability),
+		GuestCheckoutTokenHash: order2.CheckoutTokenHash(guestCapability),
 	}
 	orders := &v2TicketOrderRepo{order: orderInfo}
 	ctx := context.Background()
@@ -138,11 +138,11 @@ func TestV2GuestCapabilitySurvivesAccountActivation(t *testing.T) {
 	if _, err := logic.EventTicket(orderInfo.OrderNo, guestCapability); err != nil {
 		t.Fatalf("guest capability must refresh ticket after account creation: %v", err)
 	}
-	orders.order.GuestCheckoutTokenHash = constant.CheckoutTokenHash("replaced-capability")
+	orders.order.GuestCheckoutTokenHash = order2.CheckoutTokenHash("replaced-capability")
 	if _, err := logic.AuthorizeEventTicket(orderInfo.OrderNo, ticket); err == nil {
 		t.Fatal("ticket must be rejected when its guest capability is no longer valid")
 	}
-	orders.order.GuestCheckoutTokenHash = constant.CheckoutTokenHash(guestCapability)
+	orders.order.GuestCheckoutTokenHash = order2.CheckoutTokenHash(guestCapability)
 	if err := logic.authorizeExistingCreate(orders.order, &dto.V2CreateOrderRequest{
 		Type:  v2OrderTypePurchase,
 		Guest: &dto.V2GuestOrderRequest{AuthType: "email", Identifier: "guest@example.com"},
@@ -156,9 +156,9 @@ func TestV2GuestCapabilitySurvivesAccountActivation(t *testing.T) {
 
 func TestV2GuestSessionExchangeRequiresActivatedAccount(t *testing.T) {
 	const guestCapability = "guest-checkout-capability"
-	orderInfo := &orderEntity.Order{
+	orderInfo := &order2.Order{
 		OrderNo: "guest-session", Status: 2, CreatedAt: time.Now(), StateVersion: 2,
-		GuestCheckoutTokenHash: constant.CheckoutTokenHash(guestCapability),
+		GuestCheckoutTokenHash: order2.CheckoutTokenHash(guestCapability),
 	}
 	orders := &v2TicketOrderRepo{order: orderInfo}
 	redisServer := miniredis.RunT(t)

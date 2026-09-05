@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/perfect-panel/server/internal/auth/password"
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -28,7 +28,7 @@ func newUpdateUserPasswordLogic(ctx context.Context, deps Deps) *UpdateUserPassw
 }
 
 func (l *UpdateUserPasswordLogic) UpdateUserPassword(req *dto.UpdateUserPasswordRequest) error {
-	userInfo := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	userInfo := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	//update the password
 	userInfo.Password = password.EncodePassWord(req.Password)
 	// Reset algo to the current password algorithm, otherwise a migrated user

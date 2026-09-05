@@ -6,7 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 
-	"github.com/perfect-panel/server/internal/mapping"
+	"github.com/perfect-panel/server/internal/infra/mapping"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	entity "github.com/perfect-panel/server/internal/module/billing/entity/coupon"
 	"github.com/perfect-panel/server/internal/repository"

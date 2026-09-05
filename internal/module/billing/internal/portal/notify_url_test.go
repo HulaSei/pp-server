@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
 )
 
@@ -25,7 +25,7 @@ func TestPaymentPublicBaseURL(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			if tt.requestHost != "" {
-				ctx = context.WithValue(ctx, constant.CtxKeyRequestHost, tt.requestHost)
+				ctx = context.WithValue(ctx, requestctx.CtxKeyRequestHost, tt.requestHost)
 			}
 			logic := NewPurchaseCheckoutLogic(ctx, CheckoutDependencies{
 				Config: CheckoutConfig{Host: tt.configHost},

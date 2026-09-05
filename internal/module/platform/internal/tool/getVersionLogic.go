@@ -3,7 +3,7 @@ package tool
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/app/buildinfo"
 	dto "github.com/perfect-panel/server/internal/module/platform/contract"
 	"github.com/perfect-panel/server/pkg/logger"
 )
@@ -25,6 +25,6 @@ func newGetVersionLogic(ctx context.Context, deps Deps) *GetVersionLogic {
 
 func (l *GetVersionLogic) GetVersion() (resp *dto.VersionResponse, err error) {
 	return &dto.VersionResponse{
-		Version: constant.Display(),
+		Version: buildinfo.Display(),
 	}, nil
 }

@@ -10,7 +10,8 @@ import (
 	"time"
 
 	"github.com/hibiken/asynq"
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
+	"github.com/perfect-panel/server/internal/infra/taskqueue"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
@@ -28,7 +29,6 @@ import (
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
 	"github.com/perfect-panel/server/pkg/xerr"
-	queueType "github.com/perfect-panel/server/queue/types"
 	"github.com/pkg/errors"
 	"github.com/redis/go-redis/v9"
 )
@@ -43,7 +43,7 @@ type PurchaseCheckoutLogic struct {
 
 // CheckoutDependencies contains the infrastructure ports required by the
 // checkout use case. Keep it specific to this use case instead of passing the
-// application-wide ServiceContext into business logic.
+// application-wide Application into business logic.
 type CheckoutDependencies struct {
 	Store              CheckoutStore
 	GuestCheckoutCache GuestCheckoutCache
@@ -300,7 +300,7 @@ func (l *PurchaseCheckoutLogic) PurchaseCheckout(req *dto.CheckoutOrderRequest) 
 // checkout capability kept only in the temporary-order record.
 func (l *PurchaseCheckoutLogic) authorizeCheckout(orderInfo *order.Order, req *dto.CheckoutOrderRequest) error {
 	if orderInfo.UserId != 0 {
-		currentUser, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+		currentUser, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 		if !ok || currentUser.Id != orderInfo.UserId {
 			return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "order does not belong to the current user")
 		}
@@ -311,19 +311,19 @@ func (l *PurchaseCheckoutLogic) authorizeCheckout(orderInfo *order.Order, req *d
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "guest checkout token is required")
 	}
 	if orderInfo.GuestCheckoutTokenHash != "" {
-		if subtle.ConstantTimeCompare([]byte(orderInfo.GuestCheckoutTokenHash), []byte(constant.CheckoutTokenHash(req.CheckoutToken))) != 1 {
+		if subtle.ConstantTimeCompare([]byte(orderInfo.GuestCheckoutTokenHash), []byte(order.CheckoutTokenHash(req.CheckoutToken))) != 1 {
 			return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "guest checkout token is invalid")
 		}
 		return nil
 	}
 	// Compatibility for guest orders created before checkout capabilities were
 	// persisted on the order itself.
-	cacheKey := fmt.Sprintf(constant.TempOrderCacheKey, orderInfo.OrderNo)
+	cacheKey := fmt.Sprintf(order.TempOrderCacheKey, orderInfo.OrderNo)
 	value, err := l.deps.GuestCheckoutCache.Get(l.ctx, cacheKey).Result()
 	if err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "guest checkout token is invalid")
 	}
-	var tempOrder constant.TemporaryOrderInfo
+	var tempOrder order.TemporaryOrderInfo
 	if err := tempOrder.Unmarshal([]byte(value)); err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "guest checkout token is invalid")
 	}
@@ -349,7 +349,7 @@ func (l *PurchaseCheckoutLogic) alipayF2fPayment(pay *payment.Payment, info *ord
 	if pay.Domain != "" {
 		notifyUrl = strings.TrimSuffix(pay.Domain, "/") + "/v1/notify/" + pay.Platform + "/" + pay.Token
 	} else {
-		host, ok := l.ctx.Value(constant.CtxKeyRequestHost).(string)
+		host, ok := l.ctx.Value(requestctx.CtxKeyRequestHost).(string)
 		if !ok {
 			host = l.deps.Config.Host
 		}
@@ -622,7 +622,7 @@ func (l *PurchaseCheckoutLogic) cryptomusInvoiceURL(invoice *cryptomus.Invoice, 
 func (l *PurchaseCheckoutLogic) paymentPublicBaseURL(config *payment.Payment) string {
 	baseURL := strings.TrimSuffix(config.Domain, "/")
 	if baseURL == "" {
-		host, ok := l.ctx.Value(constant.CtxKeyRequestHost).(string)
+		host, ok := l.ctx.Value(requestctx.CtxKeyRequestHost).(string)
 		if !ok || host == "" {
 			host = l.deps.Config.Host
 		}
@@ -867,7 +867,7 @@ func (l *PurchaseCheckoutLogic) balancePayment(u *user.User, o *order.Order) err
 
 activation:
 	// Enqueue order activation task for immediate processing
-	payload := queueType.ForthwithActivateOrderPayload{
+	payload := taskqueue.ForthwithActivateOrderPayload{
 		OrderNo: o.OrderNo,
 	}
 	bytes, err := json.Marshal(payload)
@@ -876,8 +876,8 @@ activation:
 		return err
 	}
 
-	task := asynq.NewTask(queueType.ForthwithActivateOrder, bytes)
-	_, err = l.deps.ActivationQueue.EnqueueContext(l.ctx, task, asynq.MaxRetry(5), asynq.TaskID(queueType.ActivationTaskID(o.OrderNo)))
+	task := asynq.NewTask(taskqueue.ForthwithActivateOrder, bytes)
+	_, err = l.deps.ActivationQueue.EnqueueContext(l.ctx, task, asynq.MaxRetry(5), asynq.TaskID(taskqueue.ActivationTaskID(o.OrderNo)))
 	if errors.Is(err, asynq.ErrTaskIDConflict) {
 		err = nil
 	}

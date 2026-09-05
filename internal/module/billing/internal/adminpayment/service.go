@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/perfect-panel/server/internal/mapping"
+	"github.com/perfect-panel/server/internal/infra/mapping"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	paymentModel "github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment"

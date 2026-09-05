@@ -6,12 +6,12 @@ import (
 	"slices"
 
 	"github.com/perfect-panel/server/internal/auth/password"
-	"github.com/perfect-panel/server/internal/constant"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
+	"github.com/perfect-panel/server/internal/module/billing/internal/ordercontext"
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment"
-	"github.com/perfect-panel/server/internal/orderflow"
+	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/random"
@@ -108,7 +108,7 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PortalPurchaseRequest) 
 	}
 	amount += feeAmount
 	// create order
-	checkoutToken := orderflow.GuestCheckoutToken(ctx)
+	checkoutToken := ordercontext.GuestCheckoutToken(ctx)
 	if checkoutToken == "" {
 		checkoutToken = random.KeyNew(32, 1)
 	}
@@ -132,9 +132,9 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PortalPurchaseRequest) 
 		GuestIdentifier:        req.Identifier,
 		GuestPasswordHash:      password.EncodePassWord(req.Password),
 		GuestInviteCode:        req.InviteCode,
-		GuestCheckoutTokenHash: constant.CheckoutTokenHash(checkoutToken),
+		GuestCheckoutTokenHash: order.CheckoutTokenHash(checkoutToken),
 	}
-	orderflow.ApplyIdempotency(ctx, orderInfo)
+	ordercontext.ApplyIdempotency(ctx, orderInfo)
 	// Billing-domain transaction: coupon reservation and order creation
 	// settle together.
 	err = s.deps.Store.InBillingTx(ctx, func(store repository.BillingStore) error {
@@ -162,7 +162,7 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PortalPurchaseRequest) 
 	// Reserve plan inventory in its own subscription-domain transaction
 	// (ADR-001 step 2). On failure the guest order is closed inline; guest
 	// pre-orders only hold a coupon reservation.
-	if err := orderflow.ReserveInventoryOnce(ctx, s.deps.Store, orderInfo.OrderNo, sub.Id); err != nil {
+	if err := subscription.ReserveInventoryOnce(ctx, s.deps.Store, orderInfo.OrderNo, sub.Id); err != nil {
 		closeErr := s.deps.Store.InBillingTx(ctx, func(store repository.BillingStore) error {
 			closed, e := store.Order().UpdateOrderStatusFrom(ctx, orderInfo.OrderNo, 1, 3)
 			if e != nil {
@@ -176,7 +176,7 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PortalPurchaseRequest) 
 		if closeErr != nil {
 			log.Errorw("[Purchase] Close order after reservation failure failed", logger.Field("error", closeErr.Error()), logger.Field("orderNo", orderInfo.OrderNo))
 		}
-		if errors.Is(err, orderflow.ErrOutOfStock) {
+		if errors.Is(err, subscription.ErrOutOfStock) {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.SubscribeOutOfStock), "subscribe out of stock")
 		}
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "reserve inventory error: %v", err.Error())

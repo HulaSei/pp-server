@@ -87,7 +87,7 @@ const (
 )
 
 // Deps declares everything the module needs; the composition root
-// (internal/svc) provides them.
+// (internal/app) provides them.
 type Deps struct {
 	// Bot returns the current bot client; the initialize subsystem recreates
 	// it when the Telegram configuration changes, so it is read per call.

@@ -6,13 +6,14 @@ import (
 	"slices"
 	"time"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
+	"github.com/perfect-panel/server/internal/module/billing/internal/ordercontext"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
-	"github.com/perfect-panel/server/internal/orderflow"
+	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/slicesx"
@@ -37,7 +38,7 @@ func (s *Service) enqueueDeferredClose(ctx context.Context, tag, orderNo string)
 // It handles the complete purchase workflow from user validation to order creation and task scheduling.
 func (s *Service) Purchase(ctx context.Context, req *dto.PurchaseOrderRequest) (*dto.PurchaseOrderResponse, error) {
 	log := logger.WithContext(ctx)
-	u, ok := ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
@@ -196,7 +197,7 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PurchaseOrderRequest) (
 		IsNew:          isNew,
 		SubscribeId:    req.SubscribeId,
 	}
-	orderflow.ApplyIdempotency(ctx, orderInfo)
+	ordercontext.ApplyIdempotency(ctx, orderInfo)
 	err = s.deps.Store.InBillingTx(ctx, func(txStore repository.BillingStore) error {
 		// The request-context user is only an authentication snapshot. Lock and
 		// re-read the account before reserving gift credit so two concurrent
@@ -295,7 +296,7 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PurchaseOrderRequest) (
 		if closeErr := s.Close(ctx, &dto.CloseOrderRequest{OrderNo: orderInfo.OrderNo}); closeErr != nil {
 			log.Errorw("[Purchase] Close order after reservation failure failed", logger.Field("error", closeErr.Error()), logger.Field("orderNo", orderInfo.OrderNo))
 		}
-		if errors.Is(err, orderflow.ErrOutOfStock) {
+		if errors.Is(err, subscription.ErrOutOfStock) {
 			return nil, errors.Wrapf(xerr.NewErrCode(xerr.SubscribeOutOfStock), "subscribe out of stock")
 		}
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "reserve inventory error: %v", err.Error())
@@ -311,5 +312,5 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PurchaseOrderRequest) (
 // reserveInventory reserves one plan inventory unit for the order in its own
 // subscription-domain transaction (idempotent via the domain event inbox).
 func (s *Service) reserveInventory(ctx context.Context, orderNo string, subscribeID int64) error {
-	return orderflow.ReserveInventoryOnce(ctx, s.deps.Store, orderNo, subscribeID)
+	return subscription.ReserveInventoryOnce(ctx, s.deps.Store, orderNo, subscribeID)
 }

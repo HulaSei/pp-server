@@ -29,7 +29,7 @@ type TelephoneResetPasswordConfig struct {
 }
 
 // TelephoneResetPasswordDependencies explicitly declares the collaborators of
-// telephone password reset instead of passing ServiceContext to business logic.
+// telephone password reset instead of passing Application to business logic.
 type TelephoneResetPasswordDependencies struct {
 	Store        TelephoneResetPasswordStore
 	Redis        *redis.Client

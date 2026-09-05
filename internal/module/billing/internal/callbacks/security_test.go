@@ -12,7 +12,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
+	"github.com/perfect-panel/server/internal/infra/taskqueue"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
@@ -21,7 +22,6 @@ import (
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment/stripe"
 	"github.com/perfect-panel/server/internal/module/billing/internal/settle"
 	"github.com/perfect-panel/server/internal/repository"
-	queueType "github.com/perfect-panel/server/queue/types"
 	"gorm.io/gorm"
 )
 
@@ -65,7 +65,7 @@ func TestEPayNotifyRejectsInvalidSignatureWhenDebugEnabled(t *testing.T) {
 		Platform: "EPay",
 		Config:   `{"pid":"1001","url":"https://pay.example","key":"secret","type":"alipay"}`,
 	}
-	ctx := context.WithValue(context.Background(), constant.CtxKeyPayment, paymentConfig)
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyPayment, paymentConfig)
 	svc := NewService(nil, nil)
 
 	err := svc.EPayNotify(ctx, EPayNotifyMeta{
@@ -106,7 +106,7 @@ func TestEPayNotifySettlesOnlyAfterSignedAndQueriedDetailsMatch(t *testing.T) {
 		"name": "product", "money": "10.00", "trade_status": "TRADE_SUCCESS", "param": "", "sign_type": "MD5",
 	}
 	params["sign"] = signEPayTestParams(params, "secret")
-	ctx := context.WithValue(context.Background(), constant.CtxKeyPayment, paymentConfig)
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyPayment, paymentConfig)
 	svc := NewService(orders, queue)
 	meta := EPayNotifyMeta{Method: "POST", Params: params}
 
@@ -148,7 +148,7 @@ func TestEPayNotifySettlesWithSignedCallbackWhenQueryUnsupported(t *testing.T) {
 		"name": "product", "money": "10.00", "trade_status": "TRADE_SUCCESS", "param": "", "sign_type": "MD5",
 	}
 	params["sign"] = signEPayTestParams(params, "secret")
-	ctx := context.WithValue(context.Background(), constant.CtxKeyPayment, paymentConfig)
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyPayment, paymentConfig)
 	svc := NewService(orders, queue)
 	meta := EPayNotifyMeta{Method: "POST", Params: params}
 
@@ -186,7 +186,7 @@ func TestEPayNotifyRejectsAmountMismatchWhenQueryUnsupported(t *testing.T) {
 		"name": "product", "money": "9.99", "trade_status": "TRADE_SUCCESS", "param": "", "sign_type": "MD5",
 	}
 	params["sign"] = signEPayTestParams(params, "secret")
-	ctx := context.WithValue(context.Background(), constant.CtxKeyPayment, paymentConfig)
+	ctx := context.WithValue(context.Background(), requestctx.CtxKeyPayment, paymentConfig)
 	svc := NewService(orders, queue)
 	meta := EPayNotifyMeta{Method: "POST", Params: params}
 
@@ -266,11 +266,11 @@ func TestValidateQueriedEPayOrderRejectsGatewayMismatch(t *testing.T) {
 }
 
 func TestActivationTaskIDIsDeterministicPerOrder(t *testing.T) {
-	first := queueType.ActivationTaskID("order-1")
-	if first != queueType.ActivationTaskID("order-1") {
+	first := taskqueue.ActivationTaskID("order-1")
+	if first != taskqueue.ActivationTaskID("order-1") {
 		t.Fatal("activation task id must be deterministic")
 	}
-	if first == queueType.ActivationTaskID("order-2") {
+	if first == taskqueue.ActivationTaskID("order-2") {
 		t.Fatal("different orders must not share an activation task id")
 	}
 }

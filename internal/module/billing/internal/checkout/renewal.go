@@ -6,14 +6,14 @@ import (
 	"slices"
 	"time"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
+	"github.com/perfect-panel/server/internal/module/billing/internal/ordercontext"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
-	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/slicesx"
@@ -27,7 +27,7 @@ import (
 // coupon validation, gift amount deduction, fee calculation, and order creation
 func (s *Service) Renewal(ctx context.Context, req *dto.RenewalOrderRequest) (*dto.RenewalOrderResponse, error) {
 	log := logger.WithContext(ctx)
-	u, ok := ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
@@ -144,7 +144,7 @@ func (s *Service) Renewal(ctx context.Context, req *dto.RenewalOrderRequest) (*d
 		SubscribeId:    userSubscribe.SubscribeId,
 		SubscribeToken: userSubscribe.Token,
 	}
-	orderflow.ApplyIdempotency(ctx, &orderInfo)
+	ordercontext.ApplyIdempotency(ctx, &orderInfo)
 	// Billing-domain transaction: wallet deduction, coupon reservation and
 	// order creation settle together.
 	err = s.deps.Store.InBillingTx(ctx, func(txStore repository.BillingStore) error {

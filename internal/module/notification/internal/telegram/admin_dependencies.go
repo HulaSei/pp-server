@@ -29,7 +29,7 @@ type TelegramAdminActionStore interface {
 }
 
 // TelegramAdminDependencies contains only the collaborators used by Telegram
-// administrator commands. It intentionally does not accept ServiceContext.
+// administrator commands. It intentionally does not accept Application.
 type TelegramAdminDependencies struct {
 	Messenger TelegramMessenger
 	Actions   TelegramAdminActionStore

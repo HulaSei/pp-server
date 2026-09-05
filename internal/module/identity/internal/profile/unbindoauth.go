@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/identity/contract"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -28,7 +28,7 @@ func newUnbindOAuthLogic(ctx context.Context, deps Deps) *UnbindOAuthLogic {
 }
 
 func (l *UnbindOAuthLogic) UnbindOAuth(req *dto.UnbindOAuthRequest) error {
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")

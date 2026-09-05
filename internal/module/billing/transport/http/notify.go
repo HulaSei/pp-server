@@ -2,10 +2,10 @@ package handler
 
 import (
 	"github.com/cloudwego/hertz/pkg/app/server"
-	"github.com/perfect-panel/server/internal/middleware"
 	"github.com/perfect-panel/server/internal/module/billing"
 	"github.com/perfect-panel/server/internal/module/billing/transport/http/notify"
 	"github.com/perfect-panel/server/internal/repository"
+	"github.com/perfect-panel/server/internal/transport/http/middleware"
 )
 
 func RegisterNotifyHandlers(router *server.Hertz, store repository.Store, service billing.Service) {

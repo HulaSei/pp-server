@@ -17,13 +17,13 @@ import (
 	"time"
 
 	token2 "github.com/perfect-panel/server/internal/auth/token"
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
-	orderEntity "github.com/perfect-panel/server/internal/module/billing/entity/order"
+	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/checkout"
+	"github.com/perfect-panel/server/internal/module/billing/internal/ordercontext"
 	"github.com/perfect-panel/server/internal/module/billing/internal/portal"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -103,11 +103,11 @@ func (l *V2OrderLogic) CreateAndCheckout(req *dto.V2CreateOrderRequest, idempote
 	}
 
 	checkoutToken := l.derivedGuestCheckoutToken(idempotencyKey)
-	meta := orderflow.Idempotency{Key: idempotencyKey, Hash: hash}
+	meta := ordercontext.Idempotency{Key: idempotencyKey, Hash: hash}
 	if l.currentUser() == nil {
 		meta.GuestCheckoutToken = checkoutToken
 	}
-	createCtx := orderflow.WithIdempotency(l.ctx, meta)
+	createCtx := ordercontext.WithIdempotency(l.ctx, meta)
 	orderNo, createdCheckoutToken, err := l.createOrder(createCtx, req)
 	if err != nil {
 		// A concurrent request with this key can win after our initial lookup.
@@ -257,7 +257,7 @@ func (l *V2OrderLogic) createOrder(ctx context.Context, req *dto.V2CreateOrderRe
 	}
 }
 
-func (l *V2OrderLogic) checkoutResponse(orderInfo *orderEntity.Order, checkoutToken, returnURL string) (*dto.V2OrderResponse, error) {
+func (l *V2OrderLogic) checkoutResponse(orderInfo *order.Order, checkoutToken, returnURL string) (*dto.V2OrderResponse, error) {
 	var paymentResp *dto.V2OrderPayment
 	if orderInfo.Status == 1 {
 		checkout, err := l.deps.Portal.Checkout(l.ctx, &dto.CheckoutOrderRequest{
@@ -288,7 +288,7 @@ func (l *V2OrderLogic) checkoutResponse(orderInfo *orderEntity.Order, checkoutTo
 	}, nil
 }
 
-func (l *V2OrderLogic) snapshot(orderInfo *orderEntity.Order) dto.V2OrderSnapshot {
+func (l *V2OrderLogic) snapshot(orderInfo *order.Order) dto.V2OrderSnapshot {
 	return dto.V2OrderSnapshot{
 		OrderNo: orderInfo.OrderNo, Status: v2OrderStatus(orderInfo.Status),
 		PaymentStatus: v2PaymentStatus(orderInfo.Status), FulfillmentStatus: v2FulfillmentStatus(orderInfo.Status),
@@ -300,7 +300,7 @@ func (l *V2OrderLogic) snapshot(orderInfo *orderEntity.Order) dto.V2OrderSnapsho
 
 // Snapshot exposes the event-stream's current-state payload without granting
 // access by itself; callers must authorize the ticket before using it.
-func (l *V2OrderLogic) Snapshot(orderInfo *orderEntity.Order) dto.V2OrderSnapshot {
+func (l *V2OrderLogic) Snapshot(orderInfo *order.Order) dto.V2OrderSnapshot {
 	return l.snapshot(orderInfo)
 }
 
@@ -311,7 +311,7 @@ func (l *V2OrderLogic) eventResponse(orderNo, ticket string, expiresAt int64) dt
 	}
 }
 
-func (l *V2OrderLogic) authorizeExistingCreate(orderInfo *orderEntity.Order, req *dto.V2CreateOrderRequest, checkoutToken string) error {
+func (l *V2OrderLogic) authorizeExistingCreate(orderInfo *order.Order, req *dto.V2CreateOrderRequest, checkoutToken string) error {
 	if l.currentUser() != nil {
 		return l.authorizeOrder(orderInfo, "")
 	}
@@ -321,7 +321,7 @@ func (l *V2OrderLogic) authorizeExistingCreate(orderInfo *orderEntity.Order, req
 	return l.authorizeOrder(orderInfo, checkoutToken)
 }
 
-func (l *V2OrderLogic) authorizeOrder(orderInfo *orderEntity.Order, checkoutToken string) error {
+func (l *V2OrderLogic) authorizeOrder(orderInfo *order.Order, checkoutToken string) error {
 	if currentUser := l.currentUser(); orderInfo.UserId != 0 && currentUser != nil && currentUser.Id == orderInfo.UserId {
 		return nil
 	}
@@ -331,7 +331,7 @@ func (l *V2OrderLogic) authorizeOrder(orderInfo *orderEntity.Order, checkoutToke
 	return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "order does not belong to the current user")
 }
 
-func (l *V2OrderLogic) mintEventTicket(orderInfo *orderEntity.Order, checkoutToken string) (string, int64, error) {
+func (l *V2OrderLogic) mintEventTicket(orderInfo *order.Order, checkoutToken string) (string, int64, error) {
 	if err := l.authorizeOrder(orderInfo, checkoutToken); err != nil {
 		return "", 0, err
 	}
@@ -358,7 +358,7 @@ func (l *V2OrderLogic) mintEventTicket(orderInfo *orderEntity.Order, checkoutTok
 // AuthorizeEventTicket validates the self-contained stream capability against
 // the current order row. It deliberately does not require a long-lived bearer
 // token in the EventSource URL.
-func (l *V2OrderLogic) AuthorizeEventTicket(orderNo, ticket string) (*orderEntity.Order, error) {
+func (l *V2OrderLogic) AuthorizeEventTicket(orderNo, ticket string) (*order.Order, error) {
 	claims, err := token2.ParseJwtToken(ticket, l.deps.JwtSecret)
 	if err != nil || claimString(claims, "OrderNo") != orderNo || claimString(claims, "Scope") != v2EventScope {
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "event ticket is invalid")
@@ -389,7 +389,7 @@ func (l *V2OrderLogic) EventTicketExpiresAt(ticket string) (time.Time, error) {
 }
 
 func (l *V2OrderLogic) currentUser() *user.User {
-	currentUser, _ := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	currentUser, _ := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	return currentUser
 }
 
@@ -427,7 +427,7 @@ func (l *V2OrderLogic) derivedGuestCheckoutToken(idempotencyKey string) string {
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-func (l *V2OrderLogic) guestCheckoutToken(idempotencyKey string, orderInfo *orderEntity.Order) string {
+func (l *V2OrderLogic) guestCheckoutToken(idempotencyKey string, orderInfo *order.Order) string {
 	if orderInfo.GuestCheckoutTokenHash == "" {
 		return ""
 	}
@@ -477,21 +477,21 @@ func sameIdempotencyHash(left, right string) bool {
 	return len(left) == len(right) && subtle.ConstantTimeCompare([]byte(left), []byte(right)) == 1
 }
 
-func checkoutTokenForResponse(orderInfo *orderEntity.Order, checkoutToken string) string {
+func checkoutTokenForResponse(orderInfo *order.Order, checkoutToken string) string {
 	if guestCheckoutTokenMatches(orderInfo, checkoutToken) {
 		return checkoutToken
 	}
 	return ""
 }
 
-func guestCheckoutTokenMatches(orderInfo *orderEntity.Order, checkoutToken string) bool {
+func guestCheckoutTokenMatches(orderInfo *order.Order, checkoutToken string) bool {
 	if checkoutToken == "" || orderInfo.GuestCheckoutTokenHash == "" {
 		return false
 	}
-	return guestCheckoutHashMatches(orderInfo, constant.CheckoutTokenHash(checkoutToken))
+	return guestCheckoutHashMatches(orderInfo, order.CheckoutTokenHash(checkoutToken))
 }
 
-func guestCheckoutHashMatches(orderInfo *orderEntity.Order, checkoutHash string) bool {
+func guestCheckoutHashMatches(orderInfo *order.Order, checkoutHash string) bool {
 	return checkoutHash != "" && orderInfo.GuestCheckoutTokenHash != "" &&
 		subtle.ConstantTimeCompare([]byte(orderInfo.GuestCheckoutTokenHash), []byte(checkoutHash)) == 1
 }

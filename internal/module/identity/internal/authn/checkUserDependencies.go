@@ -9,7 +9,7 @@ type AccountIdentityStore interface {
 }
 
 // CheckUserDependencies explicitly declares the collaborators of account
-// existence checks instead of passing ServiceContext to business logic.
+// existence checks instead of passing Application to business logic.
 type CheckUserDependencies struct {
 	Store AccountIdentityStore
 }

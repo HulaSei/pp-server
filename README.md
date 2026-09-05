@@ -121,7 +121,7 @@ API 文档使用 Handler 上的 Swaggo 注解生成，并通过 Hertz 实际注�
 
 ```bash
 ./script/generate-swagger.sh
-go test ./internal/route -run '^TestSwagger' -count=1
+go test ./internal/transport/http/routes -run '^TestSwagger' -count=1
 ```
 
 `master` 分支的 GitHub Actions 会生成 `ppanel.json` 以及 `admin.json`、`user.json`、`common.json`、`node.json` 分类文档，并同步到 `perfect-panel/ppanel-docs` 的 `public/swagger` 目录。现有 `GH_TOKEN` secret 需要对文档仓库具有 Contents 写权限。
@@ -151,15 +151,15 @@ go test ./internal/route -run '^TestSwagger' -count=1
 ├── etc/              # 配置文件（如 ppanel.yaml）
 ├── initialize/       # 系统初始化
 ├── internal/         # 内部模块
+│   ├── app/          # 应用组装、生命周期与定时调度
+│   ├── arch/         # 架构边界检查
+│   ├── auth/         # 跨模块认证能力
 │   ├── config/       # 配置文件解析
-│   ├── middleware/   # HTTP 中间件
+│   ├── infra/        # 邮件、短信、共享任务消息等基础设施
 │   ├── module/       # 业务模块（门面、contract、transport/http 与内部实现）
-│   ├── model/        # 数据模型
-│   ├── svc/          # 服务层
-│   └── types/        # 类型定义
+│   ├── repository/   # 仓储契约与事务组装
+│   └── transport/    # HTTP、WebSocket 与任务消费
 ├── pkg/              # 公共工具代码
-├── queue/            # 队列服务
-├── scheduler/        # 定时任务
 ├── script/           # 安装脚本
 ├── scripts/          # 性能测试与维护脚本
 ├── go.mod            # Go 模块定义

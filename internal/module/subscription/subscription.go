@@ -111,7 +111,7 @@ type DeliveryConfig = delivery.Config
 type SubscriptionTransactor = plan.SubscriptionTransactor
 
 // Deps declares everything the module needs; the composition root
-// (internal/svc) provides them.
+// (internal/app) provides them.
 type Deps struct {
 	Plans    repository.SubscribeRepo
 	UserSubs repository.UserSubscriptionRepo

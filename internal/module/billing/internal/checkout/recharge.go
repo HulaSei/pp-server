@@ -3,12 +3,12 @@ package checkout
 import (
 	"context"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/internal/orderaudit"
+	"github.com/perfect-panel/server/internal/module/billing/internal/ordercontext"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
-	"github.com/perfect-panel/server/internal/orderflow"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/xerr"
@@ -18,7 +18,7 @@ import (
 // Recharge creates a balance recharge order.
 func (s *Service) Recharge(ctx context.Context, req *dto.RechargeOrderRequest) (*dto.RechargeOrderResponse, error) {
 	log := logger.WithContext(ctx)
-	u, ok := ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return nil, errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")
@@ -78,7 +78,7 @@ func (s *Service) Recharge(ctx context.Context, req *dto.RechargeOrderRequest) (
 		Status:    1,
 		IsNew:     isNew,
 	}
-	orderflow.ApplyIdempotency(ctx, &orderInfo)
+	ordercontext.ApplyIdempotency(ctx, &orderInfo)
 	if err := s.deps.Store.InBillingTx(ctx, func(txStore repository.BillingStore) error {
 		if err := txStore.Order().Insert(ctx, &orderInfo); err != nil {
 			return err

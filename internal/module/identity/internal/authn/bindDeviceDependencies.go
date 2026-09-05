@@ -16,7 +16,7 @@ type BindDeviceStore interface {
 }
 
 // BindDeviceDependencies explicitly declares the collaborators of device
-// binding instead of passing ServiceContext to business logic.
+// binding instead of passing Application to business logic.
 type BindDeviceDependencies struct {
 	Store BindDeviceStore
 }

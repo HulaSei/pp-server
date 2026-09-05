@@ -29,7 +29,7 @@ type TelephoneLoginConfig struct {
 }
 
 // TelephoneLoginDependencies explicitly declares the collaborators of
-// telephone login instead of passing ServiceContext to business logic.
+// telephone login instead of passing Application to business logic.
 type TelephoneLoginDependencies struct {
 	Store        TelephoneLoginStore
 	Redis        *redis.Client

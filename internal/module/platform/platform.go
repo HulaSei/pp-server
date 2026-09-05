@@ -95,7 +95,7 @@ type Service interface {
 type GlobalConfigSnapshot = publicinfo.GlobalConfigSnapshot
 
 // Deps declares everything the module needs; the composition root
-// (internal/svc) provides them.
+// (internal/app) provides them.
 type Deps struct {
 	Logs    repository.LogRepo
 	System  repository.SystemRepo

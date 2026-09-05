@@ -26,7 +26,7 @@ type GlobalConfigSnapshot struct {
 }
 
 // GetGlobalConfigDependencies explicitly declares the collaborators of the
-// global configuration query instead of passing ServiceContext to business
+// global configuration query instead of passing Application to business
 // logic.
 type GetGlobalConfigDependencies struct {
 	Store  GlobalConfigStore

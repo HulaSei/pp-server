@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	"github.com/perfect-panel/server/internal/module/platform/entity/log"
 	dto "github.com/perfect-panel/server/internal/module/subscription/contract"
@@ -49,7 +49,7 @@ const (
 // repaired when the user retries: a Deducted subscription whose refund marker
 // is missing resumes at the refund stage.
 func (l *UnsubscribeLogic) Unsubscribe(req *dto.UnsubscribeRequest) error {
-	u, ok := l.ctx.Value(constant.CtxKeyUser).(*user.User)
+	u, ok := l.ctx.Value(requestctx.CtxKeyUser).(*user.User)
 	if !ok {
 		logger.Error("current user is not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "Invalid Access")

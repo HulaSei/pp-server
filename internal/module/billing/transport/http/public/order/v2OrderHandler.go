@@ -15,7 +15,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/protocol/sse"
 	"github.com/perfect-panel/server/internal/module/billing"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
-	"github.com/perfect-panel/server/internal/orderstream"
+	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/httpx"
 	"github.com/perfect-panel/server/pkg/logger"
@@ -313,7 +313,7 @@ func subscribeOrderEvents(ctx context.Context, client *redis.Client, orderNo str
 	if client == nil {
 		return nil, nil
 	}
-	pubsub := client.Subscribe(ctx, orderstream.Channel(orderNo))
+	pubsub := client.Subscribe(ctx, order.EventChannel(orderNo))
 	confirmCtx, cancel := context.WithTimeout(ctx, 2*time.Second)
 	defer cancel()
 	if _, err := pubsub.Receive(confirmCtx); err != nil {

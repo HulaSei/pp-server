@@ -40,7 +40,7 @@ type EmailCodeConfig struct {
 }
 
 // SendEmailCodeDependencies explicitly declares the collaborators of email
-// code delivery instead of passing ServiceContext to business logic.
+// code delivery instead of passing Application to business logic.
 type SendEmailCodeDependencies struct {
 	Store  VerificationIdentityStore
 	Redis  *redis.Client

@@ -6,8 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/perfect-panel/server/internal/constant"
-	"github.com/perfect-panel/server/internal/mapping"
+	"github.com/perfect-panel/server/internal/infra/mapping"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	dto "github.com/perfect-panel/server/internal/module/billing/contract"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
@@ -69,7 +69,7 @@ func (s *Service) QueryPurchaseOrder(ctx context.Context, req *dto.QueryPurchase
 // mint a session token.
 func (s *Service) authorizePurchaseOrder(ctx context.Context, orderInfo *order.Order, req *dto.QueryPurchaseOrderRequest) error {
 	if orderInfo.UserId != 0 {
-		if currentUser, ok := ctx.Value(constant.CtxKeyUser).(*user.User); ok && currentUser.Id == orderInfo.UserId {
+		if currentUser, ok := ctx.Value(requestctx.CtxKeyUser).(*user.User); ok && currentUser.Id == orderInfo.UserId {
 			return nil
 		}
 	}
@@ -77,18 +77,18 @@ func (s *Service) authorizePurchaseOrder(ctx context.Context, orderInfo *order.O
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "guest checkout token is required")
 	}
 	if orderInfo.GuestCheckoutTokenHash != "" {
-		if subtle.ConstantTimeCompare([]byte(orderInfo.GuestCheckoutTokenHash), []byte(constant.CheckoutTokenHash(req.CheckoutToken))) != 1 {
+		if subtle.ConstantTimeCompare([]byte(orderInfo.GuestCheckoutTokenHash), []byte(order.CheckoutTokenHash(req.CheckoutToken))) != 1 {
 			return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "guest checkout token is invalid")
 		}
 		return nil
 	}
 	// Compatibility for orders created before guest details were made durable.
-	cacheKey := fmt.Sprintf(constant.TempOrderCacheKey, orderInfo.OrderNo)
+	cacheKey := fmt.Sprintf(order.TempOrderCacheKey, orderInfo.OrderNo)
 	cacheValue, err := s.deps.GuestCheckoutCache.Get(ctx, cacheKey).Result()
 	if err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "guest checkout token is invalid")
 	}
-	var tempOrder constant.TemporaryOrderInfo
+	var tempOrder order.TemporaryOrderInfo
 	if err := json.Unmarshal([]byte(cacheValue), &tempOrder); err != nil {
 		return errors.Wrapf(xerr.NewErrCode(xerr.InvalidAccess), "guest checkout token is invalid")
 	}

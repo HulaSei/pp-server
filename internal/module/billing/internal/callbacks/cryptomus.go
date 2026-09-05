@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment/cryptomus"
@@ -26,7 +26,7 @@ var cryptomusBaseURL = ""
 // the EPay callback's defense in depth.
 func (s *Service) CryptomusNotify(ctx context.Context, payload []byte) error {
 	l := logger.WithContext(ctx)
-	data, ok := ctx.Value(constant.CtxKeyPayment).(*payment.Payment)
+	data, ok := ctx.Value(requestctx.CtxKeyPayment).(*payment.Payment)
 	if !ok {
 		l.Error("[CryptomusNotify] Payment not found in context")
 		return errors.Wrapf(xerr.NewErrCode(xerr.ERROR), "payment config not found")

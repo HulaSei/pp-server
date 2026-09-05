@@ -41,7 +41,7 @@ type TelephoneUserRegisterConfig struct {
 }
 
 // TelephoneUserRegisterDependencies explicitly declares the collaborators of
-// telephone registration instead of passing ServiceContext to business logic.
+// telephone registration instead of passing Application to business logic.
 type TelephoneUserRegisterDependencies struct {
 	Store        TelephoneUserRegisterStore
 	Redis        *redis.Client

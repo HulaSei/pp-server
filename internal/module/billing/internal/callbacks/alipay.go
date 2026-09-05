@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/perfect-panel/server/internal/constant"
+	"github.com/perfect-panel/server/internal/infra/requestctx"
 	"github.com/perfect-panel/server/internal/module/billing/entity/order"
 	"github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment/alipay"
@@ -18,7 +18,7 @@ import (
 // AlipayNotify authenticates and settles an Alipay F2F notification.
 func (s *Service) AlipayNotify(ctx context.Context, form url.Values) error {
 	l := logger.WithContext(ctx)
-	data, ok := ctx.Value(constant.CtxKeyPayment).(*payment.Payment)
+	data, ok := ctx.Value(requestctx.CtxKeyPayment).(*payment.Payment)
 	if !ok {
 		return fmt.Errorf("payment config not found")
 	}

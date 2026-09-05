@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/mapping"
+	"github.com/perfect-panel/server/internal/infra/mapping"
 	"github.com/perfect-panel/server/internal/module/identity/entity/auth"
 	"github.com/perfect-panel/server/pkg/logger"
 )

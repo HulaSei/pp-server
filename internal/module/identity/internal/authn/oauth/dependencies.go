@@ -45,7 +45,7 @@ type OAuthLoginConfig struct {
 }
 
 // OAuthLoginDependencies contains the explicit collaborators of the OAuth
-// login use case. It replaces the application-wide ServiceContext dependency.
+// login use case. It replaces the application-wide Application dependency.
 type OAuthLoginDependencies struct {
 	Store  OAuthLoginStore
 	Redis  *redis.Client

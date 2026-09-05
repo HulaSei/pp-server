@@ -11,25 +11,23 @@ import (
 	"uuid"
 
 	"github.com/perfect-panel/server/initialize"
-	"github.com/perfect-panel/server/internal"
+	"github.com/perfect-panel/server/internal/app"
+	"github.com/perfect-panel/server/internal/app/buildinfo"
+	"github.com/perfect-panel/server/internal/app/lifecycle"
+	"github.com/perfect-panel/server/internal/app/scheduler"
 	"github.com/perfect-panel/server/internal/config"
-	"github.com/perfect-panel/server/internal/constant"
-	"github.com/perfect-panel/server/internal/lifecycle"
-	"github.com/perfect-panel/server/internal/route"
-	"github.com/perfect-panel/server/internal/svc"
-	"github.com/perfect-panel/server/internal/trafficagg"
-	"github.com/perfect-panel/server/internal/transport/httpserver"
+	"github.com/perfect-panel/server/internal/module/network"
+	"github.com/perfect-panel/server/internal/transport/http/routes"
+	"github.com/perfect-panel/server/internal/transport/http/server"
+	"github.com/perfect-panel/server/internal/transport/task"
+	"github.com/perfect-panel/server/internal/transport/task/email"
+	"github.com/perfect-panel/server/internal/transport/task/order"
+	"github.com/perfect-panel/server/internal/transport/task/sms"
+	"github.com/perfect-panel/server/internal/transport/task/traffic"
 	"github.com/perfect-panel/server/pkg/conf"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/orm"
 	"github.com/perfect-panel/server/pkg/timeutil"
-	"github.com/perfect-panel/server/queue"
-	queueHandler "github.com/perfect-panel/server/queue/handler"
-	emailLogic "github.com/perfect-panel/server/queue/logic/email"
-	orderLogic "github.com/perfect-panel/server/queue/logic/order"
-	smsLogic "github.com/perfect-panel/server/queue/logic/sms"
-	trafficLogic "github.com/perfect-panel/server/queue/logic/traffic"
-	"github.com/perfect-panel/server/scheduler"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -46,7 +44,7 @@ var startCmd = &cobra.Command{
 	Use:   "run",
 	Short: "start PPanel",
 	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("[PPanel version] " + constant.Display())
+		fmt.Println("[PPanel version] " + buildinfo.Display())
 		run()
 	},
 }
@@ -96,7 +94,7 @@ func getServers() *lifecycle.Group {
 	}
 
 	// init service context
-	ctx := svc.NewApplication(c)
+	ctx := app.NewApplication(c)
 	runtimeConfig := ctx.Runtime.Config
 	initDeps := &initialize.Dependencies{
 		Config:                   runtimeConfig,
@@ -107,8 +105,8 @@ func getServers() *lifecycle.Group {
 		SetTelegramBot:           ctx.Runtime.SetTelegramBot,
 		SetNodeMultiplierManager: ctx.Runtime.SetNodeMultiplierManager,
 	}
-	routeDeps := func() route.Dependencies {
-		return route.Dependencies{
+	routeDeps := func() routes.Dependencies {
+		return routes.Dependencies{
 			ConfigProvider: runtimeConfig,
 			Redis:          ctx.Redis,
 			Store:          ctx.Store,
@@ -120,12 +118,12 @@ func getServers() *lifecycle.Group {
 			Network:        ctx.Network,
 		}
 	}
-	trafficDeps := trafficLogic.Dependencies{
+	trafficDeps := traffic.Dependencies{
 		Store: ctx.Store,
 		Redis: ctx.Redis,
 		Queue: ctx.Queue,
 		Log:   func() config.Log { return runtimeConfig().Log },
-		Aggregator: trafficagg.Deps{
+		Aggregator: network.TrafficAggregatorDeps{
 			Store: ctx.Store,
 			Redis: ctx.Redis,
 			TrafficReportThreshold: func() int64 {
@@ -140,19 +138,19 @@ func getServers() *lifecycle.Group {
 			},
 		},
 	}
-	queueDeps := queueHandler.Dependencies{
-		Email: emailLogic.Dependencies{
+	queueDeps := task.Dependencies{
+		Email: email.Dependencies{
 			Store:    ctx.Store,
 			Queue:    ctx.Queue,
 			Email:    func() config.EmailConfig { return runtimeConfig().Email },
 			SiteName: func() string { return runtimeConfig().Site.SiteName },
 		},
-		SMS: smsLogic.Dependencies{
+		SMS: sms.Dependencies{
 			Store:  ctx.Store,
 			Mobile: func() config.MobileConfig { return runtimeConfig().Mobile },
 			Model:  func() string { return runtimeConfig().Model },
 		},
-		Order: orderLogic.Dependencies{
+		Order: order.Dependencies{
 			Store:        ctx.Store,
 			Redis:        ctx.Redis,
 			Queue:        ctx.Queue,
@@ -170,7 +168,7 @@ func getServers() *lifecycle.Group {
 	}
 
 	services := lifecycle.NewServiceGroup()
-	services.Add(internal.NewService(internal.Dependencies{
+	services.Add(app.NewService(app.Dependencies{
 		Config:     runtimeConfig,
 		Store:      ctx.Store,
 		Initialize: initDeps,
@@ -185,7 +183,7 @@ func getServers() *lifecycle.Group {
 		SetRestart:             ctx.Runtime.SetRestart,
 		SetReinitializeHandler: ctx.Runtime.SetReinitialize,
 	}))
-	services.Add(queue.NewService(c.Redis, queueDeps))
+	services.Add(task.NewService(c.Redis, queueDeps))
 	services.Add(scheduler.NewService(c.Redis, c.AppLocation))
 	return services
 }
