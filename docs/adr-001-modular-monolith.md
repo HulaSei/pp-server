@@ -69,6 +69,8 @@ internal/module/<name>/
   - `TestRuntimePackagesStayInternal`：禁止恢复根目录的 queue、scheduler、adapter、initialize Go 包；
   - `TestAppImportBoundary`：只有 CLI 导入应用组装根；
   - `TestModulePurity`：模块不得 import 应用组装与 legacy logic，版本元数据除外；
+  - `TestModulesDoNotDependOnFullStore`：模块使用消费者定义的仓储能力，禁止完整 `repository.Store`；
+  - `TestTasksDoNotOwnIdentityTransactions`：账号写事务属于 identity，不能留在任务处理器；
   - `TestModuleLayout`：模块只允许暴露门面、`contract/`、`events/`、`entity/` 与 `transport/`；
   - `TestModuleContractsAreIndependent`：禁止中央 DTO 与跨模块 contract 依赖；
   - `TestModuleTransportOwnership`：handler 只能依赖所属模块门面与 contract；
@@ -79,6 +81,8 @@ internal/module/<name>/
 2026-09-05 的目录整理已完成：当前布局见 `docs/package-layout.md`。
 运行时初始化与热更新已归 `internal/app/bootstrap`，安装页面归 `internal/transport/http/setup`，
 迁移引擎和 SQL 归 `internal/app/migration/schema`；SQL 内容和编号保持不变。
+本轮依赖收窄后，模块生产代码已清除完整 Store 类型依赖；库存与流量入账改为注入的服务能力。
+订单激活编排位于 billing，访客账号创建位于 identity；任务入口只解码并调用 billing。
 下文保留此前迁移的历史背景，旧 `ServiceContext` 名称指当时的结构。
 
 每步独立可交付、可上线，不长期分叉：

@@ -39,7 +39,7 @@ func RegisterHandlers(mux *asynq.ServeMux, deps Dependencies) {
 	// Defer close order task
 	mux.Handle(taskqueue.DeferCloseOrder, order.NewDeferCloseOrderLogic(deps.Order))
 	// Forthwith activate order task
-	mux.Handle(taskqueue.ForthwithActivateOrder, order.NewActivateOrderLogic(deps.Order))
+	mux.Handle(taskqueue.ForthwithActivateOrder, order.NewActivateOrderLogic(deps.Order.Billing))
 	// Recover paid orders whose activation enqueue was interrupted.
 	mux.Handle(taskqueue.SchedulerReconcilePaidOrders, order.NewReconcilePaidOrdersLogic(deps.Order))
 	// Close stale pending orders even when their one-shot deferred task was

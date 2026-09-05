@@ -43,7 +43,7 @@ func newSubscriptionModule(store repository.Store, srv *Application) subscriptio
 		Traffic:     store.TrafficLog(),
 		Orders:      store.Order(),
 		Inbox:       store.Inbox(),
-		FullStore:   store,
+		Operations:  store,
 		SingleModel: func() bool { return srv.Runtime.Config().Subscribe.SingleModel },
 		TrialPolicy: func() subscription.TrialPolicy {
 			c := srv.Runtime.Config().Register

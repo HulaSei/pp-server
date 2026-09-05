@@ -39,7 +39,7 @@ type Deps struct {
 	UserSubs repository.UserSubscriptionRepo
 	Plans    repository.SubscribeRepo
 	Cache    repository.UserCacheRepo
-	Store    repository.Store
+	Store    Store
 	Emails   OwnerEmailReader
 	Notify   Notifier
 }
@@ -177,4 +177,11 @@ func (s *Service) clearServerCache(ctx context.Context, userSubs ...*usersub.Sub
 			logger.Errorw("[CheckSubscription] ClearCache failed", logger.Field("error", err.Error()), logger.Field("subscribe_id", sub))
 		}
 	}
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	repository.SubscriptionTransactor
+	Inbox() repository.InboxRepo
 }

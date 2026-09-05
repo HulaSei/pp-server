@@ -9,6 +9,10 @@ import (
 
 type TrafficUsageStore = trafficusage.Store
 
-func ApplyTrafficBucketOnce(ctx context.Context, store TrafficUsageStore, bucket string, deltas []traffic.SubscribeTrafficDelta) error {
-	return trafficusage.ApplyBucketOnce(ctx, store, bucket, deltas)
+type TrafficUsage interface {
+	ApplyBucketOnce(ctx context.Context, bucket string, deltas []traffic.SubscribeTrafficDelta) error
+}
+
+func NewTrafficUsage(store TrafficUsageStore) TrafficUsage {
+	return trafficusage.New(store)
 }

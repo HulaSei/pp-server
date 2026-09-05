@@ -17,6 +17,7 @@ import (
 	walletEntity "github.com/perfect-panel/server/internal/module/billing/entity/wallet"
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment/cryptomus"
 	userEntity "github.com/perfect-panel/server/internal/module/identity/entity/user"
+	"github.com/perfect-panel/server/internal/module/subscription"
 	subscribeEntity "github.com/perfect-panel/server/internal/module/subscription/entity/subscribe"
 	"github.com/perfect-panel/server/internal/repository"
 )
@@ -49,6 +50,7 @@ func cryptomusCloseFixture(t *testing.T, gateway func() (int, string, error)) (*
 	queue := &closeQueue{}
 	svc := NewService(Deps{
 		Orders: orders, Store: store, Queue: queue,
+		Inventory: subscription.NewInventory(store),
 		Payments: &closePaymentRepo{method: &paymentEntity.Payment{
 			Id: 2, Platform: "Cryptomus", Config: `{"merchant_id":"merchant-1","api_key":"test-key"}`,
 		}},

@@ -312,5 +312,5 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PurchaseOrderRequest) (
 // reserveInventory reserves one plan inventory unit for the order in its own
 // subscription-domain transaction (idempotent via the domain event inbox).
 func (s *Service) reserveInventory(ctx context.Context, orderNo string, subscribeID int64) error {
-	return subscription.ReserveInventoryOnce(ctx, s.deps.Store, orderNo, subscribeID)
+	return s.deps.Inventory.Reserve(ctx, orderNo, subscribeID)
 }

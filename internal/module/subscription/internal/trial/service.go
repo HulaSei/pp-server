@@ -30,7 +30,7 @@ type Policy struct {
 type Deps struct {
 	Plans repository.SubscribeRepo
 	Cache repository.UserCacheRepo
-	Store repository.Store
+	Store Store
 	// TrialPolicy snapshots the runtime-mutable trial settings per call.
 	TrialPolicy func() Policy
 }
@@ -99,4 +99,10 @@ func (s *Service) GrantTrial(ctx context.Context, userID int64) error {
 		}
 	}
 	return nil
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	repository.SubscriptionTransactor
 }

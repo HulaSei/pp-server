@@ -20,7 +20,7 @@ type Deps struct {
 	Cache  repository.UserCacheRepo
 	Logs   repository.LogRepo
 	Inbox  repository.InboxRepo
-	Store  repository.Store
+	Store  Store
 	// SingleModel forbids holding more than one blocking subscription;
 	// runtime-mutable, read per request.
 	SingleModel func() bool
@@ -56,4 +56,11 @@ func (s *Service) PreUnsubscribe(ctx context.Context, req *dto.PreUnsubscribeReq
 
 func (s *Service) Unsubscribe(ctx context.Context, req *dto.UnsubscribeRequest) error {
 	return newUnsubscribeLogic(ctx, s.deps).Unsubscribe(req)
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	repository.BillingTransactor
+	repository.SubscriptionTransactor
 }

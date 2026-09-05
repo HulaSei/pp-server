@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/perfect-panel/server/internal/module/network"
+	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/repository"
 )
 
@@ -12,8 +13,9 @@ import (
 // per-request snapshot closure.
 func newNetworkModule(store repository.Store, srv *Application) network.Service {
 	return network.New(network.Deps{
-		Store: store,
-		Redis: srv.Redis,
+		Store:        store,
+		TrafficUsage: subscription.NewTrafficUsage(store),
+		Redis:        srv.Redis,
 		Config: func() network.Snapshot {
 			current := srv.Runtime.Config()
 			return network.Snapshot{

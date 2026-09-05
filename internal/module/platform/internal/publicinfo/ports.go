@@ -38,8 +38,18 @@ type GetGlobalConfigDependencies struct {
 type Deps struct {
 	// Store carries the public read surface (system settings, auth methods,
 	// user/node counters, client downloads).
-	Store repository.Store
+	Store Store
 	Redis *redis.Client
 	// Config snapshots the runtime-mutable public configuration per request.
 	Config func() GlobalConfigSnapshot
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	Auth() repository.AuthRepo
+	Client() repository.ClientRepo
+	Node() repository.NodeRepo
+	System() repository.SystemRepo
+	User() repository.UserRepo
 }

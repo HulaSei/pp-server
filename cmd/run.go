@@ -17,6 +17,7 @@ import (
 	"github.com/perfect-panel/server/internal/app/scheduler"
 	"github.com/perfect-panel/server/internal/config"
 	"github.com/perfect-panel/server/internal/module/network"
+	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/transport/http/routes"
 	"github.com/perfect-panel/server/internal/transport/http/server"
 	"github.com/perfect-panel/server/internal/transport/http/setup"
@@ -125,6 +126,7 @@ func getServers() *lifecycle.Group {
 		Queue: ctx.Queue,
 		Log:   func() config.Log { return runtimeConfig().Log },
 		Aggregator: network.TrafficAggregatorDeps{
+			Usage: subscription.NewTrafficUsage(ctx.Store),
 			Store: ctx.Store,
 			Redis: ctx.Redis,
 			TrafficReportThreshold: func() int64 {

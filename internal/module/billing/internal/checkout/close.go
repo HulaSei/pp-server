@@ -19,7 +19,6 @@ import (
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment/stripe"
 	"github.com/perfect-panel/server/internal/module/identity/entity/user"
 	logEntity "github.com/perfect-panel/server/internal/module/platform/entity/log"
-	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/perfect-panel/server/pkg/logger"
 	"github.com/perfect-panel/server/pkg/timeutil"
@@ -192,7 +191,7 @@ func (s *Service) restoreReservedInventory(ctx context.Context, orderInfo *order
 	if orderInfo.Type != orderTypeSubscribe || orderInfo.SubscribeId <= 0 {
 		return nil
 	}
-	if err := subscription.RestoreInventoryOnce(ctx, s.deps.Store, orderInfo.OrderNo, orderInfo.SubscribeId); err != nil {
+	if err := s.deps.Inventory.Restore(ctx, orderInfo.OrderNo, orderInfo.SubscribeId); err != nil {
 		logger.WithContext(ctx).Errorw("[CloseOrder] Restore subscribe inventory failed",
 			logger.Field("error", err.Error()),
 			logger.Field("subscribeId", orderInfo.SubscribeId),

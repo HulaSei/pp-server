@@ -30,7 +30,7 @@ type Deps struct {
 	Wallet repository.WalletRepo
 	Redis  *redis.Client
 	// Store carries the identity-scoped transaction for device unbinding.
-	Store  repository.Store
+	Store  Store
 	Policy OAuthMethodPolicy
 
 	// EmailDomains snapshots the runtime-mutable email domain-suffix policy.
@@ -44,4 +44,10 @@ type Deps struct {
 	// runtime-configured bot.
 	NotifyUnbind func(userID, chatID int64) error
 	KickDevice   func(userID int64, identifier string)
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	repository.IdentityTransactor
 }

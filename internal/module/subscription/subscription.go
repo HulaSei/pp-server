@@ -135,11 +135,11 @@ type Deps struct {
 	Devices repository.UserDeviceRepo
 	Cache   repository.UserCacheRepo
 	Traffic repository.TrafficRepo
-	// FullStore is the transitional full-store dependency for the admin and
-	// self-service subscription transactions.
-	FullStore repository.Store
-	Orders    repository.OrderRepo
-	Inbox     repository.InboxRepo
+	// Operations composes only the persistence capabilities of this module's
+	// administration, lifecycle and fulfillment use cases.
+	Operations Store
+	Orders     repository.OrderRepo
+	Inbox      repository.InboxRepo
 	// SingleModel forbids holding more than one blocking subscription;
 	// runtime-mutable, read per request.
 	SingleModel func() bool
@@ -174,25 +174,25 @@ func New(deps Deps) Service {
 		trials: trial.NewService(trial.Deps{
 			Plans:       deps.Plans,
 			Cache:       deps.Cache,
-			Store:       deps.FullStore,
+			Store:       deps.Operations,
 			TrialPolicy: deps.TrialPolicy,
 		}),
 		fulfil: fulfillment.NewService(fulfillment.Deps{
 			Orders:      deps.Orders,
-			Store:       deps.FullStore,
+			Store:       deps.Operations,
 			UserSubs:    deps.UserSubs,
 			Plans:       deps.Plans,
 			Cache:       deps.Cache,
 			SingleModel: deps.SingleModel,
 		}),
 		quota: quotatask.NewService(quotatask.Deps{
-			Store: deps.FullStore,
+			Store: deps.Operations,
 		}),
 		sweeper: sweep.NewService(sweep.Deps{
 			UserSubs: deps.UserSubs,
 			Plans:    deps.Plans,
 			Cache:    deps.Cache,
-			Store:    deps.FullStore,
+			Store:    deps.Operations,
 			Emails:   deps.UserAuths,
 			Notify:   deps.LifecycleNotify,
 		}),
@@ -223,7 +223,7 @@ func New(deps Deps) Service {
 			Cache:       deps.Cache,
 			Logs:        deps.Logs,
 			Inbox:       deps.Inbox,
-			Store:       deps.FullStore,
+			Store:       deps.Operations,
 			SingleModel: deps.SingleModel,
 		}),
 		userSubs: usersub.NewService(usersub.Deps{
@@ -234,7 +234,7 @@ func New(deps Deps) Service {
 			Cache:       deps.Cache,
 			Traffic:     deps.Traffic,
 			Logs:        deps.Logs,
-			Store:       deps.FullStore,
+			Store:       deps.Operations,
 			SingleModel: deps.SingleModel,
 		}),
 		storefront: storefront.NewService(storefront.Deps{
@@ -460,4 +460,15 @@ type TrialPolicy = trial.Policy
 
 func (s *service) GrantTrial(ctx context.Context, userID int64) error {
 	return s.trials.GrantTrial(ctx, userID)
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	usersub.Store
+	selfsub.Store
+	sweep.Store
+	trial.Store
+	fulfillment.Store
+	quotatask.Store
 }

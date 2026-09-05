@@ -13,6 +13,7 @@ import (
 	"github.com/perfect-panel/server/internal/module/network/internal/edge"
 	"github.com/perfect-panel/server/internal/module/network/internal/repo"
 	"github.com/perfect-panel/server/internal/module/network/internal/serverapi"
+	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/redis/go-redis/v9"
 )
@@ -73,8 +74,9 @@ type Snapshot struct {
 // migration and will own its persistence once the domain data moves in
 // (ADR-001 step 5).
 type Deps struct {
-	Store repository.Store
-	Redis *redis.Client
+	Store        Store
+	TrafficUsage subscription.TrafficUsage
+	Redis        *redis.Client
 	// Config snapshots the runtime-mutable settings per request.
 	Config func() Snapshot
 	// Multiplier returns the node traffic multiplier in effect at the given
@@ -107,8 +109,9 @@ func New(deps Deps) Service {
 			},
 		}),
 		api: serverapi.NewService(serverapi.Deps{
-			Store: deps.Store,
-			Redis: deps.Redis,
+			TrafficUsage: deps.TrafficUsage,
+			Store:        deps.Store,
+			Redis:        deps.Redis,
 			Config: func() serverapi.Snapshot {
 				cfg := deps.Config()
 				return serverapi.Snapshot{Node: cfg.Node, Subscribe: cfg.Subscribe}
@@ -216,4 +219,12 @@ func (s *service) ServerPushUserTraffic(ctx context.Context, req *dto.ServerPush
 
 func (s *service) EdgeManifest(ctx context.Context, token string) (*dto.EdgeManifestResponse, error) {
 	return s.edge.Manifest(ctx, token)
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	adminserver.Store
+	serverapi.Store
+	edge.Store
 }

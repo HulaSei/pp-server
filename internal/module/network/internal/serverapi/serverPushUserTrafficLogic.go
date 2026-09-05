@@ -35,6 +35,7 @@ func (l *ServerPushUserTrafficLogic) ServerPushUserTraffic(req *dto.ServerPushUs
 
 	if err = trafficagg.New(trafficagg.Deps{
 		Store: l.deps.Store,
+		Usage: l.deps.TrafficUsage,
 		Redis: l.deps.Redis,
 		TrafficReportThreshold: func() int64 {
 			return l.deps.Config().Node.TrafficReportThreshold

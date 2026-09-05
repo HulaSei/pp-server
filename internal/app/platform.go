@@ -51,8 +51,8 @@ func newPlatformModule(store repository.Store, srv *Application) platform.Servic
 			}
 			return manager.GetMultiplier(at)
 		},
-		FullStore: store,
-		Redis:     srv.Redis,
+		PublicStore: store,
+		Redis:       srv.Redis,
 		PublicConfig: func() platform.GlobalConfigSnapshot {
 			c := srv.Runtime.Config()
 			return platform.GlobalConfigSnapshot{

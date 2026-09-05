@@ -18,10 +18,12 @@ const (
 
 var ErrOutOfStock = inventory.ErrOutOfStock
 
-func ReserveInventoryOnce(ctx context.Context, store InventoryStore, orderNo string, subscribeID int64) error {
-	return inventory.ReserveInventoryOnce(ctx, store, orderNo, subscribeID)
+// Inventory owns reservation persistence. Callers pass only business inputs.
+type Inventory interface {
+	Reserve(ctx context.Context, orderNo string, subscribeID int64) error
+	Restore(ctx context.Context, orderNo string, subscribeID int64) error
 }
 
-func RestoreInventoryOnce(ctx context.Context, store InventoryStore, orderNo string, subscribeID int64) error {
-	return inventory.RestoreInventoryOnce(ctx, store, orderNo, subscribeID)
+func NewInventory(store InventoryStore) Inventory {
+	return inventory.New(store)
 }

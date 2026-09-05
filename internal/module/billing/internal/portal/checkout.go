@@ -104,7 +104,7 @@ type CheckoutTransaction interface {
 }
 
 type checkoutStore struct {
-	store repository.Store
+	store Store
 }
 
 type checkoutTransaction struct {
@@ -113,7 +113,7 @@ type checkoutTransaction struct {
 
 // NewCheckoutStore adapts the application's repository facade at the
 // composition boundary to the checkout use case's narrow persistence port.
-func NewCheckoutStore(store repository.Store) CheckoutStore {
+func NewCheckoutStore(store Store) CheckoutStore {
 	return checkoutStore{store: store}
 }
 

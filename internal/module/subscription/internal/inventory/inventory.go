@@ -21,10 +21,6 @@ const (
 // ErrOutOfStock reports that the plan has no inventory left to reserve.
 var ErrOutOfStock = errors.New("subscribe out of stock")
 
-// ReserveInventoryOnce reserves one unit of plan inventory for the order in a
-// subscription-domain transaction. Replays and concurrent deliveries are
-// resolved by the inbox marker: a lost race rolls the reservation back and the
-// retry sees the winner's marker. Returns ErrOutOfStock when no unit is left.
 // Store is the narrow persistence surface the inventory lifecycle needs;
 // the repository store satisfies it structurally.
 type Store interface {
@@ -32,7 +28,16 @@ type Store interface {
 	InSubscriptionTx(ctx context.Context, fn func(repository.SubscriptionStore) error) error
 }
 
-func ReserveInventoryOnce(ctx context.Context, store Store, orderNo string, subscribeID int64) error {
+type Service struct {
+	store Store
+}
+
+func New(store Store) *Service { return &Service{store: store} }
+
+// Reserve commits one unit and its inbox marker in the same subscription
+// transaction. A duplicate marker rolls back a concurrent losing reservation.
+func (s *Service) Reserve(ctx context.Context, orderNo string, subscribeID int64) error {
+	store := s.store
 	mark, err := store.Inbox().Find(ctx, InventoryReserveConsumer, orderNo)
 	if err != nil {
 		return err
@@ -52,10 +57,11 @@ func ReserveInventoryOnce(ctx context.Context, store Store, orderNo string, subs
 	})
 }
 
-// RestoreInventoryOnce returns the order's reserved unit exactly once. Orders
+// Restore returns the order's reserved unit exactly once. Orders
 // that never reserved (stock-out compensation, historical orders) are a
 // no-op, and a second restoration attempt is absorbed by the restore marker.
-func RestoreInventoryOnce(ctx context.Context, store Store, orderNo string, subscribeID int64) error {
+func (s *Service) Restore(ctx context.Context, orderNo string, subscribeID int64) error {
+	store := s.store
 	reserveMark, err := store.Inbox().Find(ctx, InventoryReserveConsumer, orderNo)
 	if err != nil {
 		return err

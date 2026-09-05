@@ -18,7 +18,7 @@ type Snapshot struct {
 // Deps declares the subdomain's dependencies; the module facade forwards
 // them from the composition root.
 type Deps struct {
-	Store repository.Store
+	Store Store
 	// Config snapshots the runtime-mutable node settings per request.
 	Config func() Snapshot
 }
@@ -91,4 +91,12 @@ func (s *Service) ResetSortWithNode(ctx context.Context, req *dto.ResetSortReque
 
 func (s *Service) QueryNodeTag(ctx context.Context) (*dto.QueryNodeTagResponse, error) {
 	return newQueryNodeTagLogic(ctx, s.deps).QueryNodeTag()
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	repository.NetworkTransactor
+	Node() repository.NodeRepo
+	UserSubscription() repository.UserSubscriptionRepo
 }

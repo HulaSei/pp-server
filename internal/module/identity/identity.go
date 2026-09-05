@@ -112,7 +112,7 @@ type Deps struct {
 	Plans     repository.SubscribeRepo
 	Traffic   repository.TrafficRepo
 	Logs      repository.LogRepo
-	Store     repository.Store
+	Store     Store
 	// KickDevice force-disconnects a bound device.
 	KickDevice func(userID int64, identifier string)
 
@@ -448,4 +448,12 @@ func (s *service) TestEmailSend(ctx context.Context, req *dto.TestEmailSendReque
 
 func (s *service) TestSmsSend(ctx context.Context, req *dto.TestSmsSendRequest) error {
 	return s.methods.TestSmsSend(ctx, req)
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	adminuser.Store
+	authn.Store
+	profile.Store
 }

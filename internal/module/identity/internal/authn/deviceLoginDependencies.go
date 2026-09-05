@@ -21,9 +21,6 @@ type DeviceLoginStore interface {
 	User() repository.UserRepo
 	UserAuth() repository.UserAuthRepo
 	UserDevice() repository.UserDeviceRepo
-	UserSubscription() repository.UserSubscriptionRepo
-	UserCache() repository.UserCacheRepo
-	Subscribe() repository.SubscribeRepo
 	Log() repository.LogRepo
 	InIdentityTx(ctx context.Context, fn func(repository.IdentityStore) error) error
 }

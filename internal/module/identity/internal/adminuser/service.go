@@ -26,7 +26,7 @@ type Deps struct {
 	// wallet values from the authoritative table, not the legacy user
 	// columns (ADR-001 step 5).
 	Wallet repository.WalletRepo
-	Store  repository.Store
+	Store  Store
 	Redis  *redis.Client
 	// KickDevice force-disconnects a bound device.
 	KickDevice func(userID int64, identifier string)
@@ -108,4 +108,12 @@ func (s *Service) UpdateUserBasicInfo(ctx context.Context, req *dto.UpdateUserBa
 
 func (s *Service) UpdateUserNotifySetting(ctx context.Context, req *dto.UpdateUserNotifySettingRequest) error {
 	return newUpdateUserNotifySettingLogic(ctx, s.deps).UpdateUserNotifySetting(req)
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	repository.BillingTransactor
+	repository.IdentityTransactor
+	Node() repository.NodeRepo
 }

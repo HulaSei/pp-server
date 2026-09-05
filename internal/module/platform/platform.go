@@ -123,7 +123,7 @@ type Deps struct {
 
 	// Public-info dependencies: the full read surface, the shared Redis
 	// cache and the runtime-mutable public configuration snapshot.
-	FullStore    repository.Store
+	PublicStore  Store
 	Redis        *redis.Client
 	PublicConfig func() GlobalConfigSnapshot
 
@@ -174,7 +174,7 @@ func New(deps Deps) Service {
 			Restart: deps.Restart,
 		}),
 		public: publicinfo.NewService(publicinfo.Deps{
-			Store:  deps.FullStore,
+			Store:  deps.PublicStore,
 			Redis:  deps.Redis,
 			Config: deps.PublicConfig,
 		}),
@@ -411,4 +411,10 @@ func (s *service) QueryIPLocation(ctx context.Context, req *dto.QueryIPLocationR
 
 func (s *service) RestartSystem(ctx context.Context) error {
 	return s.tools.RestartSystem(ctx)
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	publicinfo.Store
 }

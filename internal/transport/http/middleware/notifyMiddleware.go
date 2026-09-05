@@ -14,7 +14,11 @@ type PaymentParams struct {
 	Token    string `uri:"token"`
 }
 
-func NotifyMiddleware(store repository.Store) app.HandlerFunc {
+type PaymentStore interface {
+	Payment() repository.PaymentRepo
+}
+
+func NotifyMiddleware(store PaymentStore) app.HandlerFunc {
 	return func(ctx context.Context, requestCtx *app.RequestContext) {
 		params := PaymentParams{
 			Platform: requestCtx.Param("platform"),
@@ -30,7 +34,7 @@ func NotifyMiddleware(store repository.Store) app.HandlerFunc {
 	}
 }
 
-func PaymentNotifyContext(ctx context.Context, store repository.Store, platform, token string) (context.Context, error) {
+func PaymentNotifyContext(ctx context.Context, store PaymentStore, platform, token string) (context.Context, error) {
 	config, err := store.Payment().FindOneByPaymentToken(ctx, token)
 	if err != nil {
 		return ctx, err

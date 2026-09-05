@@ -9,6 +9,7 @@ import (
 
 	"github.com/perfect-panel/server/internal/config"
 	dto "github.com/perfect-panel/server/internal/module/network/contract"
+	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/repository"
 	"github.com/redis/go-redis/v9"
 )
@@ -23,8 +24,9 @@ type Snapshot struct {
 // Deps declares the subdomain's dependencies; the module facade forwards
 // them from the composition root.
 type Deps struct {
-	Store repository.Store
-	Redis *redis.Client
+	Store        Store
+	TrafficUsage subscription.TrafficUsage
+	Redis        *redis.Client
 	// Config snapshots the runtime-mutable settings per request.
 	Config func() Snapshot
 	// Multiplier returns the node traffic multiplier in effect at the given
@@ -67,4 +69,15 @@ func (s *Service) ServerPushStatus(ctx context.Context, req *dto.ServerPushStatu
 
 func (s *Service) ServerPushUserTraffic(ctx context.Context, req *dto.ServerPushUserTrafficRequest) error {
 	return newServerPushUserTrafficLogic(ctx, s.deps).ServerPushUserTraffic(req)
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	Inbox() repository.InboxRepo
+	repository.NetworkTransactor
+	Node() repository.NodeRepo
+	Subscribe() repository.SubscribeRepo
+	User() repository.UserRepo
+	UserSubscription() repository.UserSubscriptionRepo
 }

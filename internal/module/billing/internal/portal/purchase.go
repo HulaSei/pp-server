@@ -162,7 +162,7 @@ func (s *Service) Purchase(ctx context.Context, req *dto.PortalPurchaseRequest) 
 	// Reserve plan inventory in its own subscription-domain transaction
 	// (ADR-001 step 2). On failure the guest order is closed inline; guest
 	// pre-orders only hold a coupon reservation.
-	if err := subscription.ReserveInventoryOnce(ctx, s.deps.Store, orderInfo.OrderNo, sub.Id); err != nil {
+	if err := s.deps.Inventory.Reserve(ctx, orderInfo.OrderNo, sub.Id); err != nil {
 		closeErr := s.deps.Store.InBillingTx(ctx, func(store repository.BillingStore) error {
 			closed, e := store.Order().UpdateOrderStatusFrom(ctx, orderInfo.OrderNo, 1, 3)
 			if e != nil {

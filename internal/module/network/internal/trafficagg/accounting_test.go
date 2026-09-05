@@ -8,6 +8,7 @@ import (
 
 	trafficEntity "github.com/perfect-panel/server/internal/module/network/entity/traffic"
 	"github.com/perfect-panel/server/internal/module/platform/entity/inbox"
+	"github.com/perfect-panel/server/internal/module/subscription"
 	"github.com/perfect-panel/server/internal/module/subscription/entity/usersub"
 	"github.com/perfect-panel/server/internal/repository"
 	"gorm.io/gorm"
@@ -110,7 +111,7 @@ func TestTrafficAccountingRetryAcrossDomainCommits(t *testing.T) {
 	for _, failure := range []string{"usage", "subscription.traffic_bucket", "logs", "network.traffic_bucket"} {
 		t.Run(failure, func(t *testing.T) {
 			store := &accountingStore{marks: map[string]bool{}, fail: failure}
-			aggregator := New(Deps{Store: store})
+			aggregator := New(Deps{Store: store, Usage: subscription.NewTrafficUsage(store)})
 			deltas := []trafficDelta{{ServerId: 1, SubscribeId: 2, Upload: 3, Download: 5}}
 			if err := aggregator.persistBucket(context.Background(), bucket, deltas); !errors.Is(err, errAccounting) {
 				t.Fatalf("first attempt: %v", err)

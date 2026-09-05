@@ -68,9 +68,10 @@ func (s *closeOrderStore) Inbox() repository.InboxRepo {
 // dependencies the close flow touches are provided.
 func newCloseService(store *closeOrderStore) *Service {
 	return NewService(Deps{
-		Orders:   store.orders,
-		Payments: nil, // gateway settlement is not exercised: fake orders carry no gateway method
-		Store:    store,
+		Orders:    store.orders,
+		Payments:  nil, // gateway settlement is not exercised: fake orders carry no gateway method
+		Store:     store,
+		Inventory: subscription.NewInventory(store),
 	})
 }
 
@@ -220,7 +221,8 @@ func epayCloseFixture(gatewayURL string) (*closeOrderStore, *Service) {
 			Id: 2, Platform: "EPay",
 			Config: fmt.Sprintf(`{"pid":"1001","url":%q,"key":"secret","type":"alipay"}`, gatewayURL),
 		}},
-		Store: store,
+		Store:     store,
+		Inventory: subscription.NewInventory(store),
 	})
 	return store, svc
 }
@@ -351,8 +353,9 @@ func alipayCloseFixture(t *testing.T, respond func(method string, call int) (str
 			Id: 3, Platform: "AlipayF2F",
 			Config: fmt.Sprintf(`{"app_id":"2021000000000000","private_key":%q,"public_key":%q,"sandbox":true,"gateway":%q}`, private, public, gatewayURL),
 		}},
-		Store: store,
-		Queue: queue,
+		Store:     store,
+		Inventory: subscription.NewInventory(store),
+		Queue:     queue,
 	})
 	return store, svc, gateway, queue
 }

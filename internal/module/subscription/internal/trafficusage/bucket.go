@@ -16,9 +16,16 @@ type Store interface {
 	InSubscriptionTx(context.Context, func(repository.SubscriptionStore) error) error
 }
 
-// ApplyBucketOnce commits usage and its inbox marker together. The network
-// pipeline can retry its separate log transaction without charging usage again.
-func ApplyBucketOnce(ctx context.Context, store Store, bucket string, deltas []traffic.SubscribeTrafficDelta) error {
+type Service struct {
+	store Store
+}
+
+func New(store Store) *Service { return &Service{store: store} }
+
+// ApplyBucketOnce commits usage and its inbox marker together. Network log
+// retries can replay this operation without charging usage again.
+func (s *Service) ApplyBucketOnce(ctx context.Context, bucket string, deltas []traffic.SubscribeTrafficDelta) error {
+	store := s.store
 	mark, err := store.Inbox().Find(ctx, BucketConsumer, bucket)
 	if err != nil || mark != nil {
 		return err

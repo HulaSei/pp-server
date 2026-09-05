@@ -30,7 +30,7 @@ const v2SSEMaxConnectionsPerTicket = 3
 type EventStreamDeps struct {
 	Billing billing.Service
 	Redis   *redis.Client
-	Store   repository.Store
+	Store   Store
 }
 
 // V2CreateAndCheckoutHandler combines order creation and checkout initiation.
@@ -288,7 +288,7 @@ func writeSSEReset(writer *sse.Writer, snapshot dto.V2OrderSnapshot) error {
 	return writer.WriteEvent("", "order.reset", data)
 }
 
-func replayOrderEvents(ctx context.Context, writer *sse.Writer, store repository.Store, orderNo string, afterID *int64) error {
+func replayOrderEvents(ctx context.Context, writer *sse.Writer, store Store, orderNo string, afterID *int64) error {
 	for {
 		events, err := store.OrderEvent().ListAfter(ctx, orderNo, *afterID, 500)
 		if err != nil {
@@ -349,4 +349,10 @@ func acquireSSEConnection(ctx context.Context, client *redis.Client, ticket stri
 	return func() {
 		_, _ = client.Decr(context.Background(), key).Result()
 	}, true
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	OrderEvent() repository.OrderEventRepo
 }

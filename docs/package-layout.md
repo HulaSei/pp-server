@@ -26,7 +26,8 @@
 - 验证码存储与消费属于 `identity/internal/verification`，验证码用途属于 `identity/entity/auth`。
 - Edge 请求鉴权属于 `network/internal/edgeauth`。
 - 订单幂等上下文属于 `billing/internal/ordercontext`；临时订单、结账 Token 哈希与订单事件频道属于 `billing/entity/order`。
-- 库存预留和回补属于 `subscription/internal/inventory`，billing 通过 subscription 门面调用。
+- 库存预留和回补属于 `subscription/internal/inventory`，billing 使用构造时注入的 `subscription.Inventory`，
+  调用 `Reserve/Restore` 只传订单号与套餐 ID。
 - 流量汇总、重试和死信处理属于 `network/internal/trafficagg`，节点与任务入口均进入 network 的实现。
   订阅用量入账由 `subscription/internal/trafficusage` 执行，network 再提交自己的流量日志事务。
   两段事务各自保存原有 inbox 标记；后半段失败后重试不会再次扣算订阅用量。
@@ -34,6 +35,24 @@
   订单数据归 billing，验证码用途归 identity。没有保留通用常量集合包。
 
 本次没有拆分 `repository` 的契约与 GORM 组装；这是独立于目录整理的数据层演进项。
+
+## 模块依赖与订单工作流
+
+- 模块生产代码不再依赖完整的 `repository.Store`。每个用例声明实际需要的仓储能力，
+  模块门面组合这些能力；共享仓储仍在应用组装层创建。`repository` 提供五种独立的领域事务能力。
+- identity 的注册、设备登录和 OAuth 接口已移除不再使用的套餐、用户订阅和订阅缓存仓储要求。
+- `subscription.NewInventory`、`subscription.NewTrafficUsage`、`identity.NewGuestAccounts` 在构造时持有仓储。
+  库存、用量入账和访客账号操作只接收业务参数，调用者不再逐次传入 Store。
+- billing 的 `ActivatePaidOrder` 负责订单激活顺序；任务处理器只解析消息并调用这一入口。
+  访客账号与认证记录由 identity 创建，订单绑定由 billing 完成，订阅履约委托 subscription，
+  充值、佣金和最终结算留在 billing。通知上下文仍在最终结算前加载。
+- 已提交的访客账号通过原 `identity.guest_account` inbox 标记复用；即使绑定订单失败、旧 Redis
+  临时订单随后过期，重试也不会再建号。旧明文密码兼容数据由 identity 转换为密码哈希。
+  新建账号若同时缺少密码哈希和旧明文则直接拒绝，避免生成空密码账号。
+- `TestModulesDoNotDependOnFullStore` 禁止模块恢复完整 Store 依赖；
+  `TestTasksDoNotOwnIdentityTransactions` 防止任务处理器重新承担账号写事务。
+
+共享数据库、共享 ORM 实体以及其他维护任务的存储适配仍存在；它们属于后续数据与任务边界演进。
 
 ## 根目录运行时代码归位
 

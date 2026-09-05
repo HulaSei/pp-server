@@ -3,6 +3,7 @@ package order
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -30,10 +31,11 @@ func newActivationDeps(store *activationStore, singleModel bool) Dependencies {
 		UserSubs:    store.users,
 		Cache:       store.users,
 		Orders:      store.orders,
-		FullStore:   store,
+		Operations:  store,
 		SingleModel: func() bool { return singleModel },
 	})
 	bilMod := billing.New(billing.Deps{
+		PaidOrders:   billing.PaidOrderDependencies{Subscriptions: subMod},
 		Orders:       store.orders,
 		Store:        store,
 		Tx:           store,
@@ -111,7 +113,8 @@ func (r *activationInboxRepo) Insert(_ context.Context, consumer, eventKey, resu
 
 type activationOrderRepo struct {
 	repository.OrderRepo
-	order *orderEntity.Order
+	order            *orderEntity.Order
+	finalizeFailures int
 }
 
 func (r *activationOrderRepo) FindOneByOrderNo(_ context.Context, orderNo string) (*orderEntity.Order, error) {
@@ -127,6 +130,10 @@ func (r *activationOrderRepo) FindOneByOrderNoForUpdate(ctx context.Context, ord
 }
 
 func (r *activationOrderRepo) UpdateOrderStatusFrom(_ context.Context, orderNo string, from, to uint8, _ ...*gorm.DB) (bool, error) {
+	if to == OrderStatusFinished && r.finalizeFailures > 0 {
+		r.finalizeFailures--
+		return false, errors.New("finalize write unavailable")
+	}
 	if r.order.OrderNo != orderNo || r.order.Status != from {
 		return false, nil
 	}
@@ -174,6 +181,7 @@ type activationUserRepo struct {
 	repository.UserSubscriptionRepo
 	repository.UserCacheRepo
 	user             *userEntity.User
+	profiles         map[int64]*userEntity.User
 	updateCacheCalls int
 	quotaCount       int64
 	quotaCountCalls  int
@@ -183,11 +191,63 @@ type activationUserRepo struct {
 }
 
 func (r *activationUserRepo) FindOne(_ context.Context, id int64) (*userEntity.User, error) {
+	if profile := r.profiles[id]; profile != nil {
+		copy := *profile
+		return &copy, nil
+	}
 	if r.user == nil || r.user.Id != id {
 		return nil, gorm.ErrRecordNotFound
 	}
 	copy := *r.user
 	return &copy, nil
+}
+
+func TestCommissionIsNotCreditedAgainAfterFinalizeFailure(t *testing.T) {
+	expire := time.Now().Add(24 * time.Hour).Truncate(time.Second)
+	store := &activationStore{
+		orders: &activationOrderRepo{finalizeFailures: 1, order: &orderEntity.Order{
+			OrderNo: "commission-retry", UserId: 7, Type: OrderTypeRenewal, Status: OrderStatusPaid,
+			SubscribeId: 9, SubscribeToken: "renewal-token", Quantity: 1, Amount: 10000, FeeAmount: 100,
+		}},
+		wallet: &activationWalletRepo{wallet: &walletEntity.Wallet{UserId: 99}},
+		users: &activationUserRepo{
+			user:         &userEntity.User{Id: 7, RefererId: 99},
+			profiles:     map[int64]*userEntity.User{99: {Id: 99, ReferralPercentage: 20}},
+			subscription: &usersub.Subscribe{Id: 11, UserId: 7, SubscribeId: 9, Token: "renewal-token", ExpireTime: expire, Status: usersub.SubscribeStatusActive},
+		},
+		subscribes: &activationSubscribeRepo{subscribe: &subscribeEntity.Subscribe{Id: 9, UnitTime: "Month"}},
+		logs:       &activationLogRepo{}, inbox: newActivationInboxRepo(),
+	}
+	logic := NewActivateOrderLogic(newActivationDeps(store, false).Billing)
+	payload, err := json.Marshal(taskqueue.ForthwithActivateOrderPayload{OrderNo: "commission-retry"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := asynq.NewTask(taskqueue.ForthwithActivateOrder, payload)
+	if err := logic.ProcessTask(context.Background(), task); err == nil {
+		t.Fatal("expected finalize failure")
+	}
+	if store.wallet.wallet.Commission != 1980 || store.orders.order.Status != OrderStatusPaid {
+		t.Fatal("commission must commit before a retryable finalize failure")
+	}
+	extendedOnce := store.users.subscription.ExpireTime
+	for range 2 {
+		if err := logic.ProcessTask(context.Background(), task); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if store.wallet.wallet.Commission != 1980 || !store.users.subscription.ExpireTime.Equal(extendedOnce) || store.orders.order.Status != OrderStatusFinished {
+		t.Fatal("replay duplicated commission or subscription fulfillment")
+	}
+	commissionLogs := 0
+	for _, entry := range store.logs.logs {
+		if entry.Type == logEntity.TypeCommission.Uint8() {
+			commissionLogs++
+		}
+	}
+	if commissionLogs != 1 {
+		t.Fatalf("commission logs = %d, want 1", commissionLogs)
+	}
 }
 
 func (r *activationUserRepo) FindOneForUpdate(_ context.Context, id int64) (*userEntity.User, error) {
@@ -276,7 +336,7 @@ func TestActivateRechargeCommitsSettlementOnlyOnce(t *testing.T) {
 		logs:   &activationLogRepo{},
 		inbox:  newActivationInboxRepo(),
 	}
-	logic := NewActivateOrderLogic(newActivationDeps(store, false))
+	logic := NewActivateOrderLogic(newActivationDeps(store, false).Billing)
 	payload, err := json.Marshal(taskqueue.ForthwithActivateOrderPayload{OrderNo: "recharge-order"})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
@@ -314,7 +374,7 @@ func TestActivateRechargeReplayAfterFulfillmentSkipsSecondCredit(t *testing.T) {
 		logs:   &activationLogRepo{},
 		inbox:  newActivationInboxRepo(),
 	}
-	logic := NewActivateOrderLogic(newActivationDeps(store, false))
+	logic := NewActivateOrderLogic(newActivationDeps(store, false).Billing)
 	payload, err := json.Marshal(taskqueue.ForthwithActivateOrderPayload{OrderNo: "recharge-replay"})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)
@@ -361,7 +421,7 @@ func TestActivateRenewalReplayExtendsSubscriptionOnce(t *testing.T) {
 		logs:       &activationLogRepo{},
 		inbox:      newActivationInboxRepo(),
 	}
-	logic := NewActivateOrderLogic(newActivationDeps(store, false))
+	logic := NewActivateOrderLogic(newActivationDeps(store, false).Billing)
 	payload, err := json.Marshal(taskqueue.ForthwithActivateOrderPayload{OrderNo: "renewal-replay"})
 	if err != nil {
 		t.Fatalf("marshal payload: %v", err)

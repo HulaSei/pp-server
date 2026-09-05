@@ -81,10 +81,10 @@ func newInventoryStore(stock int64) *inventoryStore {
 func TestReserveInventoryOnceIsIdempotent(t *testing.T) {
 	store := newInventoryStore(1)
 
-	if err := ReserveInventoryOnce(context.Background(), store, "order-1", 9); err != nil {
+	if err := New(store).Reserve(context.Background(), "order-1", 9); err != nil {
 		t.Fatalf("first reserve: %v", err)
 	}
-	if err := ReserveInventoryOnce(context.Background(), store, "order-1", 9); err != nil {
+	if err := New(store).Reserve(context.Background(), "order-1", 9); err != nil {
 		t.Fatalf("replayed reserve: %v", err)
 	}
 	if store.subscribes.reserves != 1 {
@@ -95,7 +95,7 @@ func TestReserveInventoryOnceIsIdempotent(t *testing.T) {
 func TestReserveInventoryOnceReportsOutOfStock(t *testing.T) {
 	store := newInventoryStore(0)
 
-	err := ReserveInventoryOnce(context.Background(), store, "order-2", 9)
+	err := New(store).Reserve(context.Background(), "order-2", 9)
 	if !errors.Is(err, ErrOutOfStock) {
 		t.Fatalf("expected ErrOutOfStock, got %v", err)
 	}
@@ -107,7 +107,7 @@ func TestReserveInventoryOnceReportsOutOfStock(t *testing.T) {
 func TestRestoreInventoryOnceSkipsUnreservedOrders(t *testing.T) {
 	store := newInventoryStore(1)
 
-	if err := RestoreInventoryOnce(context.Background(), store, "never-reserved", 9); err != nil {
+	if err := New(store).Restore(context.Background(), "never-reserved", 9); err != nil {
 		t.Fatalf("restore: %v", err)
 	}
 	if store.subscribes.restores != 0 {
@@ -118,13 +118,13 @@ func TestRestoreInventoryOnceSkipsUnreservedOrders(t *testing.T) {
 func TestRestoreInventoryOnceRestoresExactlyOnce(t *testing.T) {
 	store := newInventoryStore(1)
 
-	if err := ReserveInventoryOnce(context.Background(), store, "order-3", 9); err != nil {
+	if err := New(store).Reserve(context.Background(), "order-3", 9); err != nil {
 		t.Fatalf("reserve: %v", err)
 	}
-	if err := RestoreInventoryOnce(context.Background(), store, "order-3", 9); err != nil {
+	if err := New(store).Restore(context.Background(), "order-3", 9); err != nil {
 		t.Fatalf("first restore: %v", err)
 	}
-	if err := RestoreInventoryOnce(context.Background(), store, "order-3", 9); err != nil {
+	if err := New(store).Restore(context.Background(), "order-3", 9); err != nil {
 		t.Fatalf("replayed restore: %v", err)
 	}
 	if store.subscribes.restores != 1 {

@@ -102,9 +102,9 @@ type Service interface {
 	QueryUserAffiliate(ctx context.Context) (*dto.QueryUserAffiliateCountResponse, error)
 	QueryUserAffiliateList(ctx context.Context, req *dto.QueryUserAffiliateListRequest) (*dto.QueryUserAffiliateListResponse, error)
 
-	// The paid-order activation stages sequenced by the queue shell:
-	// recharge credit, referral commission and final settlement. Each is
-	// idempotent.
+	// The billing-owned paid-order workflow and its idempotent stages:
+	// recharge credit, referral commission and final settlement.
+	ActivatePaidOrder(ctx context.Context, orderNo string) error
 	ActivateRecharge(ctx context.Context, orderNo string) (balance int64, err error)
 	SettleOrderCommission(ctx context.Context, orderNo string, buyerID int64) error
 	FinalizeOrder(ctx context.Context, orderNo string) error
@@ -172,6 +172,10 @@ type Transactor interface {
 	InBillingTx(ctx context.Context, fn func(repository.BillingStore) error) error
 }
 
+// PaidOrderDependencies supplies the external capabilities of order activation.
+// The billing module binds its own order and profile readers when constructed.
+type PaidOrderDependencies = activation.WorkflowDeps
+
 // OrderQueue schedules the order lifecycle tasks. The composition root
 // adapts the asynq client; an activation delivery that already exists for
 // the order is not an error (the Paid state is the durable outbox), and a
@@ -182,22 +186,21 @@ type OrderQueue interface {
 }
 
 // Deps declares everything the module needs; the composition root
-// (internal/app) provides them. The module wraps legacy repositories during
-// migration and will own its persistence once the domain data moves in
-// (ADR-001 step 5).
+// (internal/app) provides them; each field is scoped to the use cases it serves.
 type Deps struct {
+	PaidOrders  PaidOrderDependencies
 	Orders      repository.OrderRepo
 	Payments    repository.PaymentRepo
 	Coupons     repository.CouponRepo
 	Withdrawals repository.UserWithdrawalRepo
 	Plans       PlanReader
 	UserSubs    UserSubscriptionReader
-	// Store carries the scoped transactions, wallet view and inbox the
-	// checkout/portal subdomains need; it narrows further when modules own
-	// their persistence (ADR-001 step 6).
-	Store repository.Store
-	Tx    Transactor
-	Queue OrderQueue
+	// Store composes billing persistence and the checkout's identity reads.
+	// Subscription writes are exposed only by the Inventory capability.
+	Store     Store
+	Inventory checkout.Inventory
+	Tx        Transactor
+	Queue     OrderQueue
 	// SingleModel forbids holding more than one blocking subscription;
 	// runtime-mutable, read per request.
 	SingleModel func() bool
@@ -251,6 +254,7 @@ func NewRepoBuilder() repository.BillingBuilder {
 
 func New(deps Deps) Service {
 	checkoutSvc := checkout.NewService(checkout.Deps{
+		Inventory:    deps.Inventory,
 		Orders:       deps.Orders,
 		Coupons:      deps.Coupons,
 		Payments:     deps.Payments,
@@ -262,6 +266,7 @@ func New(deps Deps) Service {
 		CurrencyUnit: deps.CurrencyUnit,
 	})
 	portalSvc := portal.NewService(portal.Deps{
+		Inventory:          deps.Inventory,
 		Orders:             deps.Orders,
 		Coupons:            deps.Coupons,
 		Payments:           deps.Payments,
@@ -275,6 +280,12 @@ func New(deps Deps) Service {
 		ExchangeRate:       deps.ExchangeRate,
 		Config:             deps.Portal,
 	})
+	activationSvc := activation.NewService(activation.Deps{
+		Orders: deps.Orders, Store: deps.Store, Profiles: deps.UserProfiles, InvitePolicy: deps.InvitePolicy,
+	})
+	workflowDeps := deps.PaidOrders
+	workflowDeps.Orders = deps.Orders
+	workflowDeps.Profiles = deps.UserProfiles
 	return &service{
 		orders:     adminorder.NewService(deps.Orders, deps.Payments, deps.Tx, deps.Queue, deps.Plans),
 		payments:   adminpayment.NewService(deps.Payments, deps.Orders, deps.Tx, deps.Host),
@@ -283,12 +294,8 @@ func New(deps Deps) Service {
 		callbacks:  callbacks.NewService(deps.Orders, deps.Queue),
 		portal:     portalSvc,
 		checkout:   checkoutSvc,
-		activation: activation.NewService(activation.Deps{
-			Orders:       deps.Orders,
-			Store:        deps.Store,
-			Profiles:     deps.UserProfiles,
-			InvitePolicy: deps.InvitePolicy,
-		}),
+		activation: activationSvc,
+		paidOrders: activation.NewWorkflow(workflowDeps, activationSvc),
 		wallet: wallet.NewService(wallet.Deps{
 			Logs:        deps.Logs,
 			Withdrawals: deps.Withdrawals,
@@ -308,6 +315,7 @@ func New(deps Deps) Service {
 }
 
 type service struct {
+	paidOrders *activation.Workflow
 	orders     *adminorder.Service
 	payments   *adminpayment.Service
 	coupons    *coupon.Service
@@ -508,6 +516,10 @@ func (s *service) ActivateRecharge(ctx context.Context, orderNo string) (int64, 
 	return s.activation.ActivateRecharge(ctx, orderNo)
 }
 
+func (s *service) ActivatePaidOrder(ctx context.Context, orderNo string) error {
+	return s.paidOrders.Activate(ctx, orderNo)
+}
+
 func (s *service) SettleOrderCommission(ctx context.Context, orderNo string, buyerID int64) error {
 	return s.activation.SettleOrderCommission(ctx, orderNo, buyerID)
 }
@@ -518,4 +530,12 @@ func (s *service) FinalizeOrder(ctx context.Context, orderNo string) error {
 
 func (s *service) DailyOrderReport(ctx context.Context, date time.Time) (*DailyOrderReport, error) {
 	return s.orders.DailyReport(ctx, date)
+}
+
+// Store is the persistence capability required by this package. It excludes
+// unrelated repositories and application-wide transactions.
+type Store interface {
+	checkout.Store
+	portal.Store
+	activation.Store
 }

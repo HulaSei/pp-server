@@ -62,10 +62,10 @@ type trafficDelta struct {
 	Download    int64
 }
 
-// Store exposes the network persistence and subscription accounting boundary
-// needed by the report pipeline, without granting access to unrelated domains.
+// Store exposes network persistence and subscription reads. Usage writes are
+// performed by the injected subscription service, not this store.
 type Store interface {
-	subscription.TrafficUsageStore
+	Inbox() repository.InboxRepo
 	Node() repository.NodeRepo
 	UserSubscription() repository.UserSubscriptionRepo
 	InNetworkTx(context.Context, func(repository.NetworkStore) error) error
@@ -75,6 +75,7 @@ type Store interface {
 // this pipeline through the network facade.
 type Deps struct {
 	Store Store
+	Usage subscription.TrafficUsage
 	Redis *redis.Client
 	// TrafficReportThreshold reads the runtime-mutable minimum report size;
 	// nil means no minimum.
@@ -487,7 +488,10 @@ func (a *Aggregator) persistBucket(ctx context.Context, suffix string, deltas []
 	// it succeeds (then deadletters), so each transaction marks the bucket in
 	// the idempotent inbox to keep replays from double-counting the side that
 	// already committed.
-	if err := subscription.ApplyTrafficBucketOnce(ctx, a.deps.Store, suffix, updates); err != nil {
+	if a.deps.Usage == nil {
+		return errors.New("subscription traffic accounting is not configured")
+	}
+	if err := a.deps.Usage.ApplyBucketOnce(ctx, suffix, updates); err != nil {
 		return err
 	}
 	processed, err := a.bucketProcessed(ctx, networkTrafficBucketConsumer, suffix)

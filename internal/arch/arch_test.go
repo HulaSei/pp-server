@@ -228,6 +228,57 @@ func TestModulePurity(t *testing.T) {
 	}
 }
 
+// Module code declares only the repository capabilities it consumes. The full
+// store remains an application assembly concern, including in type aliases.
+func TestModulesDoNotDependOnFullStore(t *testing.T) {
+	for _, f := range collectGoFiles(t) {
+		if !within(f.dir, "internal/module") || strings.HasSuffix(f.path, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join("..", "..", f.path), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		repositoryAlias := ""
+		for _, imp := range file.Imports {
+			if strings.Trim(imp.Path.Value, `"`) == importPrefix+"internal/repository" {
+				repositoryAlias = "repository"
+				if imp.Name != nil {
+					repositoryAlias = imp.Name.Name
+				}
+			}
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			selector, ok := node.(*ast.SelectorExpr)
+			if !ok || selector.Sel.Name != "Store" {
+				return true
+			}
+			if id, ok := selector.X.(*ast.Ident); ok && id.Name == repositoryAlias {
+				t.Errorf("%s: module depends on repository.Store; define a consumer-owned capability instead", f.path)
+			}
+			return true
+		})
+	}
+}
+
+func TestTasksDoNotOwnIdentityTransactions(t *testing.T) {
+	for _, f := range collectGoFiles(t) {
+		if !within(f.dir, "internal/transport/task") || strings.HasSuffix(f.path, "_test.go") {
+			continue
+		}
+		file, err := parser.ParseFile(token.NewFileSet(), filepath.Join("..", "..", f.path), nil, 0)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ast.Inspect(file, func(node ast.Node) bool {
+			if selector, ok := node.(*ast.SelectorExpr); ok && selector.Sel.Name == "InIdentityTx" {
+				t.Errorf("%s: task adapter owns an identity transaction; invoke an identity business capability instead", f.path)
+			}
+			return true
+		})
+	}
+}
+
 // TestAppImportBoundary keeps the composition root private to the CLI. Module
 // facades and runtime adapters receive their own dependency sets instead.
 func TestAppImportBoundary(t *testing.T) {
