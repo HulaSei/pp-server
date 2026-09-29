@@ -47,7 +47,10 @@ func TestOrderRepoMarkOrderPaidUsesPendingCondition(t *testing.T) {
 		t.Fatal("dry-run update must not report an affected row")
 	}
 	sql := logs.String()
-	for _, want := range []string{"UPDATE `order`", "`status`=2", "`trade_no`='trade-456'", "WHERE order_no = 'order-123' AND status = 1"} {
+	// The transition binds the trade number: an order that claimed another
+	// gateway payment is left alone.
+	for _, want := range []string{"UPDATE `order`", "`status`=2", "`trade_no`='trade-456'",
+		"WHERE order_no = 'order-123' AND status = 1 AND (trade_no IS NULL OR trade_no = '' OR trade_no = 'trade-456')"} {
 		if !strings.Contains(sql, want) {
 			t.Fatalf("SQL missing %q:\n%s", want, sql)
 		}
@@ -312,11 +315,12 @@ func useAppLocation(t *testing.T, name string) {
 
 func TestOrderRepoCountPendingGuestOrdersFiltersByGuestIdentity(t *testing.T) {
 	repo, logs := newDryRunOrderRepo(t)
-	if _, err := repo.CountPendingGuestOrders(context.Background(), "email", "guest@example.com"); err != nil {
+	since := time.Date(2026, 9, 1, 0, 0, 0, 0, time.UTC)
+	if _, err := repo.CountPendingGuestOrders(context.Background(), "email", "guest@example.com", since); err != nil {
 		t.Fatalf("CountPendingGuestOrders: %v", err)
 	}
 	sql := logs.String()
-	for _, want := range []string{"SELECT count(*) FROM `order`", "WHERE user_id = 0 AND status = 1 AND guest_auth_type = 'email' AND guest_identifier = 'guest@example.com'"} {
+	for _, want := range []string{"SELECT count(*) FROM `order`", "WHERE user_id = 0 AND status = 1 AND guest_auth_type = 'email' AND guest_identifier = 'guest@example.com' AND created_at >= '2026-09-01 00:00:00'"} {
 		if !strings.Contains(sql, want) {
 			t.Fatalf("SQL missing %q:\n%s", want, sql)
 		}

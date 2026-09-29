@@ -1,6 +1,7 @@
 package devicesocket
 
 import (
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -23,10 +24,17 @@ func deviceTestServer(t *testing.T, dm *DeviceManager, userID int64, maxDevices 
 	return srv
 }
 
-func dialDevice(t *testing.T, srv *httptest.Server, deviceID string) *websocket.Conn {
+// testDeviceID is the device every test connection dials as; dialing it
+// twice replaces the first connection.
+const testDeviceID = "dev1"
+
+func dialDevice(t *testing.T, srv *httptest.Server) *websocket.Conn {
 	t.Helper()
-	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "?device=" + deviceID
-	conn, _, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "?device=" + testDeviceID
+	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
 	if err != nil {
 		t.Fatalf("websocket dial: %v", err)
 	}
@@ -38,12 +46,12 @@ func dialDevice(t *testing.T, srv *httptest.Server, deviceID string) *websocket.
 // panicking with gorilla/websocket's concurrent-write assertion. Run with
 // -race.
 func TestConcurrentHeartbeatAndPushWrites(t *testing.T) {
-	dm := NewDeviceManager(3600, 3600)
+	dm := NewDeviceManager(3600, 3600, nil)
 	defer dm.Stop()
 
 	const userID = int64(7)
 	srv := deviceTestServer(t, dm, userID, 5)
-	conn := dialDevice(t, srv, "dev1")
+	conn := dialDevice(t, srv)
 
 	var received atomic.Int64
 	closed := make(chan struct{})
@@ -66,9 +74,18 @@ func TestConcurrentHeartbeatAndPushWrites(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < pushesPerWorker; j++ {
-				if err := dm.SendToDevice(userID, "dev1", "push"); err != nil {
-					t.Errorf("SendToDevice: %v", err)
-					return
+				// The queue is bounded: a burst faster than the client
+				// drains is refused, to be retried, never blocked on.
+				for {
+					err := dm.SendToDevice(userID, testDeviceID, "push")
+					if err == nil {
+						break
+					}
+					if !errors.Is(err, ErrSendQueueFull) {
+						t.Errorf("SendToDevice: %v", err)
+						return
+					}
+					time.Sleep(time.Millisecond)
 				}
 			}
 		}()
@@ -82,7 +99,7 @@ func TestConcurrentHeartbeatAndPushWrites(t *testing.T) {
 				case <-stop:
 					return
 				default:
-					dm.UpdateHeartbeat(userID, "dev1")
+					dm.UpdateHeartbeat(userID, testDeviceID)
 					time.Sleep(time.Millisecond)
 				}
 			}
@@ -97,7 +114,7 @@ func TestConcurrentHeartbeatAndPushWrites(t *testing.T) {
 	for received.Load() < pushWorkers*pushesPerWorker && time.Now().Before(deadline) {
 		time.Sleep(10 * time.Millisecond)
 	}
-	conn.Close()
+	_ = conn.Close()
 	<-closed
 	if got := received.Load(); got < pushWorkers*pushesPerWorker {
 		t.Errorf("received %d messages, want at least %d", got, pushWorkers*pushesPerWorker)
@@ -107,7 +124,7 @@ func TestConcurrentHeartbeatAndPushWrites(t *testing.T) {
 // The kick notification must reach the client before the connection closes,
 // which requires the device to stay registered until OnDeviceKicked returns.
 func TestKickDeliversNotificationThenCloses(t *testing.T) {
-	dm := NewDeviceManager(3600, 3600)
+	dm := NewDeviceManager(3600, 3600, nil)
 	defer dm.Stop()
 
 	const userID = int64(9)
@@ -122,9 +139,9 @@ func TestKickDeliversNotificationThenCloses(t *testing.T) {
 	}
 
 	srv := deviceTestServer(t, dm, userID, 5)
-	conn := dialDevice(t, srv, "dev1")
+	conn := dialDevice(t, srv)
 
-	dm.KickDevice(userID, "dev1")
+	dm.KickDevice(userID, testDeviceID)
 
 	if err := conn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 		t.Fatalf("set read deadline: %v", err)
@@ -152,13 +169,13 @@ func TestKickDeliversNotificationThenCloses(t *testing.T) {
 // Reconnecting with the same device ID must retire the previous socket:
 // pushes reach the new connection and the online counter stays at one.
 func TestReconnectReplacesPreviousSocket(t *testing.T) {
-	dm := NewDeviceManager(3600, 3600)
+	dm := NewDeviceManager(3600, 3600, nil)
 	defer dm.Stop()
 
 	const userID = int64(11)
 	srv := deviceTestServer(t, dm, userID, 5)
-	oldConn := dialDevice(t, srv, "dev1")
-	newConn := dialDevice(t, srv, "dev1")
+	oldConn := dialDevice(t, srv)
+	newConn := dialDevice(t, srv)
 
 	if err := oldConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
 		t.Fatalf("set read deadline: %v", err)
@@ -167,7 +184,7 @@ func TestReconnectReplacesPreviousSocket(t *testing.T) {
 		t.Error("previous socket should be closed after reconnect")
 	}
 
-	if err := dm.SendToDevice(userID, "dev1", "hello"); err != nil {
+	if err := dm.SendToDevice(userID, testDeviceID, "hello"); err != nil {
 		t.Fatalf("SendToDevice after reconnect: %v", err)
 	}
 	if err := newConn.SetReadDeadline(time.Now().Add(2 * time.Second)); err != nil {
@@ -181,7 +198,82 @@ func TestReconnectReplacesPreviousSocket(t *testing.T) {
 		t.Errorf("push = %q, want %q", msg, "hello")
 	}
 
-	if got := atomic.LoadInt32(&dm.totalOnline); got != 1 {
-		t.Errorf("totalOnline = %d after reconnect, want 1", got)
+	if got := dm.Online(); got != 1 {
+		t.Errorf("Online() = %d after reconnect, want 1", got)
+	}
+}
+
+// serverSocket returns the server side of a websocket connection no manager
+// knows about, for a device registered by hand.
+func serverSocket(t *testing.T) *websocket.Conn {
+	t.Helper()
+	accepted := make(chan *websocket.Conn, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		conn, err := (&websocket.Upgrader{}).Upgrade(w, r, nil)
+		if err != nil {
+			t.Errorf("websocket upgrade: %v", err)
+			return
+		}
+		accepted <- conn
+	}))
+	t.Cleanup(srv.Close)
+	client, resp, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http"), nil)
+	if resp != nil {
+		_ = resp.Body.Close()
+	}
+	if err != nil {
+		t.Fatalf("websocket dial: %v", err)
+	}
+	t.Cleanup(func() { _ = client.Close() })
+	return <-accepted
+}
+
+// The heartbeat sweep gets each user's device list from the map's Range,
+// before it holds the user's lock. A device that connects in between is in
+// the map but not in that list; a sweep storing a list rebuilt from it
+// would drop the device, leaving a socket nothing can kick and a
+// totalOnline that never comes down.
+func TestHeartbeatSweepKeepsADeviceConnectedWhileItWaited(t *testing.T) {
+	dm := NewDeviceManager(3600, 3600, nil)
+	defer dm.Stop()
+
+	const userID = int64(13)
+	srv := deviceTestServer(t, dm, userID, 2)
+	conn := dialDevice(t, srv)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	// The sweep starts while the test holds the user's lock: it has taken
+	// its snapshot from Range and waits for the lock.
+	mu := dm.getUserMutex(userID)
+	mu.Lock()
+	swept := make(chan struct{})
+	go func() {
+		defer close(swept)
+		dm.checkHeartbeats()
+	}()
+	time.Sleep(100 * time.Millisecond)
+
+	// Meanwhile a second device connects: AddDevice's registration, as it
+	// runs under the lock.
+	late := newDevice(serverSocket(t), "session", "dev2", time.Now())
+	late.startWriter(userID)
+	current, _ := dm.userDevices.Load(userID)
+	dm.userDevices.Store(userID, append(append([]*Device(nil), current.([]*Device)...), late))
+	dm.totalOnline.Add(1)
+	mu.Unlock()
+	<-swept
+
+	if devices := dm.snapshotDevices(userID); len(devices) != 2 || devices[1] != late {
+		t.Fatalf("devices after the sweep = %d, want both, the late one included", len(devices))
+	}
+	if got := dm.Online(); got != 2 {
+		t.Fatalf("Online() after the sweep = %d, want 2", got)
+	}
+	if err := dm.SendToDevice(userID, "dev2", "hello"); err != nil {
+		t.Fatalf("the late device is unreachable: %v", err)
+	}
+	dm.KickDevice(userID, "dev2")
+	if got := dm.Online(); got != 1 {
+		t.Fatalf("Online() after kicking the late device = %d, want 1", got)
 	}
 }

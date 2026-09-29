@@ -1,9 +1,12 @@
 package deduction
 
 import (
+	"errors"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/perfect-panel/server/internal/module/subscription/internal/period"
 )
 
 func TestSubscribe_Validate(t *testing.T) {
@@ -21,7 +24,7 @@ func TestSubscribe_Validate(t *testing.T) {
 				Traffic:        1000,
 				Download:       100,
 				Upload:         200,
-				UnitTime:       UnitTimeMonth,
+				UnitTime:       period.UnitMonth,
 				DeductionRatio: 50,
 			},
 			wantErr: false,
@@ -34,7 +37,7 @@ func TestSubscribe_Validate(t *testing.T) {
 				Traffic:        -1000,
 				Download:       100,
 				Upload:         200,
-				UnitTime:       UnitTimeMonth,
+				UnitTime:       period.UnitMonth,
 				DeductionRatio: 50,
 			},
 			wantErr: true,
@@ -48,7 +51,7 @@ func TestSubscribe_Validate(t *testing.T) {
 				Traffic:        1000,
 				Download:       -100,
 				Upload:         200,
-				UnitTime:       UnitTimeMonth,
+				UnitTime:       period.UnitMonth,
 				DeductionRatio: 50,
 			},
 			wantErr: true,
@@ -62,10 +65,12 @@ func TestSubscribe_Validate(t *testing.T) {
 				Traffic:        1000,
 				Download:       600,
 				Upload:         500,
-				UnitTime:       UnitTimeMonth,
+				UnitTime:       period.UnitMonth,
 				DeductionRatio: 50,
 			},
-			wantErr: true,
+			// Reports can land after the quota ran out: over-use leaves no
+			// unused traffic to refund, it is not invalid.
+			wantErr: false,
 		},
 		{
 			name: "expire time before start time",
@@ -75,7 +80,7 @@ func TestSubscribe_Validate(t *testing.T) {
 				Traffic:        1000,
 				Download:       100,
 				Upload:         200,
-				UnitTime:       UnitTimeMonth,
+				UnitTime:       period.UnitMonth,
 				DeductionRatio: 50,
 			},
 			wantErr: true,
@@ -89,7 +94,7 @@ func TestSubscribe_Validate(t *testing.T) {
 				Traffic:        1000,
 				Download:       100,
 				Upload:         200,
-				UnitTime:       UnitTimeMonth,
+				UnitTime:       period.UnitMonth,
 				DeductionRatio: -10,
 			},
 			wantErr: true,
@@ -103,7 +108,7 @@ func TestSubscribe_Validate(t *testing.T) {
 				Traffic:        1000,
 				Download:       100,
 				Upload:         200,
-				UnitTime:       UnitTimeMonth,
+				UnitTime:       period.UnitMonth,
 				DeductionRatio: 150,
 			},
 			wantErr: true,
@@ -132,7 +137,7 @@ func TestSubscribe_Validate(t *testing.T) {
 				t.Errorf("Subscribe.Validate() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			if tt.errType != nil && err != tt.errType {
+			if tt.errType != nil && !errors.Is(err, tt.errType) {
 				t.Errorf("Subscribe.Validate() error = %v, want %v", err, tt.errType)
 			}
 		})
@@ -143,7 +148,7 @@ func TestOrder_Validate(t *testing.T) {
 	if err := (&Order{Amount: 0}).Validate(); err != nil {
 		t.Fatalf("zero amount must be valid, got %v", err)
 	}
-	if err := (&Order{Amount: -1000}).Validate(); err != ErrInvalidAmount {
+	if err := (&Order{Amount: -1000}).Validate(); !errors.Is(err, ErrInvalidAmount) {
 		t.Fatalf("negative amount error = %v, want %v", err, ErrInvalidAmount)
 	}
 }
@@ -227,7 +232,7 @@ func TestCalculateRemainingAmount(t *testing.T) {
 				Traffic:    1000,
 				Download:   300,
 				Upload:     200,
-				UnitTime:   UnitTimeNoLimit,
+				UnitTime:   period.UnitNoLimit,
 			},
 			order: Order{Amount: 1000},
 		},
@@ -239,7 +244,7 @@ func TestCalculateRemainingAmount(t *testing.T) {
 				Traffic:    1000,
 				Download:   300,
 				Upload:     200,
-				UnitTime:   UnitTimeMonth,
+				UnitTime:   period.UnitMonth,
 			},
 			order:   Order{Amount: 1000},
 			wantErr: true,
@@ -252,7 +257,7 @@ func TestCalculateRemainingAmount(t *testing.T) {
 				Traffic:    1000,
 				Download:   300,
 				Upload:     200,
-				UnitTime:   UnitTimeMonth,
+				UnitTime:   period.UnitMonth,
 			},
 			order:   Order{Amount: -1}, // Invalid: negative amount
 			wantErr: true,
@@ -265,8 +270,8 @@ func TestCalculateRemainingAmount(t *testing.T) {
 				Traffic:    1000,
 				Download:   300,
 				Upload:     200,
-				UnitTime:   UnitTimeNoLimit,
-				ResetCycle: ResetCycleMonthly, // Should return 0
+				UnitTime:   period.UnitNoLimit,
+				ResetCycle: period.CycleMonthly, // Should return 0
 			},
 			order: Order{Amount: 1000},
 		},
@@ -290,8 +295,8 @@ func TestCalculateRemainingAmount_NoLimitWithResetCycle(t *testing.T) {
 		Traffic:    1000,
 		Download:   300,
 		Upload:     200,
-		UnitTime:   UnitTimeNoLimit,
-		ResetCycle: ResetCycleMonthly,
+		UnitTime:   period.UnitNoLimit,
+		ResetCycle: period.CycleMonthly,
 	}
 
 	got, err := CalculateRemainingAmount(sub, Order{Amount: 1000})
@@ -325,28 +330,28 @@ func TestCalculateRemainingAmountRefundsOnlyWhatIsLeft(t *testing.T) {
 	}{
 		{
 			name:   "year plan unsubscribed on the purchase day",
-			sub:    Subscribe{StartTime: at(2026, 3, 10, 9), ExpireTime: at(2027, 3, 10, 9), UnitTime: UnitTimeYear},
+			sub:    Subscribe{StartTime: at(2026, 3, 10, 9), ExpireTime: at(2027, 3, 10, 9), UnitTime: period.UnitYear},
 			amount: 36500,
 			now:    at(2026, 3, 10, 10),
 			want:   36495, // 8759 of 8760 hours left
 		},
 		{
 			name:   "month plan bought on Jan 31 unsubscribed the same day",
-			sub:    Subscribe{StartTime: at(2026, 1, 31, 12), ExpireTime: at(2026, 3, 3, 12), UnitTime: UnitTimeMonth},
+			sub:    Subscribe{StartTime: at(2026, 1, 31, 12), ExpireTime: at(2026, 3, 3, 12), UnitTime: period.UnitMonth},
 			amount: 3000,
 			now:    at(2026, 1, 31, 13),
 			want:   2995, // 743 of 744 hours left
 		},
 		{
 			name:   "month plan with monthly reset after 29 of 30 days",
-			sub:    Subscribe{StartTime: at(2026, 4, 1, 0), ExpireTime: at(2026, 5, 1, 0), UnitTime: UnitTimeMonth, ResetCycle: ResetCycleMonthly},
+			sub:    Subscribe{StartTime: at(2026, 4, 1, 0), ExpireTime: at(2026, 5, 1, 0), UnitTime: period.UnitMonth, ResetCycle: period.CycleMonthly},
 			amount: 3000,
 			now:    at(2026, 4, 30, 0),
 			want:   100,
 		},
 		{
 			name:   "month plan with yearly reset after one day",
-			sub:    Subscribe{StartTime: at(2026, 4, 1, 0), ExpireTime: at(2026, 5, 1, 0), UnitTime: UnitTimeMonth, ResetCycle: ResetCycleYear},
+			sub:    Subscribe{StartTime: at(2026, 4, 1, 0), ExpireTime: at(2026, 5, 1, 0), UnitTime: period.UnitMonth, ResetCycle: period.CycleYearly},
 			amount: 3000,
 			now:    at(2026, 4, 2, 0),
 			want:   2900,
@@ -354,8 +359,8 @@ func TestCalculateRemainingAmountRefundsOnlyWhatIsLeft(t *testing.T) {
 		{
 			name: "year plan resetting on the 1st, last month half used",
 			sub: Subscribe{
-				StartTime: at(2025, 9, 1, 0), ExpireTime: at(2026, 9, 1, 0), UnitTime: UnitTimeYear,
-				ResetCycle: ResetCycle1st, Traffic: 100 * gb, Download: 30 * gb, Upload: 20 * gb,
+				StartTime: at(2025, 9, 1, 0), ExpireTime: at(2026, 9, 1, 0), UnitTime: period.UnitYear,
+				ResetCycle: period.CycleFirstOfMonth, Traffic: 100 * gb, Download: 30 * gb, Upload: 20 * gb,
 			},
 			amount: 36500,
 			now:    at(2026, 8, 1, 0),
@@ -364,8 +369,8 @@ func TestCalculateRemainingAmountRefundsOnlyWhatIsLeft(t *testing.T) {
 		{
 			name: "current cycle's traffic used up is not refunded",
 			sub: Subscribe{
-				StartTime: at(2026, 1, 15, 0), ExpireTime: at(2027, 1, 15, 0), UnitTime: UnitTimeYear,
-				ResetCycle: ResetCycleMonthly, Traffic: 100 * gb, Download: 100 * gb,
+				StartTime: at(2026, 1, 15, 0), ExpireTime: at(2027, 1, 15, 0), UnitTime: period.UnitYear,
+				ResetCycle: period.CycleMonthly, Traffic: 100 * gb, Download: 100 * gb,
 			},
 			amount: 36500,
 			now:    at(2026, 3, 16, 0),
@@ -374,7 +379,7 @@ func TestCalculateRemainingAmountRefundsOnlyWhatIsLeft(t *testing.T) {
 		{
 			name: "deduction ratio weighs traffic against time",
 			sub: Subscribe{
-				StartTime: at(2026, 4, 1, 0), ExpireTime: at(2026, 5, 1, 0), UnitTime: UnitTimeMonth,
+				StartTime: at(2026, 4, 1, 0), ExpireTime: at(2026, 5, 1, 0), UnitTime: period.UnitMonth,
 				Traffic: 100 * gb, Download: 60 * gb, DeductionRatio: 50,
 			},
 			amount: 3000,
@@ -382,15 +387,45 @@ func TestCalculateRemainingAmountRefundsOnlyWhatIsLeft(t *testing.T) {
 			want:   1350, // 0.5 * 40% traffic left + 0.5 * 50% time left
 		},
 		{
+			name: "usage past the quota refunds only later cycles",
+			sub: Subscribe{
+				StartTime: at(2026, 1, 15, 0), ExpireTime: at(2027, 1, 15, 0), UnitTime: period.UnitYear,
+				ResetCycle: period.CycleMonthly, Traffic: 100 * gb, Download: 90 * gb, Upload: 15 * gb,
+			},
+			amount: 36500,
+			now:    at(2026, 3, 16, 0),
+			want:   27500, // as if used up: only Apr 15 onwards
+		},
+		{
+			name: "unlimited traffic in use refunds by time",
+			sub: Subscribe{
+				StartTime: at(2026, 4, 1, 0), ExpireTime: at(2026, 5, 1, 0), UnitTime: period.UnitMonth,
+				Traffic: 0, Download: 500 * gb, Upload: 20 * gb,
+			},
+			amount: 3000,
+			now:    at(2026, 4, 16, 0),
+			want:   1500,
+		},
+		{
+			name: "no expiry refunds the unused traffic",
+			sub: Subscribe{
+				StartTime: at(2026, 4, 1, 0), ExpireTime: time.UnixMilli(0), UnitTime: period.UnitMonth,
+				Traffic: 100 * gb, Download: 25 * gb,
+			},
+			amount: 3000,
+			now:    at(2026, 4, 16, 0),
+			want:   2250,
+		},
+		{
 			name:   "expired subscription refunds nothing",
-			sub:    Subscribe{StartTime: at(2026, 4, 1, 0), ExpireTime: at(2026, 5, 1, 0), UnitTime: UnitTimeMonth},
+			sub:    Subscribe{StartTime: at(2026, 4, 1, 0), ExpireTime: at(2026, 5, 1, 0), UnitTime: period.UnitMonth},
 			amount: 3000,
 			now:    at(2026, 5, 1, 1),
 			want:   0,
 		},
 		{
 			name:   "not yet started refunds everything",
-			sub:    Subscribe{StartTime: at(2026, 4, 1, 0), ExpireTime: at(2026, 5, 1, 0), UnitTime: UnitTimeMonth},
+			sub:    Subscribe{StartTime: at(2026, 4, 1, 0), ExpireTime: at(2026, 5, 1, 0), UnitTime: period.UnitMonth},
 			amount: 3000,
 			now:    at(2026, 3, 30, 0),
 			want:   3000,
@@ -399,7 +434,7 @@ func TestCalculateRemainingAmountRefundsOnlyWhatIsLeft(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := calculateRemainingAmount(tt.sub, Order{Amount: tt.amount}, tt.now)
+			got, err := calculateRemainingAmount(period.In(loc), tt.sub, Order{Amount: tt.amount}, tt.now)
 			if err != nil {
 				t.Fatalf("calculateRemainingAmount() error = %v", err)
 			}
@@ -415,7 +450,7 @@ func TestCalculateRemainingAmountRefundsOnlyWhatIsLeft(t *testing.T) {
 // within what was paid.
 func TestCalculateRemainingAmountStaysWithinPaid(t *testing.T) {
 	rng := rand.New(rand.NewSource(1))
-	units := []string{UnitTimeYear, UnitTimeMonth, UnitTimeDay, UnitTimeHour}
+	units := []period.Unit{period.UnitYear, period.UnitMonth, period.UnitDay, period.UnitHour}
 	loc := time.FixedZone("CST", 8*3600)
 	base := time.Date(2024, 1, 1, 0, 0, 0, 0, loc)
 
@@ -425,11 +460,11 @@ func TestCalculateRemainingAmountStaysWithinPaid(t *testing.T) {
 		unit := units[rng.Intn(len(units))]
 		var expire time.Time
 		switch unit {
-		case UnitTimeYear:
+		case period.UnitYear:
 			expire = start.AddDate(quantity, 0, 0)
-		case UnitTimeMonth:
+		case period.UnitMonth:
 			expire = start.AddDate(0, quantity, 0)
-		case UnitTimeDay:
+		case period.UnitDay:
 			expire = start.AddDate(0, 0, quantity)
 		default:
 			expire = start.Add(time.Duration(quantity) * time.Hour)
@@ -438,7 +473,7 @@ func TestCalculateRemainingAmountStaysWithinPaid(t *testing.T) {
 			StartTime:      start,
 			ExpireTime:     expire,
 			UnitTime:       unit,
-			ResetCycle:     int64(rng.Intn(4)),
+			ResetCycle:     period.Cycle(rng.Intn(4)),
 			DeductionRatio: int64(rng.Intn(101)),
 		}
 		if rng.Intn(3) > 0 {
@@ -450,7 +485,7 @@ func TestCalculateRemainingAmountStaysWithinPaid(t *testing.T) {
 		span := expire.Sub(start) + 20*24*time.Hour
 		now := start.Add(-10*24*time.Hour + time.Duration(rng.Int63n(int64(span))))
 
-		got, err := calculateRemainingAmount(sub, Order{Amount: amount}, now)
+		got, err := calculateRemainingAmount(period.In(loc), sub, Order{Amount: amount}, now)
 		if err != nil {
 			t.Fatalf("case %d: unexpected error %v for %+v", i, err, sub)
 		}
@@ -475,35 +510,35 @@ func TestCurrentResetCycle(t *testing.T) {
 	}{
 		{
 			name:      "1st of month",
-			sub:       Subscribe{StartTime: day(2025, 6, 20), ExpireTime: day(2027, 6, 20), ResetCycle: ResetCycle1st},
+			sub:       Subscribe{StartTime: day(2025, 6, 20), ExpireTime: day(2027, 6, 20), ResetCycle: period.CycleFirstOfMonth},
 			now:       day(2026, 2, 10).Add(5 * time.Hour),
 			wantStart: day(2026, 2, 1),
 			wantEnd:   day(2026, 3, 1),
 		},
 		{
 			name:      "monthly on the 31st falls back to the month's last day",
-			sub:       Subscribe{StartTime: day(2026, 1, 31), ExpireTime: day(2027, 1, 31), ResetCycle: ResetCycleMonthly},
+			sub:       Subscribe{StartTime: day(2026, 1, 31), ExpireTime: day(2027, 1, 31), ResetCycle: period.CycleMonthly},
 			now:       day(2026, 2, 15),
 			wantStart: day(2026, 1, 31),
 			wantEnd:   day(2026, 2, 28),
 		},
 		{
 			name:      "monthly on the 31st from February's last day",
-			sub:       Subscribe{StartTime: day(2026, 1, 31), ExpireTime: day(2027, 1, 31), ResetCycle: ResetCycleMonthly},
+			sub:       Subscribe{StartTime: day(2026, 1, 31), ExpireTime: day(2027, 1, 31), ResetCycle: period.CycleMonthly},
 			now:       day(2026, 2, 28).Add(12 * time.Hour),
 			wantStart: day(2026, 2, 28),
 			wantEnd:   day(2026, 3, 31),
 		},
 		{
 			name:      "yearly from Feb 29 resets on Feb 28 in common years",
-			sub:       Subscribe{StartTime: day(2024, 2, 29), ExpireTime: day(2028, 2, 29), ResetCycle: ResetCycleYear},
+			sub:       Subscribe{StartTime: day(2024, 2, 29), ExpireTime: day(2028, 2, 29), ResetCycle: period.CycleYearly},
 			now:       day(2025, 3, 1),
 			wantStart: day(2025, 2, 28),
 			wantEnd:   day(2026, 2, 28),
 		},
 		{
 			name:      "cycle clamped to the subscription term",
-			sub:       Subscribe{StartTime: day(2026, 2, 10), ExpireTime: day(2026, 2, 20), ResetCycle: ResetCycle1st},
+			sub:       Subscribe{StartTime: day(2026, 2, 10), ExpireTime: day(2026, 2, 20), ResetCycle: period.CycleFirstOfMonth},
 			now:       day(2026, 2, 12),
 			wantStart: day(2026, 2, 10),
 			wantEnd:   day(2026, 2, 20),
@@ -519,7 +554,7 @@ func TestCurrentResetCycle(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			gotStart, gotEnd := currentResetCycle(tt.sub, tt.now)
+			gotStart, gotEnd := currentResetCycle(period.In(loc), tt.sub, tt.now)
 			if !gotStart.Equal(tt.wantStart) || !gotEnd.Equal(tt.wantEnd) {
 				t.Fatalf("cycle = [%v, %v), want [%v, %v)", gotStart, gotEnd, tt.wantStart, tt.wantEnd)
 			}
@@ -536,8 +571,8 @@ func BenchmarkCalculateRemainingAmount(b *testing.B) {
 		Traffic:        1000,
 		Download:       300,
 		Upload:         200,
-		UnitTime:       UnitTimeMonth,
-		ResetCycle:     ResetCycleNone,
+		UnitTime:       period.UnitMonth,
+		ResetCycle:     period.CycleNone,
 		DeductionRatio: 50,
 	}
 	order := Order{Amount: 1000}
