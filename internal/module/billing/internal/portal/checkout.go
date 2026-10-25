@@ -122,6 +122,12 @@ func (s *Service) payThroughGateway(ctx context.Context, orderInfo *order.Order,
 		Subject:   s.siteName(),
 		Payer:     gateway.Payer{UserID: orderInfo.UserId},
 		Claim:     s.claimTrade(orderInfo),
+		BeginSession: func(ctx context.Context) (bool, error) {
+			return s.deps.Orders.BeginPaymentSession(ctx, orderInfo.OrderNo)
+		},
+		CompleteSession: func(ctx context.Context, tradeNo, session string) (bool, error) {
+			return s.deps.Orders.CompletePaymentSession(ctx, orderInfo.OrderNo, tradeNo, session)
+		},
 	})
 	if err != nil {
 		return nil, xerr.Wrapf(err, xerr.ERROR, "start %s payment of order %s", method.Platform, orderInfo.OrderNo)

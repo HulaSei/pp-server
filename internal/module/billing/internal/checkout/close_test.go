@@ -338,6 +338,25 @@ func TestCloseEPayOrderSettlesAPaidOrder(t *testing.T) {
 	}
 }
 
+func TestCloseEPayCashierSettlesAPaidOrderWithoutConfiguredType(t *testing.T) {
+	f := newCheckoutFixture(t)
+	_, o := f.epayOrder(epayGateway(t, epayPaid), time.Hour)
+	method, err := f.h.Store.Payment().FindOne(context.Background(), o.PaymentId)
+	if err != nil {
+		t.Fatal(err)
+	}
+	method.Config = strings.Replace(method.Config, `"type":"alipay"`, `"type":""`, 1)
+	if err := f.h.Store.Payment().Update(context.Background(), method); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.svc.Close(context.Background(), &dto.CloseOrderRequest{OrderNo: o.OrderNo}); err != nil {
+		t.Fatal(err)
+	}
+	if got := f.h.ReloadOrder(o.OrderNo); got.Status != order.StatusPaid || got.TradeNo != "T-1" {
+		t.Fatalf("cashier order was not settled: status=%d trade=%q", got.Status, got.TradeNo)
+	}
+}
+
 // Without the gateway's confirmation the reconciler keeps the order pending
 // and reports the retryable refusal.
 func TestCloseEPayOrderReconcilerKeepsUncertainOrdersPending(t *testing.T) {

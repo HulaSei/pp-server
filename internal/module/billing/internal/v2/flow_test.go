@@ -191,6 +191,14 @@ func (c competingClaim) SetPaymentTradeNoIfEmpty(ctx context.Context, orderNo, t
 	return c.orders.SetPaymentTradeNoIfEmpty(ctx, orderNo, tradeNo)
 }
 
+func (c competingClaim) BeginPaymentSession(ctx context.Context, orderNo string) (bool, error) {
+	return c.orders.BeginPaymentSession(ctx, orderNo)
+}
+
+func (c competingClaim) CompletePaymentSession(ctx context.Context, orderNo, tradeNo, session string) (bool, error) {
+	return c.orders.CompletePaymentSession(ctx, orderNo, tradeNo, session)
+}
+
 func (c competingClaim) UpdateOrderStatusFrom(ctx context.Context, orderNo string, from, status uint8) (bool, error) {
 	return c.orders.UpdateOrderStatusFrom(ctx, orderNo, from, status)
 }

@@ -150,6 +150,11 @@ type EPayConfig struct {
 	Url  string `json:"url"`
 	Key  string `json:"key"`
 	Type string `json:"type"`
+	// Empty Version and CheckoutMode retain the existing V1 page checkout.
+	Version      string `json:"version,omitempty"`
+	CheckoutMode string `json:"checkout_mode,omitempty"`
+	PrivateKey   string `json:"private_key,omitempty"`
+	PublicKey    string `json:"public_key,omitempty"`
 }
 
 func (l *EPayConfig) Marshal() ([]byte, error) {

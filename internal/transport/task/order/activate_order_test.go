@@ -711,6 +711,12 @@ func (*activationOrderRepo) QueryTotalUserCounts(context.Context) (int64, int64,
 func (*activationOrderRepo) SetPaymentTradeNoIfEmpty(context.Context, string, string) (bool, error) {
 	return false, errNotInScenario
 }
+func (*activationOrderRepo) BeginPaymentSession(context.Context, string) (bool, error) {
+	return false, errNotInScenario
+}
+func (*activationOrderRepo) CompletePaymentSession(context.Context, string, string, string) (bool, error) {
+	return false, errNotInScenario
+}
 func (*activationOrderRepo) Update(context.Context, *orderEntity.Order) error {
 	return errNotInScenario
 }

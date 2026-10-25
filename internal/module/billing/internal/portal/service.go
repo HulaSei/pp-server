@@ -88,6 +88,8 @@ type Orders interface {
 	CountPendingGuestOrders(ctx context.Context, authType, identifier string, since time.Time) (int64, error)
 	UpdatePaymentExpectation(ctx context.Context, orderNo string, amount int64, currency string) (bool, error)
 	SetPaymentTradeNoIfEmpty(ctx context.Context, orderNo, tradeNo string) (bool, error)
+	BeginPaymentSession(ctx context.Context, orderNo string) (bool, error)
+	CompletePaymentSession(ctx context.Context, orderNo, tradeNo, session string) (bool, error)
 	UpdateOrderStatusFrom(ctx context.Context, orderNo string, from, status uint8) (bool, error)
 }
 

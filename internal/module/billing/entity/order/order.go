@@ -32,6 +32,7 @@ type Order struct {
 	FeeAmount              int64     `gorm:"type:int;not null;default:0;comment:Fee Amount"`
 	PaymentAmount          int64     `gorm:"type:bigint;not null;default:0;comment:Amount requested by payment gateway in minor units"`
 	PaymentCurrency        string    `gorm:"type:varchar(16);not null;default:'';comment:Payment gateway currency"`
+	PaymentSession         string    `gorm:"type:text;default:null;comment:Durable external checkout attempt and payment entry" json:"-"`
 	TradeNo                string    `gorm:"type:varchar(255);default:null;comment:Trade No"`
 	Status                 uint8     `gorm:"type:tinyint(1);not null;default:1;comment:Order Status: 1: Pending, 2: Paid, 3:Close, 4: Failed, 5:Finished;"`
 	SubscribeId            int64     `gorm:"type:bigint;not null;default:0;comment:Subscribe Id"`

@@ -78,10 +78,14 @@ func GetSupportedPlatforms() []integration.Info {
 			Platform:    EPay.String(),
 			PlatformURL: "",
 			PlatformFieldDescription: map[string]string{
-				"pid":  "PID",
-				"url":  "URL",
-				"key":  "Key",
-				"type": "Type",
+				"pid":           "Merchant ID",
+				"url":           "Gateway URL",
+				"key":           "V1 merchant key",
+				"type":          "Payment type (empty for page cashier)",
+				"version":       "Protocol: v1 (default) or v2",
+				"checkout_mode": "Checkout: page (default) or api",
+				"private_key":   "V2 merchant RSA private key",
+				"public_key":    "V2 platform RSA public key",
 			},
 		},
 		{

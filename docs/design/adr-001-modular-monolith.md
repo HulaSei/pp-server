@@ -62,6 +62,11 @@ internal/module/<name>/
 
 ### 边界强制（已落地）
 
+EPay V1/V2 协议实现位于 `billing/internal/payment/epay/protocol`，兼容适配与
+业务网关仍在 billing 内部。API 下单的请求标记与可复用支付入口保存在 billing 拥有的
+`order.payment_session`；先持久化标记再调用远端，失败后保留未知结果并走现有对账，
+不持有跨网络事务锁，也不新增跨模块写入。详见 [EPay 接入](../guide/epay-zh.md)。
+
 - **编译器**：模块实现位于嵌套 `internal/` 下，跨模块 import 内部包直接编译失败。
 - **架构测试** `internal/arch`（随 `go test ./...`、CI 与 lefthook pre-commit 运行）：
   - `TestInternalLayout`：固定 internal 的 8 个职责组，限制基础设施的反向依赖；
