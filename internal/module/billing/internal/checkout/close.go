@@ -206,7 +206,8 @@ func (s *Service) closePending(ctx context.Context, snapshot *order.Order, requi
 // snapshot the gateway verdict was made on.
 func checkoutChanged(current, snapshot *order.Order) bool {
 	return current.PaymentCurrency != snapshot.PaymentCurrency || current.PaymentAmount != snapshot.PaymentAmount ||
-		current.TradeNo != snapshot.TradeNo || current.PaymentId != snapshot.PaymentId || current.Method != snapshot.Method
+		current.TradeNo != snapshot.TradeNo || current.PaymentId != snapshot.PaymentId || current.Method != snapshot.Method ||
+		current.PaymentSession != snapshot.PaymentSession
 }
 
 // refundGift returns the gift credit the order reserved to its buyer.

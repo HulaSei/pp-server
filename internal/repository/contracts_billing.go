@@ -22,6 +22,8 @@ type OrderRepo interface {
 	UpdateOrderStatusFrom(ctx context.Context, orderNo string, from, status uint8) (bool, error)
 	UpdatePaymentExpectation(ctx context.Context, orderNo string, amount int64, currency string) (bool, error)
 	SetPaymentTradeNoIfEmpty(ctx context.Context, orderNo, tradeNo string) (bool, error)
+	BeginPaymentSession(ctx context.Context, orderNo string) (bool, error)
+	CompletePaymentSession(ctx context.Context, orderNo, tradeNo, session string) (bool, error)
 	MarkOrderPaid(ctx context.Context, orderNo, tradeNo string) (bool, error)
 	// SetCommission records the referral commission paid for the order and
 	// the referrer credited with it; a refund reverses it in proportion

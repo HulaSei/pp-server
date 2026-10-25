@@ -70,6 +70,12 @@ type Checkout struct {
 	// holds afterwards: tradeNo when the claim won, the concurrent winner's
 	// otherwise.
 	Claim func(ctx context.Context, tradeNo string) (string, error)
+	// BeginSession fences an API create before any remote request. Once begun,
+	// a failed/unknown create is reconciled, never automatically re-issued.
+	BeginSession func(context.Context) (bool, error)
+	// CompleteSession atomically binds the returned trade and reusable checkout
+	// entry while the order is still pending.
+	CompleteSession func(ctx context.Context, tradeNo, session string) (bool, error)
 }
 
 // CloseRequest asks whether a pending order may close locally.

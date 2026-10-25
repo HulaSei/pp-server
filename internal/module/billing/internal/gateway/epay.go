@@ -13,6 +13,7 @@ import (
 	paymentEntity "github.com/perfect-panel/server/internal/module/billing/entity/payment"
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment"
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment/epay"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/epay/protocol"
 	"github.com/perfect-panel/server/internal/module/billing/internal/settle"
 	"github.com/perfect-panel/server/pkg/logger"
 )
@@ -21,9 +22,12 @@ import (
 const epayCurrency = "CNY"
 
 type epayGateway struct {
-	config       paymentEntity.EPayConfig
-	client       *epay.Client
-	siteRelative bool
+	config         paymentEntity.EPayConfig
+	client         *epay.Client
+	v1             *protocol.V1Client
+	v2             *protocol.Client
+	siteRelative   bool
+	schemeRelative bool
 }
 
 func openEPay(r *Registry, method *paymentEntity.Payment) (Gateway, error) {
@@ -31,23 +35,34 @@ func openEPay(r *Registry, method *paymentEntity.Payment) (Gateway, error) {
 	if err := config.Unmarshal([]byte(method.Config)); err != nil {
 		return nil, fmt.Errorf("decode EPay configuration: %w", err)
 	}
-	if config.Pid == "" || config.Url == "" || config.Key == "" {
-		return nil, errors.New("incomplete payment configuration")
+	config.Version = strings.ToLower(strings.TrimSpace(config.Version))
+	config.CheckoutMode = strings.ToLower(strings.TrimSpace(config.CheckoutMode))
+	config.Url = strings.TrimSpace(config.Url)
+	var siteRelative, schemeRelative bool
+	if (config.Version == "" || config.Version == "v1") && (config.CheckoutMode == "" || config.CheckoutMode == "page") {
+		schemeRelative = strings.HasPrefix(config.Url, "//")
+		endpoint, relative, err := epayEndpoint(config.Url, method.Domain)
+		if err != nil {
+			return nil, err
+		}
+		config.Url, siteRelative = endpoint, relative
 	}
-	endpoint, siteRelative, err := epayEndpoint(config.Url, method.Domain)
+	gw, err := newEPayGateway(config, r.httpClient)
 	if err != nil {
 		return nil, err
 	}
-	return &epayGateway{
-		config:       config,
-		client:       epay.NewClient(config.Pid, endpoint, config.Key, config.Type, epay.WithHTTPClient(r.httpClient)),
-		siteRelative: siteRelative,
-	}, nil
+	gw.siteRelative, gw.schemeRelative = siteRelative, schemeRelative
+	return gw, nil
 }
 
 func epayEndpoint(raw, domain string) (string, bool, error) {
 	raw = strings.TrimSpace(raw)
-	if !strings.HasPrefix(raw, "/") || strings.HasPrefix(raw, "//") {
+	if strings.HasPrefix(raw, "//") {
+		// Server-side queries have no browser scheme; use HTTPS while the
+		// browser-facing checkout retains the configured scheme-relative URL.
+		return "https:" + raw, false, nil
+	}
+	if !strings.HasPrefix(raw, "/") {
 		return raw, false, nil
 	}
 	base := strings.TrimSuffix(strings.TrimSpace(domain), "/")
@@ -62,6 +77,11 @@ func normalizeEPay(raw []byte) (string, error) {
 	if err := config.Unmarshal(raw); err != nil {
 		return "", err
 	}
+	validated, err := newEPayGateway(config, nil)
+	if err != nil {
+		return "", err
+	}
+	config = validated.config
 	content, err := config.Marshal()
 	return string(content), err
 }
@@ -72,8 +92,21 @@ func (g *epayGateway) ChargeCurrency() string { return epayCurrency }
 
 func (g *epayGateway) NeedsNotifyURL(*order.Order) bool { return true }
 
-// StartPayment builds the signed redirect to the gateway's payment page.
-func (g *epayGateway) StartPayment(_ context.Context, c Checkout) (*dto.CheckoutOrderResponse, error) {
+// StartPayment builds a signed page redirect or reuses a durable API checkout.
+func (g *epayGateway) StartPayment(ctx context.Context, c Checkout) (*dto.CheckoutOrderResponse, error) {
+	if g.config.CheckoutMode == "api" {
+		return g.startAPI(ctx, c)
+	}
+	if g.v2 != nil {
+		form, err := g.v2.PagePayment(protocol.Payment{
+			Type: g.config.Type, Name: c.Subject, OutTradeNo: c.Order.OrderNo,
+			Money: payment.FormatAmount(c.Charge.Amount), NotifyURL: c.NotifyURL, ReturnURL: c.ReturnURL,
+		})
+		if err != nil {
+			return nil, err
+		}
+		return &dto.CheckoutOrderResponse{Type: "url", CheckoutUrl: form.URL()}, nil
+	}
 	payURL, err := g.client.CreatePayUrl(epay.Order{
 		Name:      c.Subject,
 		Amount:    c.Charge.Amount,
@@ -91,11 +124,13 @@ func (g *epayGateway) StartPayment(_ context.Context, c Checkout) (*dto.Checkout
 			return nil, err
 		}
 		payURL = parsed.RequestURI()
+	} else if g.schemeRelative {
+		payURL = strings.TrimPrefix(payURL, "https:")
 	}
 	return &dto.CheckoutOrderResponse{Type: "url", CheckoutUrl: payURL}, nil
 }
 
-// Reconcile queries the order at the gateway. EPay-compatible gateways have
+// Reconcile queries the order at the gateway. Legacy V1-compatible gateways have
 // no cancellation API, and a late callback on a closed order is rejected
 // rather than reopened or refunded. A paid order is settled; an order the
 // gateway explicitly lists as awaiting payment closes once it is
@@ -111,6 +146,9 @@ func (g *epayGateway) Reconcile(ctx context.Context, req CloseRequest) (Reconcil
 		// Checkout never started; safe to close if it still has not when
 		// the close commits.
 		return Reconciliation{RequireStableCheckout: true}, nil
+	}
+	if g.v2 != nil {
+		return g.reconcileV2(ctx, req)
 	}
 	result, err := g.client.QueryOrder(ctx, o.OrderNo)
 	if err != nil {
@@ -139,7 +177,9 @@ func (g *epayGateway) Reconcile(ctx context.Context, req CloseRequest) (Reconcil
 		return Reconciliation{}, fmt.Errorf("cannot safely reconcile paid EPay order %s: gateway query has no transaction details", o.OrderNo)
 	}
 	amount, err := payment.ParseAmount(result.Money)
-	if err != nil || result.OrderNo != o.OrderNo || result.MerchantID != g.config.Pid || result.Type != g.config.Type || amount != o.PaymentAmount || result.TradeNo == "" {
+	if err != nil || result.OrderNo != o.OrderNo || result.MerchantID != g.config.Pid ||
+		(g.config.Type != "" && result.Type != g.config.Type) || result.Type == "" ||
+		amount != o.PaymentAmount || result.TradeNo == "" || (o.TradeNo != "" && o.TradeNo != result.TradeNo) {
 		return Reconciliation{}, fmt.Errorf("EPay order %s query does not match payment expectation", o.OrderNo)
 	}
 	return Reconciliation{TradeNo: result.TradeNo}, nil
@@ -149,15 +189,24 @@ type epayNotice struct {
 	paymentType string
 }
 
-// ParseCallback verifies the MD5 signature and the callback fields: the
+// ParseCallback verifies the configured protocol's signature and callback fields: the
 // merchant, the payment type, a successful trade status and the amount.
 func (g *epayGateway) ParseCallback(_ context.Context, n Notification) (*Notice, error) {
 	params := n.Params
 	if params == nil {
 		params = map[string]string{}
 	}
-	if !g.client.VerifySign(params) {
-		return nil, errors.New("verify sign failed")
+	if g.v2 != nil {
+		if _, err := g.v2.VerifyNotification(singleValues(params)); err != nil {
+			return nil, err
+		}
+	} else {
+		if !g.client.VerifySign(params) {
+			return nil, errors.New("verify sign failed")
+		}
+		if !strings.EqualFold(params["sign_type"], "MD5") {
+			return nil, errors.New("unsupported signature type")
+		}
 	}
 	orderNo, tradeNo := params["out_trade_no"], params["trade_no"]
 	if orderNo == "" || len(orderNo) > 255 || strings.TrimSpace(orderNo) != orderNo {
@@ -174,9 +223,6 @@ func (g *epayGateway) ParseCallback(_ context.Context, n Notification) (*Notice,
 	}
 	if params["trade_status"] != "TRADE_SUCCESS" {
 		return nil, errors.New("trade status is not success")
-	}
-	if !strings.EqualFold(params["sign_type"], "MD5") {
-		return nil, errors.New("unsupported signature type")
 	}
 	amount, err := payment.ParseAmount(params["money"])
 	if err != nil {
@@ -195,11 +241,11 @@ func (g *epayGateway) ParseCallback(_ context.Context, n Notification) (*Notice,
 
 func (g *epayGateway) CheckOrder(*order.Order, *Notice) error { return nil }
 
-// ConfirmPayment re-queries the gateway. A gateway without the query API is
-// accepted on the strength of the verified signature alone.
+// ConfirmPayment re-queries the gateway. Only legacy V1 gateways without query
+// support may be accepted on the strength of the verified signature alone.
 func (g *epayGateway) ConfirmPayment(ctx context.Context, o *order.Order, notice *Notice) error {
-	queried, err := g.client.QueryOrder(ctx, o.OrderNo)
-	if errors.Is(err, epay.ErrQueryNotSupported) {
+	queried, err := g.queryOrder(ctx, o.OrderNo)
+	if g.v2 == nil && errors.Is(err, epay.ErrQueryNotSupported) {
 		logger.WithContext(ctx).Infow("[EPayNotify] Gateway does not support order query; accepting signature-verified callback",
 			logger.Field("orderNo", o.OrderNo),
 		)
@@ -223,6 +269,10 @@ func (g *epayGateway) validateQueried(result *epay.QueryResult, notice *Notice, 
 	if result.StatusOnly {
 		return nil
 	}
+	return g.validateQueriedDetails(result, notice, paymentType)
+}
+
+func (g *epayGateway) validateQueriedDetails(result *epay.QueryResult, notice *Notice, paymentType string) error {
 	if result.OrderNo != notice.OrderNo {
 		return errors.New("gateway order number mismatch")
 	}
@@ -232,7 +282,7 @@ func (g *epayGateway) validateQueried(result *epay.QueryResult, notice *Notice, 
 	if result.MerchantID != g.config.Pid {
 		return errors.New("gateway merchant id mismatch")
 	}
-	if result.Type != paymentType || (g.config.Type != "" && result.Type != g.config.Type) {
+	if result.Type == "" || result.Type != paymentType || (g.config.Type != "" && result.Type != g.config.Type) {
 		return errors.New("gateway payment type mismatch")
 	}
 	queriedAmount, err := payment.ParseAmount(result.Money)

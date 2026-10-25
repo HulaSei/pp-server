@@ -12,12 +12,13 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/perfect-panel/server/internal/infra/protocolkey"
 	"github.com/perfect-panel/server/internal/module/billing/internal/payment"
+	"github.com/perfect-panel/server/internal/module/billing/internal/payment/epay/protocol"
 )
 
 // ErrQueryNotSupported is returned when the payment gateway implements
@@ -95,7 +96,7 @@ type QueryResult struct {
 }
 
 type queryOrderResponse struct {
-	Code       int             `json:"code"`
+	Code       queryInteger    `json:"code"`
 	Msg        string          `json:"msg"`
 	TradeNo    string          `json:"trade_no"`
 	OutTradeNo string          `json:"out_trade_no"`
@@ -103,15 +104,32 @@ type queryOrderResponse struct {
 	Money      string          `json:"money"`
 	Pid        json.RawMessage `json:"pid"`
 	// Status is a pointer so an omitted status is not read as 0 (unpaid).
-	Status *int `json:"status"`
+	Status *queryInteger `json:"status"`
+}
+
+// PHP deployments serialize these scalars as either numbers or integer strings.
+// A missing status stays nil, never an implicit unpaid result.
+type queryInteger int
+
+func (i *queryInteger) UnmarshalJSON(raw []byte) error {
+	value, err := rawString(raw)
+	if err != nil {
+		return err
+	}
+	number, err := strconv.Atoi(value)
+	if err != nil || strconv.Itoa(number) != value {
+		return errors.New("invalid gateway integer")
+	}
+	*i = queryInteger(number)
+	return nil
 }
 
 // easyPayQueryOrderResponse is used by a non-standard EPay variant. Its
 // query response intentionally contains only an order status, rather than
 // the full payment details returned by standard EPay's api.php endpoint.
 type easyPayQueryOrderResponse struct {
-	Code int    `json:"code"`
-	Msg  string `json:"msg"`
+	Code queryInteger `json:"code"`
+	Msg  string       `json:"msg"`
 	Data *struct {
 		Status string `json:"status"`
 	} `json:"data"`
@@ -130,7 +148,41 @@ func NewClient(pid, url, key string, Type string, opts ...Option) *Client {
 	for _, opt := range opts {
 		opt(client)
 	}
+	// Keep caller-owned clients unchanged and never follow a query redirect.
+	httpClient := *client.httpClient
+	if httpClient.Timeout == 0 {
+		httpClient.Timeout = defaultTimeout
+	}
+	httpClient.CheckRedirect = func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse }
+	client.httpClient = &httpClient
 	return client
+}
+
+// Validate checks legacy V1 configuration without contacting the gateway.
+// HTTP and deployment subpaths remain supported for existing installations.
+// The gateway resolves site/scheme-relative forms before making requests.
+func (c *Client) Validate() error {
+	if c.Pid == "" || strings.Trim(c.Pid, "0123456789") != "" || strings.TrimSpace(c.Key) == "" {
+		return errors.New("EPay V1 requires a numeric merchant ID and merchant key")
+	}
+	switch c.Type {
+	case "", "alipay", "wxpay", "qqpay", "bank", "jdpay", "paypal", "douyinpay":
+	default:
+		return errors.New("unsupported EPay V1 payment type")
+	}
+	if strings.HasPrefix(c.Url, "/") && !strings.HasPrefix(c.Url, "//") {
+		parsed, err := url.Parse(c.Url)
+		if err != nil || parsed.Host != "" || parsed.RawQuery != "" || parsed.ForceQuery || parsed.Fragment != "" {
+			return errors.New("invalid site-relative payment endpoint")
+		}
+		return nil
+	}
+	endpointClient := *c
+	if strings.HasPrefix(c.Url, "//") {
+		endpointClient.Url = "https:" + c.Url
+	}
+	_, err := endpointClient.endpoint("submit.php")
+	return err
 }
 
 // CreatePayUrl builds the browser redirect URL for EPay's submit.php endpoint.
@@ -146,19 +198,11 @@ func (c *Client) CreatePayUrl(order Order) (string, error) {
 }
 
 func (c *Client) createSign(params map[string]string) string {
-	keys := make([]string, 0, len(params))
-	for k := range params {
-		if params[k] != "" && k != "sign" && k != "sign_type" {
-			keys = append(keys, k)
-		}
+	canonical, err := protocol.V1CanonicalString(params)
+	if err != nil {
+		return ""
 	}
-	sort.Strings(keys)
-	parts := make([]string, 0, len(keys))
-	for _, k := range keys {
-		parts = append(parts, k+"="+params[k])
-	}
-	queryString := strings.Join(parts, "&")
-	text := queryString + c.Key
+	text := canonical + c.Key
 	return protocolkey.Md5Encode(text, false)
 }
 
@@ -216,6 +260,9 @@ func (c *Client) queryStandardOrder(ctx context.Context, orderNo string) (*Query
 	merchantID, err := rawString(response.Pid)
 	if err != nil {
 		return nil, fmt.Errorf("decode merchant id: %w", err)
+	}
+	if merchantID != c.Pid || response.OutTradeNo != orderNo {
+		return nil, errors.New("gateway query merchant or order mismatch")
 	}
 	return &QueryResult{
 		MerchantID: merchantID,
@@ -320,8 +367,8 @@ func (c *Client) endpoint(script string) (*url.URL, error) {
 	if endpoint.Scheme != "http" && endpoint.Scheme != "https" || endpoint.Host == "" {
 		return nil, errors.New("unsupported payment endpoint")
 	}
-	if endpoint.RawQuery != "" || endpoint.Fragment != "" {
-		return nil, errors.New("payment endpoint must not include query or fragment")
+	if endpoint.User != nil || endpoint.RawQuery != "" || endpoint.ForceQuery || endpoint.Fragment != "" {
+		return nil, errors.New("payment endpoint must not include credentials, query or fragment")
 	}
 	path := strings.TrimRight(endpoint.Path, "/")
 	for _, knownScript := range []string{"submit.php", "api.php"} {

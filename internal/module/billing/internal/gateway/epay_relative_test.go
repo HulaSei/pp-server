@@ -2,6 +2,7 @@ package gateway
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -50,6 +51,49 @@ func TestEPaySiteRelativeURLKeepsTheBrowserOnTheCurrentHost(t *testing.T) {
 	}
 	if queried != "/pay/api.php" || !result.Unpaid {
 		t.Fatalf("server-side query went to %q, unpaid=%v", queried, result.Unpaid)
+	}
+}
+
+func TestEPayRelativeConfigurationSurvivesNormalization(t *testing.T) {
+	for _, endpoint := range []string{"/pay", "//pay.example"} {
+		normalized, err := NewRegistry().NormalizeConfig("EPay", map[string]any{
+			"pid": "1", "url": endpoint, "key": "k", "type": "alipay",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var config payment.EPayConfig
+		if err := json.Unmarshal([]byte(normalized), &config); err != nil || config.Url != endpoint {
+			t.Fatalf("normalized relative address changed: %v", err)
+		}
+	}
+	for _, endpoint := range []string{"/pay?key=x", "/pay#fragment", "///host"} {
+		if _, err := NewRegistry().NormalizeConfig("EPay", map[string]any{"pid": "1", "url": endpoint, "key": "k"}); err == nil {
+			t.Fatalf("invalid relative address accepted: %q", endpoint)
+		}
+	}
+}
+
+func TestEPaySchemeRelativeCheckoutUsesHTTPSForServerRequests(t *testing.T) {
+	var queried bool
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		queried = true
+		_, _ = w.Write([]byte(`{"code":1,"pid":"1","out_trade_no":"O1","status":0}`))
+	}))
+	defer server.Close()
+	endpoint := strings.TrimPrefix(server.URL, "https:")
+	gw, err := NewRegistry(WithHTTPClient(server.Client())).Open(&payment.Payment{
+		Platform: "EPay", Config: `{"pid":"1","url":"` + endpoint + `","key":"k","type":"alipay"}`,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp, err := gw.StartPayment(context.Background(), Checkout{Order: &order.Order{OrderNo: "O1"}, Charge: Charge{Amount: 100}})
+	if err != nil || !strings.HasPrefix(resp.CheckoutUrl, endpoint+"/submit.php?") {
+		t.Fatalf("scheme-relative checkout failed: %v", err)
+	}
+	if _, err := gw.(*epayGateway).client.QueryOrder(context.Background(), "O1"); err != nil || !queried {
+		t.Fatalf("HTTPS query failed: %v", err)
 	}
 }
 

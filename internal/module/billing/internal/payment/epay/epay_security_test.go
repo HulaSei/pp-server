@@ -174,6 +174,8 @@ func TestQueryOrderReportsExplicitAwaitingPayment(t *testing.T) {
 	}{
 		{"awaiting payment", `{"code":1,"pid":1001,"out_trade_no":"order-1","status":0}`, false, true},
 		{"paid", `{"code":1,"pid":1001,"out_trade_no":"order-1","status":1}`, true, false},
+		{"integer strings", `{"code":"1","pid":"1001","out_trade_no":"order-1","status":"1"}`, true, false},
+		{"unpaid integer strings", `{"code":"1","pid":"1001","out_trade_no":"order-1","status":"0"}`, false, true},
 		{"refunded", `{"code":1,"pid":1001,"out_trade_no":"order-1","status":2}`, false, false},
 		{"status omitted", `{"code":1,"pid":1001,"out_trade_no":"order-1"}`, false, false},
 	}
@@ -207,6 +209,34 @@ func TestQueryOrderReportsExplicitAwaitingPayment(t *testing.T) {
 	}
 	if result.Paid || result.Unpaid {
 		t.Fatalf("status-only result = %+v, want neither paid nor awaiting payment", result)
+	}
+}
+
+func TestQueryOrderRejectsMismatchedOrderAndRedirects(t *testing.T) {
+	for _, body := range []string{
+		`{"code":1,"pid":"another","out_trade_no":"order-1","status":0}`,
+		`{"code":1,"pid":"1001","out_trade_no":"another","status":0}`,
+		`{"code":1,"pid":"1001","out_trade_no":"order-1","status":"1.0"}`,
+	} {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) { _, _ = w.Write([]byte(body)) }))
+		_, err := NewClient("1001", server.URL, "secret", "").QueryOrder(context.Background(), "order-1")
+		server.Close()
+		if err == nil {
+			t.Fatal("mismatched or malformed query accepted")
+		}
+	}
+	var redirected bool
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/other" {
+			redirected = true
+			return
+		}
+		http.Redirect(w, r, "/other", http.StatusTemporaryRedirect)
+	}))
+	defer server.Close()
+	_, err := NewClient("1001", server.URL, "secret", "").QueryOrder(context.Background(), "order-1")
+	if err == nil || redirected {
+		t.Fatal("gateway query followed a redirect")
 	}
 }
 
