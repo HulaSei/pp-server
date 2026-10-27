@@ -3,7 +3,10 @@ package token
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -84,16 +87,28 @@ func TestParseJwtTokenRefusesForgedTokens(t *testing.T) {
 	}
 }
 
-// tamper changes the last character of the token's signature, so the
-// claims parse but the signature no longer verifies.
+// tamper changes a signed claim without re-signing it. Changing only the final
+// base64 character can change unused padding bits while leaving the signature's
+// decoded bytes intact, so it does not reliably produce a forged token.
 func tamper(t *testing.T, signed string) string {
 	t.Helper()
-	b := []byte(signed)
-	last := len(b) - 1
-	if b[last] == 'A' {
-		b[last] = 'B'
-	} else {
-		b[last] = 'A'
+	parts := strings.Split(signed, ".")
+	if len(parts) != 3 {
+		t.Fatal("expected a signed JWT")
 	}
-	return string(b)
+	payload, err := base64.RawURLEncoding.DecodeString(parts[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var claims jwt.MapClaims
+	if err := json.Unmarshal(payload, &claims); err != nil {
+		t.Fatal(err)
+	}
+	claims["UserId"] = int64(8)
+	payload, err = json.Marshal(claims)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts[1] = base64.RawURLEncoding.EncodeToString(payload)
+	return strings.Join(parts, ".")
 }
