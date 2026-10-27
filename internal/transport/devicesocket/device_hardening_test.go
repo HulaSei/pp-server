@@ -3,7 +3,6 @@ package devicesocket
 import (
 	"errors"
 	"net/http"
-	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +13,7 @@ import (
 // dialDeviceAs dials the test server as the named device, with extra
 // request headers, and returns the connection and the handshake's HTTP
 // status (zero when no response came back).
-func dialDeviceAs(t *testing.T, srv *httptest.Server, device string, header http.Header) (*websocket.Conn, int, error) {
+func dialDeviceAs(t *testing.T, srv *deviceServer, device string, header http.Header) (*websocket.Conn, int, error) {
 	t.Helper()
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "?device=" + device
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, header)
@@ -22,6 +21,9 @@ func dialDeviceAs(t *testing.T, srv *httptest.Server, device string, header http
 	if resp != nil {
 		status = resp.StatusCode
 		_ = resp.Body.Close()
+	}
+	if err == nil {
+		srv.waitRegistered(t, device)
 	}
 	return conn, status, err
 }

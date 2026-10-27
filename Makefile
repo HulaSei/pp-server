@@ -20,7 +20,7 @@ GOBUILD=CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)"
 
 # Pinned developer tools. CI installs the same versions through these targets.
 TOOLS_BIN := $(CURDIR)/bin/tools
-GOLANGCI_LINT_VERSION ?= v2.13.2
+GOLANGCI_LINT_VERSION ?= v2.15.0
 GOIMPORTS_VERSION ?= v0.44.0
 GOVULNCHECK_VERSION ?= v1.8.0
 GORELEASER_VERSION ?= v2.18.2
@@ -102,11 +102,13 @@ vulncheck:
 
 # Regenerates the protobuf bindings with the pinned protoc and the
 # protoc-gen-go version go.mod requires, which the generated headers record.
-proto: $(PROTOC_GEN_GO)
+proto: $(PROTOC_GEN_GO) $(GOIMPORTS)
 	@found="$$($(PROTOC) --version 2>/dev/null)"; \
 	if [ "$$found" != "libprotoc 3.$(PROTOC_VERSION)" ]; then \
 		echo "protoc $(PROTOC_VERSION) (libprotoc 3.$(PROTOC_VERSION)) required, found: $${found:-none}"; exit 1; fi
 	$(PROTOC) --plugin=protoc-gen-go=$(PROTOC_GEN_GO) --go_out=paths=source_relative:. $(PROTO_FILES)
+	# Keep generator output in the same import format as fmt and the commit hook.
+	$(GOIMPORTS) -w $(PROTO_FILES:.proto=.pb.go)
 
 # Fails when the committed bindings differ from what the .proto files generate.
 proto-check: proto

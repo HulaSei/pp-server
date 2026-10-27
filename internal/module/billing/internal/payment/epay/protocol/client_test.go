@@ -225,7 +225,7 @@ func TestMultipartImage(t *testing.T) {
 			w.WriteHeader(400)
 			return
 		}
-		defer r.MultipartForm.RemoveAll()
+		defer func() { _ = r.MultipartForm.RemoveAll() }()
 		params := make(Params)
 		for key, values := range r.MultipartForm.Value {
 			params[key] = values[0]
