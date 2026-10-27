@@ -153,7 +153,7 @@ func Migrate(ctx context.Context, cfg Config) error {
 		}
 	}
 
-	if err := resetSequences(ctx, postgresDB, cfg.Schema); err != nil {
+	if err := resetSequences(ctx, postgresDB, cfg.Schema, plans); err != nil {
 		return err
 	}
 	log.Printf("migration completed")
@@ -866,33 +866,20 @@ func parseTimestamp(value string, location *time.Location) (time.Time, error) {
 	return time.Time{}, fmt.Errorf("unsupported timestamp %q", value)
 }
 
-func resetSequences(ctx context.Context, db *sql.DB, schema string) (err error) {
-	rows, err := db.QueryContext(ctx, //nolint:sqlclosecheck // closed by closeRows, which folds the close error into err
-		`
-SELECT table_name, column_name
-FROM information_schema.columns
-WHERE table_schema = $1
-  AND (is_identity = 'YES' OR column_default LIKE 'nextval(%')
-ORDER BY table_name, ordinal_position`, schema)
-	if err != nil {
-		return fmt.Errorf("list postgres sequences: %w", err)
-	}
-	defer closeRows(rows, &err)
-
+// resetSequences only advances sequences for columns included in the copy plan.
+// Scanning the whole schema would mutate excluded tables and race unrelated DDL.
+func resetSequences(ctx context.Context, db *sql.DB, schema string, plans []tablePlan) error {
 	type sequenceColumn struct {
 		table  string
 		column string
 	}
 	var columns []sequenceColumn
-	for rows.Next() {
-		var item sequenceColumn
-		if err := rows.Scan(&item.table, &item.column); err != nil {
-			return err
+	for _, plan := range plans {
+		for _, col := range plan.Columns {
+			if col.Identity || (col.Default.Valid && strings.HasPrefix(col.Default.String, "nextval(")) {
+				columns = append(columns, sequenceColumn{table: plan.Name, column: col.Name})
+			}
 		}
-		columns = append(columns, item)
-	}
-	if err := rows.Err(); err != nil {
-		return err
 	}
 
 	for _, item := range columns {
