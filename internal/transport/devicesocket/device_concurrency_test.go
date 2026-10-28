@@ -13,11 +13,24 @@ import (
 	"github.com/gorilla/websocket"
 )
 
+type deviceServer struct {
+	*httptest.Server
+	registered chan string
+}
+
 // deviceTestServer serves a websocket endpoint that registers every dial as
 // the device named by the "device" query parameter.
-func deviceTestServer(t *testing.T, dm *DeviceManager, userID int64, maxDevices int) *httptest.Server {
+func deviceTestServer(t *testing.T, dm *DeviceManager, userID int64, maxDevices int) *deviceServer {
 	t.Helper()
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	srv := &deviceServer{registered: make(chan string, 16)}
+	online := dm.OnDeviceOnline
+	dm.OnDeviceOnline = func(userID int64, deviceID, session string) {
+		if online != nil {
+			online(userID, deviceID, session)
+		}
+		srv.registered <- deviceID
+	}
+	srv.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		dm.AddDevice(w, r, "session", userID, r.URL.Query().Get("device"), maxDevices)
 	}))
 	t.Cleanup(srv.Close)
@@ -28,7 +41,7 @@ func deviceTestServer(t *testing.T, dm *DeviceManager, userID int64, maxDevices 
 // twice replaces the first connection.
 const testDeviceID = "dev1"
 
-func dialDevice(t *testing.T, srv *httptest.Server) *websocket.Conn {
+func dialDevice(t *testing.T, srv *deviceServer) *websocket.Conn {
 	t.Helper()
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "?device=" + testDeviceID
 	conn, resp, err := websocket.DefaultDialer.Dial(wsURL, nil)
@@ -38,7 +51,22 @@ func dialDevice(t *testing.T, srv *httptest.Server) *websocket.Conn {
 	if err != nil {
 		t.Fatalf("websocket dial: %v", err)
 	}
+	srv.waitRegistered(t, testDeviceID)
 	return conn
+}
+
+// The HTTP upgrade is sent before register finishes. Tests must wait for the
+// online event before sending, kicking, replacing or inspecting the device.
+func (s *deviceServer) waitRegistered(t *testing.T, deviceID string) {
+	t.Helper()
+	select {
+	case got := <-s.registered:
+		if got != deviceID {
+			t.Fatalf("registered device %q, want %q", got, deviceID)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatalf("device %q did not finish registering", deviceID)
+	}
 }
 
 // heartbeat replies and subscription pushes write to the same connection
@@ -242,21 +270,30 @@ func TestHeartbeatSweepKeepsADeviceConnectedWhileItWaited(t *testing.T) {
 	conn := dialDevice(t, srv)
 	t.Cleanup(func() { _ = conn.Close() })
 
-	// The sweep starts while the test holds the user's lock: it has taken
-	// its snapshot from Range and waits for the lock.
+	late := newDevice(serverSocket(t), "session", "dev2", time.Now())
+	late.startWriter(userID)
+	defer late.close()
+	// Exercise the same Range -> expireDevices boundary as checkHeartbeats.
+	// A barrier confirms Range has its snapshot before the new device is
+	// registered; no scheduler timing or sleeps decide what this test covers.
 	mu := dm.getUserMutex(userID)
 	mu.Lock()
+	snapshotted := make(chan struct{})
 	swept := make(chan struct{})
 	go func() {
 		defer close(swept)
-		dm.checkHeartbeats()
+		dm.userDevices.Range(func(key, _ any) bool {
+			close(snapshotted)
+			if expired := dm.expireDevices(key.(int64), time.Now()); len(expired) != 0 {
+				t.Error("the sweep expired a live device")
+			}
+			return true
+		})
 	}()
-	time.Sleep(100 * time.Millisecond)
+	<-snapshotted
 
 	// Meanwhile a second device connects: AddDevice's registration, as it
 	// runs under the lock.
-	late := newDevice(serverSocket(t), "session", "dev2", time.Now())
-	late.startWriter(userID)
 	current, _ := dm.userDevices.Load(userID)
 	dm.userDevices.Store(userID, append(append([]*Device(nil), current.([]*Device)...), late))
 	dm.totalOnline.Add(1)

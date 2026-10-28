@@ -62,5 +62,5 @@ go run ./tools/mysql2postgres \
 - `schema_migrations` 永远不会被复制。
 - 只复制源库和目标库同时存在的表与列。PostgreSQL 新增列会保留默认值。
 - 表会按照 PostgreSQL 外键依赖顺序复制；如果 MySQL 表存在主键，读取时会按主键排序。
-- 复制完成后会重置 PostgreSQL sequences。
+- 复制完成后只重置本次实际复制列对应的 PostgreSQL sequences；`--tables` / `--exclude` 排除的表，以及仅存在于目标库的列，不会被改动。
 - 建议使用全新的 PostgreSQL 数据库。如果不使用 `--truncate`，可能因为 migrations 已插入默认数据而触发唯一约束错误。

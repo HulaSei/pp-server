@@ -154,69 +154,91 @@ func TestV1OperationSpecificSuccessCodes(t *testing.T) {
 	}
 }
 
+type v1HTTPFixture struct {
+	badRequest atomic.Value
+	calls      atomic.Int32
+	mode       atomic.Int32
+}
+
+func (p *v1HTTPFixture) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	p.calls.Add(1)
+	if err := r.ParseForm(); err != nil {
+		p.badRequest.Store(err.Error())
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	var result any
+	switch r.URL.Path {
+	case "/mapi.php":
+		result = p.create(r)
+	case "/api.php":
+		result = p.queryOrRefund(r)
+	default:
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+	if result == nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
+	_ = json.NewEncoder(w).Encode(result)
+}
+
+func (p *v1HTTPFixture) create(r *http.Request) any {
+	if r.Method != http.MethodPost || r.PostForm.Get("pid") != "1001" || r.PostForm.Get("sign_type") != "MD5" || r.PostForm.Get("sign") != v1TestSignature(r.PostForm) || r.PostForm.Has("key") || r.PostForm.Has("timestamp") || r.PostForm.Get("param") != "A+B&=中文" {
+		p.badRequest.Store("invalid signed payment form")
+	}
+	if p.mode.Load() == 4 {
+		return map[string]any{"code": 0, "msg": "failed"}
+	}
+	return map[string]any{"code": 1, "trade_no": "platform-1", "payurl": "https://pay.example.com/checkout"}
+}
+
+func (p *v1HTTPFixture) queryOrRefund(r *http.Request) any {
+	if r.URL.Query().Get("act") == "refund" {
+		return p.refund(r)
+	}
+	if r.Method != http.MethodGet || r.URL.Query().Get("key") != v1TestKey || r.URL.Query().Get("pid") != "1001" || r.URL.Query().Has("sign") {
+		p.badRequest.Store("invalid query credentials")
+	}
+	switch r.URL.Query().Get("act") {
+	case "order":
+		result := map[string]any{"code": "1", "pid": "1001", "trade_no": "platform-1", "out_trade_no": "order-1", "type": "alipay", "money": "1.00", "status": "1"}
+		if p.mode.Load() == 1 {
+			result["out_trade_no"] = "wrong-order"
+		}
+		if p.mode.Load() == 2 {
+			delete(result, "status")
+		}
+		return result
+	case "query":
+		return map[string]any{"code": 1, "pid": 1001, "money": "5.00", "key": v1TestKey}
+	case "settle":
+		return map[string]any{"code": 1, "data": []any{}}
+	case "orders":
+		if r.Form.Get("page") != "1" || r.Form.Get("limit") != "20" {
+			p.badRequest.Store("wrong V1 pagination defaults")
+		}
+		return map[string]any{"code": 1, "data": []any{}}
+	default:
+		return nil
+	}
+}
+
+func (p *v1HTTPFixture) refund(r *http.Request) any {
+	if r.Method != http.MethodPost || r.URL.Query().Has("key") || r.PostForm.Get("key") != v1TestKey || r.PostForm.Get("pid") != "1001" || r.PostForm.Get("money") != "1.00" || r.PostForm.Get("out_trade_no") != "order-1" || r.PostForm.Has("out_refund_no") {
+		p.badRequest.Store("invalid refund method/credentials/body")
+	}
+	code := 0
+	if p.mode.Load() == 3 {
+		code = 1
+	}
+	return map[string]any{"code": code, "msg": "refund result"}
+}
+
 func TestV1HTTPFlows(t *testing.T) {
-	var badRequest atomic.Value
-	var calls atomic.Int32
-	var mode atomic.Int32
-	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		if err := r.ParseForm(); err != nil {
-			badRequest.Store(err.Error())
-			w.WriteHeader(400)
-			return
-		}
-		var result any
-		if r.URL.Path == "/mapi.php" {
-			if r.Method != "POST" || r.PostForm.Get("pid") != "1001" || r.PostForm.Get("sign_type") != "MD5" || r.PostForm.Get("sign") != v1TestSignature(r.PostForm) || r.PostForm.Has("key") || r.PostForm.Has("timestamp") || r.PostForm.Get("param") != "A+B&=中文" {
-				badRequest.Store("invalid signed payment form")
-			}
-			result = map[string]any{"code": 1, "trade_no": "platform-1", "payurl": "https://pay.example.com/checkout"}
-			if mode.Load() == 4 {
-				result = map[string]any{"code": 0, "msg": "failed"}
-			}
-		} else if r.URL.Path == "/api.php" {
-			if r.URL.Query().Get("act") == "refund" {
-				if r.Method != "POST" || r.URL.Query().Has("key") || r.PostForm.Get("key") != v1TestKey || r.PostForm.Get("pid") != "1001" || r.PostForm.Get("money") != "1.00" || r.PostForm.Get("out_trade_no") != "order-1" || r.PostForm.Has("out_refund_no") {
-					badRequest.Store("invalid refund method/credentials/body")
-				}
-				code := 0
-				if mode.Load() == 3 {
-					code = 1
-				}
-				result = map[string]any{"code": code, "msg": "refund result"}
-			} else {
-				if r.Method != "GET" || r.URL.Query().Get("key") != v1TestKey || r.URL.Query().Get("pid") != "1001" || r.URL.Query().Has("sign") {
-					badRequest.Store("invalid query credentials")
-				}
-				switch r.URL.Query().Get("act") {
-				case "order":
-					result = map[string]any{"code": "1", "pid": "1001", "trade_no": "platform-1", "out_trade_no": "order-1", "type": "alipay", "money": "1.00", "status": "1"}
-					if mode.Load() == 1 {
-						result.(map[string]any)["out_trade_no"] = "wrong-order"
-					}
-					if mode.Load() == 2 {
-						delete(result.(map[string]any), "status")
-					}
-				case "query":
-					result = map[string]any{"code": 1, "pid": 1001, "money": "5.00", "key": v1TestKey}
-				case "settle":
-					result = map[string]any{"code": 1, "data": []any{}}
-				case "orders":
-					if r.Form.Get("page") != "1" || r.Form.Get("limit") != "20" {
-						badRequest.Store("wrong V1 pagination defaults")
-					}
-					result = map[string]any{"code": 1, "data": []any{}}
-				default:
-					w.WriteHeader(400)
-					return
-				}
-			}
-		} else {
-			w.WriteHeader(404)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(result)
-	}))
+	peer := &v1HTTPFixture{}
+	server := httptest.NewTLSServer(peer)
 	defer server.Close()
 	c, err := NewV1Client(V1Config{BaseURL: server.URL, MerchantID: "1001", Key: v1TestKey, HTTPClient: server.Client()})
 	if err != nil {
@@ -247,20 +269,20 @@ func TestV1HTTPFlows(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, m := range []int32{1, 2} {
-		mode.Store(m)
+		peer.mode.Store(m)
 		if _, err := c.QueryOrder(ctx, ref); err == nil {
 			t.Fatal("mismatched/incomplete order accepted")
 		}
 	}
-	mode.Store(3)
+	peer.mode.Store(3)
 	if _, err := c.Refund(ctx, refund); err == nil {
 		t.Fatal("refund code 1 treated as success")
 	}
-	mode.Store(4)
+	peer.mode.Store(4)
 	if _, err := c.CreatePayment(ctx, V1CreatePaymentRequest{V1Payment: payment, ClientIP: "127.0.0.1"}); err == nil {
 		t.Fatal("create code 0 treated as success")
 	}
-	before := calls.Load()
+	before := peer.calls.Load()
 	if _, err := c.Refund(ctx, V1RefundRequest{OrderRef: ref, Money: "0"}); err == nil {
 		t.Fatal("zero refund accepted")
 	}
@@ -270,10 +292,10 @@ func TestV1HTTPFlows(t *testing.T) {
 	if _, err := c.QueryOrder(ctx, OrderRef{}); err == nil {
 		t.Fatal("empty order ref accepted")
 	}
-	if calls.Load() != before {
+	if peer.calls.Load() != before {
 		t.Fatal("invalid input reached server")
 	}
-	if issue := badRequest.Load(); issue != nil {
+	if issue := peer.badRequest.Load(); issue != nil {
 		t.Fatal(issue)
 	}
 }
@@ -310,7 +332,7 @@ func TestV1NoRetriesRedirectsOrPrintableKeyLeaks(t *testing.T) {
 			w.WriteHeader(500)
 			return
 		}
-		http.Redirect(w, r, "/target", 307)
+		http.Redirect(w, r, "/target", http.StatusTemporaryRedirect)
 	}))
 	defer server.Close()
 	c, err = NewV1Client(V1Config{BaseURL: server.URL, MerchantID: "1001", Key: v1TestKey, HTTPClient: server.Client()})
@@ -319,7 +341,7 @@ func TestV1NoRetriesRedirectsOrPrintableKeyLeaks(t *testing.T) {
 	}
 	_, err = c.QueryOrder(context.Background(), OrderRef{OutTradeNo: "order-1"})
 	var httpErr *HTTPError
-	if !errors.As(err, &httpErr) || httpErr.StatusCode != 307 || followed.Load() != 0 {
+	if !errors.As(err, &httpErr) || httpErr.StatusCode != http.StatusTemporaryRedirect || followed.Load() != 0 {
 		t.Fatalf("redirect: %v", err)
 	}
 }

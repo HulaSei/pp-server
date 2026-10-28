@@ -66,12 +66,14 @@ func TestMigrateCopiesRowsIntoPostgres(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer closeDatabase("mysql", mysqlDB)
+	t.Cleanup(func() { closeDatabase("mysql", mysqlDB) })
 	postgresDB, err := sql.Open("pgx", postgresDSN)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer closeDatabase("postgres", postgresDB)
+	t.Cleanup(func() { closeDatabase("postgres", postgresDB) })
+	schema := postgresTestSchema(t, postgresDB)
+	target := quotePGIdent(schema) + "." + quotePGIdent(table)
 
 	exec := func(db *sql.DB, query string, args ...any) {
 		t.Helper()
@@ -81,8 +83,7 @@ func TestMigrateCopiesRowsIntoPostgres(t *testing.T) {
 	}
 	exec(mysqlDB, "CREATE TABLE "+quoteMySQLIdent(table)+" (id BIGINT PRIMARY KEY, note TEXT NULL, flag TINYINT(1) NOT NULL, amount DECIMAL(10,2) NOT NULL, at DATETIME(3) NULL)")
 	t.Cleanup(func() { _, _ = mysqlDB.ExecContext(ctx, "DROP TABLE IF EXISTS "+quoteMySQLIdent(table)) })
-	exec(postgresDB, "CREATE TABLE public."+quotePGIdent(table)+" (id bigint PRIMARY KEY, note text, flag boolean NOT NULL, amount numeric(10,2) NOT NULL, at timestamp(3))")
-	t.Cleanup(func() { _, _ = postgresDB.ExecContext(ctx, "DROP TABLE IF EXISTS public."+quotePGIdent(table)) })
+	exec(postgresDB, "CREATE TABLE "+target+" (id bigint PRIMARY KEY, note text, flag boolean NOT NULL, amount numeric(10,2) NOT NULL, at timestamp(3))")
 
 	at := time.Date(2026, 9, 28, 10, 30, 0, 123000000, time.UTC)
 	notes := []any{"tab\tnew\nline \\ backslash", nil, "plain"}
@@ -94,11 +95,11 @@ func TestMigrateCopiesRowsIntoPostgres(t *testing.T) {
 		exec(mysqlDB, "INSERT INTO "+quoteMySQLIdent(table)+" (id, note, flag, amount, at) VALUES (?, ?, ?, ?, ?)", i+1, note, i%2, fmt.Sprintf("%d.%02d", i+10, i), stamp)
 	}
 
-	if err := Migrate(ctx, Config{MySQLDSN: mysqlDSN, PostgresDSN: postgresDSN, Schema: "public", Tables: table, BatchSize: 2}); err != nil {
+	if err := Migrate(ctx, Config{MySQLDSN: mysqlDSN, PostgresDSN: postgresDSN, Schema: schema, Tables: table, BatchSize: 2, Location: "UTC"}); err != nil {
 		t.Fatalf("Migrate: %v", err)
 	}
 
-	rows, err := postgresDB.QueryContext(ctx, "SELECT id, note, flag, amount::text, at FROM public."+quotePGIdent(table)+" ORDER BY id")
+	rows, err := postgresDB.QueryContext(ctx, "SELECT id, note, flag, amount::text, at FROM "+target+" ORDER BY id")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -41,12 +41,12 @@ func TestNormalizeMySQLDSNReadsTimesInTheConfiguredZone(t *testing.T) {
 		dsn  string
 		want string
 	}{
-		"no parameters":      {"user:pass@tcp(127.0.0.1:3306)/ppanel", "Europe/Paris"},
-		"other parameters":   {"user:pass@tcp(127.0.0.1:3306)/ppanel?charset=utf8mb4&parseTime=true", "Europe/Paris"},
-		"explicit loc":       {"user:pass@tcp(127.0.0.1:3306)/ppanel?loc=Asia%2FTokyo", "Asia/Tokyo"},
-		"explicit UTC":       {"user:pass@tcp(127.0.0.1:3306)/ppanel?loc=UTC", "UTC"},
-		"slash in password":  {"user:p/ss?loc=x@tcp(127.0.0.1:3306)/ppanel", "Europe/Paris"},
-		"question in dbname": {"user:pass@tcp(127.0.0.1:3306)/ppanel?parseTime=true&loc=Local", "Local"},
+		"no parameters":     {"user:pass@tcp(127.0.0.1:3306)/ppanel", "Europe/Paris"},
+		"other parameters":  {"user:pass@tcp(127.0.0.1:3306)/ppanel?charset=utf8mb4&parseTime=true", "Europe/Paris"},
+		"explicit loc":      {"user:pass@tcp(127.0.0.1:3306)/ppanel?loc=Asia%2FTokyo", "Asia/Tokyo"},
+		"explicit UTC":      {"user:pass@tcp(127.0.0.1:3306)/ppanel?loc=UTC", "UTC"},
+		"slash in password": {"user:p/ss?loc=x@tcp(127.0.0.1:3306)/ppanel", "Europe/Paris"},
+		"explicit local":    {"user:pass@tcp(127.0.0.1:3306)/ppanel?parseTime=true&loc=Local", time.Local.String()},
 	} {
 		t.Run(name, func(t *testing.T) {
 			cfg, err := mysqlDriver.ParseDSN(normalizeMySQLDSN(tc.dsn, paris))

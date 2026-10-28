@@ -225,7 +225,7 @@ func TestMultipartImage(t *testing.T) {
 			w.WriteHeader(400)
 			return
 		}
-		defer r.MultipartForm.RemoveAll()
+		defer func() { _ = r.MultipartForm.RemoveAll() }()
 		params := make(Params)
 		for key, values := range r.MultipartForm.Value {
 			params[key] = values[0]
@@ -276,5 +276,44 @@ func TestRequiredScalarCannotHideInUnsignedObject(t *testing.T) {
 	var result map[string]json.RawMessage
 	if err := response.decodeRequired(&result, "money"); err == nil {
 		t.Fatal("required scalar accepted as unsigned object")
+	}
+}
+
+func TestClientAcceptsDeploymentPath(t *testing.T) {
+	testClient(t)
+	config := Config{
+		MerchantID:         "1001",
+		MerchantPrivateKey: []byte(base64.StdEncoding.EncodeToString(x509.MarshalPKCS1PrivateKey(fixtureKeys.merchant))),
+		PlatformPublicKey:  []byte(base64.StdEncoding.EncodeToString(x509.MarshalPKCS1PublicKey(&fixtureKeys.platform.PublicKey))),
+	}
+	for base, want := range map[string]string{
+		"https://pay.example.com":         "https://pay.example.com/api/pay/query",
+		"https://pay.example.com/":        "https://pay.example.com/api/pay/query",
+		"https://pay.example.com/pay":     "https://pay.example.com/pay/api/pay/query",
+		"https://pay.example.com/pay/":    "https://pay.example.com/pay/api/pay/query",
+		"https://pay.example.com/a/b/pay": "https://pay.example.com/a/b/pay/api/pay/query",
+	} {
+		config.BaseURL = base
+		c, err := NewClient(config)
+		if err != nil {
+			t.Fatalf("%s: %v", base, err)
+		}
+		if endpoint, err := c.endpoint("/api/pay/query"); err != nil || endpoint != want {
+			t.Fatalf("%s: endpoint=%q err=%v", base, endpoint, err)
+		}
+	}
+	for _, base := range []string{
+		"http://pay.example.com/pay", "https://pay.example.com/pay?x=1", "https://pay.example.com/pay#f",
+		"https://user@pay.example.com/pay", "https://pay.example.com/a/../pay", "https://pay.example.com/a//pay",
+		"https://pay.example.com/p%2Fay", "https://pay.example.com/./pay",
+		"https://pay.example.com/pay%23checkout", "https://pay.example.com/pay%3Froute=wrong",
+		"https://pay.example.com/pay%20space", "https://pay.example.com/pay%09tab",
+		"https://pay.example.com/pay%0Aline", "https://pay.example.com/pay%0Dline",
+		"https://pay.example.com//", "https://pay.example.com///", "https://pay.example.com/pay//",
+	} {
+		config.BaseURL = base
+		if _, err := NewClient(config); err == nil {
+			t.Errorf("invalid base URL accepted: %q", base)
+		}
 	}
 }
