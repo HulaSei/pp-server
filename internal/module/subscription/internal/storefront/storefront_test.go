@@ -41,8 +41,8 @@ func newStorefront(f *subtest.Fixture, nodes NodeLister, trialPlan int64) *Servi
 	})
 }
 
-func ownerContext(id int64) context.Context {
-	return user.NewContext(context.Background(), &user.User{Id: id})
+func ownerContext() context.Context {
+	return user.NewContext(context.Background(), &user.User{Id: 7})
 }
 
 // The owner's node list shows nodes exactly for the subscriptions the nodes
@@ -62,7 +62,7 @@ func TestQueryUserSubscribeNodeListShowsNodesOnlyForServableSubscriptions(t *tes
 	f.Subscription(t, usersub.Subscribe{UserId: 8, SubscribeId: 1, ExpireTime: future, Status: usersub.SubscribeStatusActive})
 
 	nodes := &planNodes{nodes: []*node.Node{{Id: 5, Name: "Tokyo", Protocol: "vless", Port: 443, Address: "jp.example.com", Tags: "asia", Server: &node.Server{Country: "JP", City: "Tokyo"}}}}
-	resp, err := newStorefront(f, nodes, 1).QueryUserSubscribeNodeList(ownerContext(7))
+	resp, err := newStorefront(f, nodes, 1).QueryUserSubscribeNodeList(ownerContext())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -99,7 +99,7 @@ func TestQueryUserSubscribeNodeListPlanWithoutNodes(t *testing.T) {
 	f.Plan(t, subscribe.Subscribe{Id: 1, NodeTags: " , "})
 	sub := f.Subscription(t, usersub.Subscribe{UserId: 7, SubscribeId: 1, ExpireTime: time.Now().Add(time.Hour), Status: usersub.SubscribeStatusActive})
 	nodes := &planNodes{}
-	resp, err := newStorefront(f, nodes, 0).QueryUserSubscribeNodeList(ownerContext(7))
+	resp, err := newStorefront(f, nodes, 0).QueryUserSubscribeNodeList(ownerContext())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -127,5 +127,24 @@ func TestQuerySubscribeListShowsSellablePlans(t *testing.T) {
 	}
 	if resp.Total != 1 || len(resp.List) != 1 || resp.List[0].Name != "gold" || len(resp.List[0].Discount) != 1 || resp.List[0].Discount[0].Quantity != 12 {
 		t.Fatalf("storefront plans = %+v", resp)
+	}
+}
+
+func TestNowhereNodeCredentialsMatchNW3WithoutChangingOtherProtocols(t *testing.T) {
+	const credential = "550e8400-e29b-41d4-a716-446655440000"
+	const key = "550e8400e29b41d4a716446655440000"
+	f := subtest.New(t)
+	f.Plan(t, subscribe.Subscribe{Id: 1, Nodes: "5,6"})
+	f.Subscription(t, usersub.Subscribe{UserId: 7, SubscribeId: 1, ExpireTime: time.Now().Add(time.Hour), Status: usersub.SubscribeStatusActive, UUID: credential})
+	nodes := &planNodes{nodes: []*node.Node{{Id: 5, Protocol: "nowhere", Server: &node.Server{}}, {Id: 6, Protocol: "vless", Server: &node.Server{}}}}
+	resp, err := newStorefront(f, nodes, 0).QueryUserSubscribeNodeList(ownerContext())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.List) != 1 || len(resp.List[0].Nodes) != 2 {
+		t.Fatalf("nodes=%+v", resp)
+	}
+	if resp.List[0].Nodes[0].Uuid != key || resp.List[0].Nodes[1].Uuid != credential {
+		t.Fatalf("credentials=%+v", resp.List[0].Nodes)
 	}
 }
